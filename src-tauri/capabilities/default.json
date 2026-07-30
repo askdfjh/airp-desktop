@@ -1,0 +1,17 @@
+{
+  "identifier": "default",
+  "description": "Default permissions for AIRP",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "fs:default",
+    "shell:default",
+    "sql:default",
+    "sql:allow-execute",
+    "core:webview:allow-set-webview-zoom",
+    "core:window:allow-set-theme",
+    "core:window:allow-close",
+    "core:window:allow-destroy"
+  ]
+}
