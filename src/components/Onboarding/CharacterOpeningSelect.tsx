@@ -1,0 +1,222 @@
+import { useState } from "react";
+import { useUIStore } from "@/stores/uiStore";
+import { useCharacterStore } from "@/stores/characterStore";
+import { useOnboardingStore } from "@/stores/onboardingStore";
+
+interface Props {
+  onComplete: () => void;
+}
+
+export function CharacterOpeningSelect({ onComplete }: Props) {
+  const {
+    selectedWorldName, selectedMode, selectedWorldId,
+    setSelectedCharacter, setSelectedScenario: setStoreScenario, setOnboardingStep,
+  } = useUIStore();
+  const characters = useCharacterStore((s) => s.characters);
+  const getScenariosByTheme = useOnboardingStore((s) => s.getScenariosByTheme);
+
+  const [selectedChar, setSelectedChar] = useState<string | null>(null);
+  const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
+
+  const scenarios = getScenariosByTheme(selectedWorldId || "cultivation");
+
+  const modeLabel = selectedMode === "novel" ? "小说视角" : selectedMode === "player" ? "玩家视角" : "自定义模式";
+
+  const handleCharSelect = (id: string, name: string) => {
+    setSelectedChar(id);
+    setSelectedCharacter(id, name);
+  };
+
+  const handleScenarioSelect = (id: string, name: string) => {
+    setSelectedScenario(id);
+    setStoreScenario(id, name);
+  };
+
+  // 允许无角色无场景直接开始：用户可以选择角色+场景，也可以跳过直接进入对话
+  const canStart = true;
+
+  return (
+    <div>
+      {/* Breadcrumb */}
+      <nav className="seed-breadcrumb">
+        <span className="seed-breadcrumb-pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M2 12h20" />
+            <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+          </svg>
+          {selectedWorldName || "未知世界"}
+        </span>
+        <span className="seed-breadcrumb-sep">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+        </span>
+        <span className="seed-breadcrumb-pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+          </svg>
+          {modeLabel}
+        </span>
+        <button className="seed-breadcrumb-link" onClick={() => setOnboardingStep(2)} style={{ marginLeft: "auto" }}>
+          更换
+        </button>
+      </nav>
+
+      {/* Title */}
+      <div style={{ textAlign: "center", marginBottom: 48 }}>
+        <h1 style={{ fontSize: 34, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--seed-fg)", marginBottom: 8 }}>
+          选择角色与开局
+        </h1>
+        <p style={{ fontSize: 15, color: "var(--seed-muted)" }}>决定你的主角和故事的起点</p>
+      </div>
+
+      {/* Character section */}
+      <div style={{ marginBottom: 48 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, fontSize: 14, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--seed-muted)" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--seed-accent)" }}>
+            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          角色
+          <div style={{ flex: 1, height: 1, background: "var(--seed-border)", marginLeft: 8 }} />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 16 }}>
+          {characters.map((char) => (
+            <div
+              key={char.id}
+              className={`seed-card ${selectedChar === char.id ? "seed-card--selected" : ""}`}
+              onClick={() => handleCharSelect(char.id, char.name)}
+              style={{ textAlign: "center", padding: "24px 16px 20px" }}
+            >
+              <div className="seed-card-check">
+                <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
+              </div>
+              <div style={{
+                width: 64, height: 64, margin: "0 auto 14px", borderRadius: "50%",
+                background: "var(--seed-accent-bg)", display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {char.avatar ? (
+                  <img src={char.avatar} alt={char.name} style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover" }} />
+                ) : (
+                  <svg width="36" height="36" viewBox="0 0 48 48" fill="none" stroke="var(--seed-primary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="24" cy="14" r="7" />
+                    <path d="M12 40v-4a8 8 0 018-8h8a8 8 0 018 8v4" />
+                  </svg>
+                )}
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: "var(--seed-fg)", marginBottom: 6 }}>{char.name}</div>
+              {char.tags.length > 0 && (
+                <span style={{
+                  display: "inline-block", padding: "2px 10px", fontSize: 11, fontWeight: 600,
+                  borderRadius: 999, background: "var(--seed-accent-bg)", color: "var(--seed-accent)", marginBottom: 10,
+                }}>
+                  {char.tags[0]}
+                </span>
+              )}
+              <div style={{ fontSize: 12, lineHeight: 1.55, color: "var(--seed-muted)" }}>
+                {char.personality ? char.personality.slice(0, 40) + (char.personality.length > 40 ? "..." : "") : "未设置人设"}
+              </div>
+            </div>
+          ))}
+
+          {/* Custom character */}
+          <div
+            className="seed-card seed-card--custom"
+            style={{ textAlign: "center", padding: "24px 16px 20px" }}
+            onClick={() => {
+              // Could open settings panel here
+            }}
+          >
+            <div style={{
+              width: 64, height: 64, margin: "0 auto 14px", borderRadius: "50%",
+              border: "1.5px dashed color-mix(in srgb, var(--seed-fg) 12%, transparent)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--seed-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--seed-muted)" }}>自定义角色</div>
+            <div style={{ fontSize: 12, color: "var(--seed-muted)", opacity: 0.6, marginTop: 4 }}>创建你自己的角色</div>
+          </div>
+
+          {characters.length === 0 && (
+            <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: 32, color: "var(--seed-muted)", fontSize: 14 }}>
+              暂无角色，请在设置面板中创建角色后返回
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Scenario section */}
+      <div style={{ marginBottom: 52 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, fontSize: 14, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--seed-muted)" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--seed-accent)" }}>
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+          开局场景
+          <div style={{ flex: 1, height: 1, background: "var(--seed-border)", marginLeft: 8 }} />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+          {scenarios.map((scenario) => (
+            <div
+              key={scenario.id}
+              className={`seed-card ${selectedScenario === scenario.id ? "seed-card--selected" : ""}`}
+              onClick={() => handleScenarioSelect(scenario.id, scenario.name)}
+              style={{ padding: "28px 22px 24px" }}
+            >
+              <div className="seed-card-check">
+                <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
+              </div>
+              <div className="seed-card-icon" style={{ marginBottom: 16 }}>
+                <svg viewBox="0 0 24 24">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+              </div>
+              <div className="seed-card-title" style={{ marginBottom: 8 }}>{scenario.name}</div>
+              <div className="seed-card-desc" style={{ marginBottom: 14 }}>{scenario.description}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {scenario.keywords.map((kw) => (
+                  <span key={kw} style={{
+                    fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 999,
+                    background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-muted)",
+                  }}>
+                    {kw}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {scenarios.length === 0 && (
+            <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: 32, color: "var(--seed-muted)", fontSize: 14 }}>
+              当前世界暂无预设开局场景，可直接开始对话
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* CTA */}
+      <div style={{ textAlign: "center" }}>
+        <button
+          className="seed-cta"
+          disabled={!canStart}
+          onClick={onComplete}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+          </svg>
+          {selectedChar && selectedScenario ? "开始冒险" : selectedChar ? "以此角色开始" : "直接开始"}
+        </button>
+      </div>
+
+      {/* Step indicator */}
+      <div style={{ textAlign: "center", marginTop: 24, fontSize: 13, color: "var(--seed-muted)", letterSpacing: "0.08em", fontWeight: 500 }}>
+        3 <span style={{ opacity: 0.4 }}>/ 3</span>
+      </div>
+    </div>
+  );
+}
