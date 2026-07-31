@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useUIStore } from "@/stores/uiStore";
+import { setToolsEnabled } from "@/hooks/useChat";
+import { setAppSetting } from "@/lib/db";
 import { SessionPopup } from "./SessionPopup";
 
 export function FunctionBar() {
-  const { theme, setTheme, messageFontSize, setMessageFontSize, settingsOpen } = useUIStore();
+  const { theme, setTheme, messageFontSize, setMessageFontSize, settingsOpen, webSearchOn, setWebSearchOn } = useUIStore();
   const [showSessionPopup, setShowSessionPopup] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -28,6 +30,15 @@ export function FunctionBar() {
     const nextIdx = (currentIdx + 1) % fontSizes.length;
     setMessageFontSize(fontSizes[nextIdx]);
     showToast(`字体大小：${fontLabels[fontSizes[nextIdx]]}`);
+  };
+
+  // Toggle web search
+  const toggleWebSearch = () => {
+    const next = !webSearchOn;
+    setWebSearchOn(next);
+    setToolsEnabled(next);
+    setAppSetting("web_search_enabled", next ? "1" : "0");
+    showToast(next ? "联网搜索已开启" : "联网搜索已关闭");
   };
 
   return (
@@ -71,6 +82,16 @@ export function FunctionBar() {
             <polygon points="12 2 2 7 12 12 22 7 12 2" />
             <polyline points="2 17 12 22 22 17" />
             <polyline points="2 12 12 17 22 12" />
+          </svg>
+        </button>
+
+        {/* Web search toggle */}
+        <button className={"seed-func-btn" + (webSearchOn ? " seed-func-btn--active" : "")} data-tooltip={webSearchOn ? "联网搜索已开启" : "联网搜索已关闭"} onClick={toggleWebSearch}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0" />
+            <path d="M1.42 9a16 16 0 0 1 21.16 0" />
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+            <line x1="12" y1="20" x2="12.01" y2="20" />
           </svg>
         </button>
 

@@ -154,6 +154,30 @@ async function searchTavily(query: string, apiKey: string): Promise<string> {
 }
 
 async function searchDuckDuckGo(query: string): Promise<string> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  // Reset cookies and seed DDG-friendly cookies before searching
+  try {
+    await invoke("http_clear_cookies", {});
+    await invoke("http_set_cookie", {
+      url: "https://duckduckgo.com/",
+      name: "accept",
+      value: "auto",
+      domain: "duckduckgo.com",
+      path: "/",
+    });
+    await invoke("http_set_cookie", {
+      url: "https://duckduckgo.com/",
+      name: "duckduckgo-accept",
+      value: "true",
+      domain: "duckduckgo.com",
+      path: "/",
+    });
+    const cookies = await invoke<string>("http_list_cookies", { url: "https://duckduckgo.com/" });
+    console.log("[search] DuckDuckGo cookies ready:", cookies.trim().split("\n")[0]);
+  } catch (e) {
+    console.warn("[search] Cookie init failed:", e);
+  }
+
   const fetchUrlWithTimeout = async (url: string, timeoutMs = 8000): Promise<string> => {
     const { invoke } = await import("@tauri-apps/api/core");
     return await Promise.race([

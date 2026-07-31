@@ -31,21 +31,24 @@ export function ConfirmDialog({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
       style={{
-        background: "rgba(0,0,0,0.35)",
-        backdropFilter: "var(--blur-xs)",
-        WebkitBackdropFilter: "var(--blur-xs)",
-        animation: "fadeInMsg .15s ease-out",
+        background: "rgba(0,0,0,0.45)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
+        animation: "seed-fade-in-up 0.18s ease-out",
       }}
       onClick={onCancel}
     >
       <div
-        className="glass-modal rd-16 sh-lg"
         style={{
           width: 360,
           maxWidth: "calc(100vw - 32px)",
           padding: "28px 28px 24px",
           textAlign: "center",
-          animation: "fadeInUp .2s ease-out",
+          background: "var(--seed-surface)",
+          border: "1px solid var(--seed-border)",
+          borderRadius: 16,
+          boxShadow: "0 16px 64px rgba(0,0,0,0.5)",
+          animation: "seed-fade-in-up 0.22s ease-out",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -54,35 +57,45 @@ export function ConfirmDialog({
             width: 44,
             height: 44,
             borderRadius: 12,
-            background: "var(--accent-bg)",
+            background: "var(--seed-accent-bg)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             margin: "0 auto 16px",
           }}
         >
-          <LogOut size={20} style={{ color: "var(--accent)" }} />
+          <LogOut size={20} style={{ color: "var(--seed-accent)" }} />
         </div>
 
-        <span className="text-base font-semibold txt-primary" style={{ display: "block", marginBottom: 8 }}>
+        <span style={{ display: "block", marginBottom: 8, fontSize: 16, fontWeight: 600, color: "var(--seed-fg)" }}>
           {title}
         </span>
 
-        <p className="text-sm txt-secondary" style={{ marginBottom: 24 }}>
+        <p style={{ marginBottom: 24, fontSize: 14, color: "var(--seed-muted)", lineHeight: 1.55 }}>
           {message}
         </p>
 
         <div className="flex justify-center gap-3">
           <button
             onClick={onCancel}
-            className="btn-ghost"
             style={{
               padding: "8px 24px",
-              borderRadius: 8,
+              borderRadius: 10,
               fontSize: "var(--fs-13)",
-              color: "var(--text-secondary)",
-              border: "1px solid var(--border-medium)",
+              color: "var(--seed-muted)",
+              background: "transparent",
+              border: "1px solid var(--seed-border)",
+              cursor: "pointer",
+              transition: "all 0.15s",
               minWidth: 100,
+            }}
+            onMouseEnter={(e) => {
+              (e.target as HTMLElement).style.background = "var(--seed-hover-bg)";
+              (e.target as HTMLElement).style.color = "var(--seed-fg)";
+            }}
+            onMouseLeave={(e) => {
+              (e.target as HTMLElement).style.background = "transparent";
+              (e.target as HTMLElement).style.color = "var(--seed-muted)";
             }}
           >
             {cancelLabel}
@@ -91,22 +104,22 @@ export function ConfirmDialog({
             onClick={onConfirm}
             style={{
               padding: "8px 24px",
-              borderRadius: 8,
+              borderRadius: 10,
               fontSize: "var(--fs-13)",
               fontWeight: 500,
               border: "none",
-              background: "var(--accent)",
+              background: "var(--seed-accent)",
               color: "#fff",
               cursor: "pointer",
-              transition: "all .15s",
-              boxShadow: "0 0 16px var(--accent-glow)",
+              transition: "all 0.15s",
+              boxShadow: "0 0 16px var(--seed-accent-glow)",
               minWidth: 100,
             }}
             onMouseEnter={(e) => {
-              (e.target as HTMLElement).style.opacity = "0.85";
+              (e.target as HTMLElement).style.background = "color-mix(in srgb, var(--seed-accent) 85%, white)";
             }}
             onMouseLeave={(e) => {
-              (e.target as HTMLElement).style.opacity = "1";
+              (e.target as HTMLElement).style.background = "var(--seed-accent)";
             }}
           >
             {confirmLabel}

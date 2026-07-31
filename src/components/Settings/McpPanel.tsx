@@ -130,11 +130,11 @@ export function McpPanel({ onClose }: McpPanelProps) {
   };
 
   return (
-    <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 12, height: "100%" }}>
+    <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 12, flex: 1, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Server size={16} style={{ color: "var(--accent)" }} />
-          <span style={{ fontSize: "var(--fs-15)", fontWeight: 600, color: "var(--text-primary)" }}>MCP 工具集成</span>
+          <Server size={16} style={{ color: "var(--seed-accent)" }} />
+          <span style={{ fontSize: "var(--fs-15)", fontWeight: 600, color: "var(--seed-fg)" }}>MCP 工具集成</span>
         </div>
         <button
           onClick={() => setShowForm(!showForm)}
@@ -143,9 +143,9 @@ export function McpPanel({ onClose }: McpPanelProps) {
             display: "flex", alignItems: "center", gap: 4,
             padding: "6px 14px", borderRadius: 8,
             fontSize: "var(--fs-12)", fontWeight: 500,
-            background: showForm ? "var(--accent-bg)" : "var(--accent)",
-            color: showForm ? "var(--accent)" : "#fff",
-            border: showForm ? "1px solid var(--accent-border)" : "none",
+            background: showForm ? "var(--seed-accent-bg)" : "var(--seed-accent)",
+            color: showForm ? "var(--seed-accent)" : "#fff",
+            border: showForm ? "1px solid var(--seed-accent-border)" : "none",
             transition: "all 0.15s ease",
           }}
         >
@@ -153,23 +153,23 @@ export function McpPanel({ onClose }: McpPanelProps) {
         </button>
       </div>
 
-      <div style={{ fontSize: "var(--fs-11)", color: "var(--text-muted)", lineHeight: 1.5, padding: "10px 12px", background: "var(--bg-hover)", borderRadius: 8 }}>
+      <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.5, padding: "10px 12px", background: "var(--seed-hover-bg)", borderRadius: 8 }}>
         MCP (Model Context Protocol) 允许 AI 连接外部工具和服务。添加 MCP 服务器后，可以在对话中调用 API、查询数据库、操作文件等。
       </div>
 
       {showForm && (
-        <div style={{ padding: 12, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border-light)", display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ padding: 12, background: "var(--seed-surface)", borderRadius: 10, border: "1px solid var(--seed-border)", display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ display: "flex", gap: 8 }}>
             <input
               value={formName}
               onChange={(e) => setFormName(e.target.value)}
               placeholder="服务器名称（如：文件管理）"
-              style={{ flex: 1, padding: "8px 12px", borderRadius: 8, background: "var(--bg-input)", border: "1px solid var(--border-light)", color: "var(--text-primary)", fontSize: "var(--fs-12)", fontFamily: "inherit", outline: "none" }}
+              style={{ flex: 1, padding: "8px 12px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-12)", fontFamily: "inherit", outline: "none" }}
             />
             <select
               value={formTransport}
               onChange={(e) => setFormTransport(e.target.value as "http" | "sse" | "stdio")}
-              style={{ padding: "8px 10px", borderRadius: 8, background: "var(--bg-input)", border: "1px solid var(--border-light)", color: "var(--text-primary)", fontSize: "var(--fs-12)", fontFamily: "inherit", outline: "none" }}
+              style={{ padding: "8px 10px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-12)", fontFamily: "inherit", outline: "none" }}
             >
               <option value="http">HTTP</option>
               <option value="sse">SSE</option>
@@ -180,21 +180,21 @@ export function McpPanel({ onClose }: McpPanelProps) {
             value={formUrl}
             onChange={(e) => setFormUrl(e.target.value)}
             placeholder="服务器地址（如：http://localhost:3000）"
-            style={{ width: "100%", padding: "8px 12px", borderRadius: 8, background: "var(--bg-input)", border: "1px solid var(--border-light)", color: "var(--text-primary)", fontSize: "var(--fs-12)", fontFamily: "inherit", outline: "none" }}
+            style={{ width: "100%", padding: "8px 12px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-12)", fontFamily: "inherit", outline: "none" }}
           />
           <textarea
             value={formHeaders}
             onChange={(e) => setFormHeaders(e.target.value)}
             placeholder="Headers（JSON 格式，可选）"
-            style={{ width: "100%", padding: "8px 12px", borderRadius: 8, background: "var(--bg-input)", border: "1px solid var(--border-light)", color: "var(--text-primary)", fontSize: "var(--fs-11)", minHeight: 50, resize: "vertical", outline: "none", fontFamily: "ui-monospace, monospace" }}
+            style={{ width: "100%", padding: "8px 12px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-11)", minHeight: 50, resize: "vertical", outline: "none", fontFamily: "ui-monospace, monospace" }}
           />
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
             <button onClick={() => { setShowForm(false); setFormName(""); setFormUrl(""); setFormHeaders(""); }} className="cp"
-              style={{ padding: "6px 14px", borderRadius: 7, fontSize: "var(--fs-12)", color: "var(--text-tertiary)", background: "transparent", border: "1px solid var(--border-light)" }}>
+              style={{ padding: "6px 14px", borderRadius: 7, fontSize: "var(--fs-12)", color: "var(--seed-muted)", background: "transparent", border: "1px solid var(--seed-border)" }}>
               取消
             </button>
             <button onClick={handleAdd} disabled={!formName.trim() || !formUrl.trim()} className="cp"
-              style={{ padding: "6px 16px", borderRadius: 7, fontSize: "var(--fs-12)", fontWeight: 500, background: "var(--accent)", color: "#fff", border: "none", opacity: !formName.trim() || !formUrl.trim() ? 0.5 : 1, cursor: !formName.trim() || !formUrl.trim() ? "not-allowed" : "pointer" }}>
+              style={{ padding: "6px 16px", borderRadius: 7, fontSize: "var(--fs-12)", fontWeight: 500, background: "var(--seed-accent)", color: "#fff", border: "none", opacity: !formName.trim() || !formUrl.trim() ? 0.5 : 1, cursor: !formName.trim() || !formUrl.trim() ? "not-allowed" : "pointer" }}>
               添加
             </button>
           </div>
@@ -203,7 +203,7 @@ export function McpPanel({ onClose }: McpPanelProps) {
 
       <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
         {servers.length === 0 && (
-          <div style={{ padding: "40px 16px", textAlign: "center", color: "var(--text-muted)", fontSize: "var(--fs-13)" }}>
+          <div style={{ padding: "40px 16px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-13)" }}>
             暂无 MCP 服务器，点击上方按钮添加
           </div>
         )}
@@ -216,22 +216,22 @@ export function McpPanel({ onClose }: McpPanelProps) {
           const testOk = testResults[server.id];
 
           return (
-            <div key={server.id} style={{ padding: 12, background: "var(--bg-card)", borderRadius: 10, border: isActive ? "1px solid var(--accent-border)" : "1px solid var(--border-light)", transition: "border-color 0.15s ease" }}>
+            <div key={server.id} style={{ padding: 12, background: "var(--seed-surface)", borderRadius: 10, border: isActive ? "1px solid var(--seed-accent-border)" : "1px solid var(--seed-border)", transition: "border-color 0.15s ease" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                   <button onClick={() => toggleServerExpand(server.id)} className="cp"
-                    style={{ width: 18, height: 18, padding: 0, borderRadius: 4, background: "transparent", border: "none", color: "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    style={{ width: 18, height: 18, padding: 0, borderRadius: 4, background: "transparent", border: "none", color: "var(--seed-muted)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                   </button>
-                  <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--seed-fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {server.name}
                   </span>
-                  <span style={{ fontSize: "var(--fs-10)", padding: "1px 5px", borderRadius: 3, background: "var(--bg-hover)", color: "var(--text-muted)" }}>
+                  <span style={{ fontSize: "var(--fs-10)", padding: "1px 5px", borderRadius: 3, background: "var(--seed-hover-bg)", color: "var(--seed-muted)" }}>
                     {server.transportType.toUpperCase()}
                   </span>
                   {server.status === "connected" && <span style={{ fontSize: "var(--fs-10)", color: "var(--success)" }}>●</span>}
                   {server.status === "error" && <span style={{ fontSize: "var(--fs-10)", color: "var(--danger)" }}>●</span>}
-                  {server.status === "disconnected" && <span style={{ fontSize: "var(--fs-10)", color: "var(--text-muted)" }}>○</span>}
+                  {server.status === "disconnected" && <span style={{ fontSize: "var(--fs-10)", color: "var(--seed-muted)" }}>○</span>}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                   <button
@@ -241,9 +241,9 @@ export function McpPanel({ onClose }: McpPanelProps) {
                       display: "flex", alignItems: "center", gap: 3,
                       padding: "3px 10px", borderRadius: 5,
                       fontSize: "var(--fs-10)", fontWeight: 500,
-                      background: isActive ? "var(--accent-bg)" : "transparent",
-                      color: isActive ? "var(--accent)" : "var(--text-muted)",
-                      border: isActive ? "1px solid var(--accent-border)" : "1px solid var(--border-light)",
+                      background: isActive ? "var(--seed-accent-bg)" : "transparent",
+                      color: isActive ? "var(--seed-accent)" : "var(--seed-muted)",
+                      border: isActive ? "1px solid var(--seed-accent-border)" : "1px solid var(--seed-border)",
                       transition: "all 0.15s ease",
                     }}
                   >
@@ -254,7 +254,7 @@ export function McpPanel({ onClose }: McpPanelProps) {
                     onClick={() => handleTest(server.id)}
                     className="cp"
                     title="测试连接"
-                    style={{ width: 24, height: 24, borderRadius: 5, background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border-light)", display: "flex", alignItems: "center", justifyContent: "center" }}
+                    style={{ width: 24, height: 24, borderRadius: 5, background: "transparent", color: "var(--seed-muted)", border: "1px solid var(--seed-border)", display: "flex", alignItems: "center", justifyContent: "center" }}
                   >
                     <RefreshCw size={11} style={{ animation: testingThis ? "spin 1s linear infinite" : "none" }} />
                   </button>
@@ -262,16 +262,16 @@ export function McpPanel({ onClose }: McpPanelProps) {
                     onClick={() => removeServer(server.id)}
                     className="cp"
                     title="删除"
-                    style={{ width: 24, height: 24, borderRadius: 5, background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border-light)", display: "flex", alignItems: "center", justifyContent: "center" }}
+                    style={{ width: 24, height: 24, borderRadius: 5, background: "transparent", color: "var(--seed-muted)", border: "1px solid var(--seed-border)", display: "flex", alignItems: "center", justifyContent: "center" }}
                     onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger);" }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--seed-muted)"; }}
                   >
                     <Trash2 size={11} />
                   </button>
                 </div>
               </div>
 
-              <div style={{ fontSize: "var(--fs-11)", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis" }}>
+              <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", display: "flex", alignItems: "center", gap: 4, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis" }}>
                 <ExternalLink size={9} />
                 <span style={{ fontFamily: "ui-monospace, monospace" }}>{server.url}</span>
               </div>
@@ -283,23 +283,23 @@ export function McpPanel({ onClose }: McpPanelProps) {
               )}
 
               {isExpanded && (
-                <div style={{ padding: "8px", background: "var(--bg-hover)", borderRadius: 6, marginTop: 4 }}>
-                  <div style={{ fontSize: "var(--fs-11)", fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
+                <div style={{ padding: "8px", background: "var(--seed-hover-bg)", borderRadius: 6, marginTop: 4 }}>
+                  <div style={{ fontSize: "var(--fs-11)", fontWeight: 600, color: "var(--seed-muted)", marginBottom: 6 }}>
                     可用工具 ({tools.length})
                   </div>
                   {tools.length === 0 ? (
-                    <div style={{ fontSize: "var(--fs-11)", color: "var(--text-muted)" }}>
+                    <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)" }}>
                       {testingThis ? "加载中..." : "暂无可用工具"}
                     </div>
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                       {tools.map((tool) => (
-                        <div key={tool.name} style={{ padding: "6px 8px", background: "var(--bg-card)", borderRadius: 5, border: "1px solid var(--border-light)" }}>
-                          <div style={{ fontSize: "var(--fs-11)", fontWeight: 600, color: "var(--text-primary)", fontFamily: "ui-monospace, monospace", marginBottom: 2 }}>
+                        <div key={tool.name} style={{ padding: "6px 8px", background: "var(--seed-surface)", borderRadius: 5, border: "1px solid var(--seed-border)" }}>
+                          <div style={{ fontSize: "var(--fs-11)", fontWeight: 600, color: "var(--seed-fg)", fontFamily: "ui-monospace, monospace", marginBottom: 2 }}>
                             {tool.name}
                           </div>
                           {tool.description && (
-                            <div style={{ fontSize: "var(--fs-10)", color: "var(--text-muted)", lineHeight: 1.3 }}>
+                            <div style={{ fontSize: "var(--fs-10)", color: "var(--seed-muted)", lineHeight: 1.3 }}>
                               {tool.description}
                             </div>
                           )}
@@ -314,8 +314,8 @@ export function McpPanel({ onClose }: McpPanelProps) {
         })}
       </div>
 
-      <div style={{ padding: "8px 12px", background: "var(--bg-hover)", borderRadius: 8, fontSize: "var(--fs-11)", color: "var(--text-muted)", lineHeight: 1.5 }}>
-        <strong style={{ color: "var(--text-secondary)" }}>提示：</strong>启用 MCP 服务器后，AI 在对话中可以自动调用可用工具。需要模型支持 Function Calling 能力。
+      <div style={{ padding: "8px 12px", background: "var(--seed-hover-bg)", borderRadius: 8, fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.5 }}>
+        <strong style={{ color: "var(--seed-muted)" }}>提示：</strong>启用 MCP 服务器后，AI 在对话中可以自动调用可用工具。需要模型支持 Function Calling 能力。
       </div>
     </div>
   );

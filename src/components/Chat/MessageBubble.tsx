@@ -15,7 +15,9 @@ interface Props {
 
 export function MessageBubble({ message, streaming, onDelete, onEdit, onRegenerate, onEditAndSend }: Props) {
   const isUser = message.role === "user";
-  const isToolCall = message.role === "assistant" && message.content.startsWith("工具调用:");
+  const toolCall = message.toolCalls && message.toolCalls.length > 0 ? message.toolCalls[0] : null;
+  const hasToolCalls = message.role === "assistant" && !!(message.toolCalls && message.toolCalls.length > 0);
+  const isToolCall = hasToolCalls || message.content.startsWith("工具调用:");
   const isToolResult = message.role === "system" && message.content.startsWith("[工具");
   const [hovered, setHovered] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -35,7 +37,6 @@ export function MessageBubble({ message, streaming, onDelete, onEdit, onRegenera
     }
   }, [editing, editText]);
 
-  // 思考内容流式时跟随滚到底部（StreamingText 每帧更新，用 rAF 跟随）
   useEffect(() => {
     if (!isThinkingStreaming) return;
     let rafId: number;
@@ -49,7 +50,6 @@ export function MessageBubble({ message, streaming, onDelete, onEdit, onRegenera
     return () => cancelAnimationFrame(rafId);
   }, [isThinkingStreaming]);
 
-  // 思考流式时自动展开；思考完成后自动收起（用户手动操作过则不再自动收）
   useEffect(() => {
     if (isThinkingStreaming) {
       setThinkingOpen(true);
@@ -136,34 +136,65 @@ export function MessageBubble({ message, streaming, onDelete, onEdit, onRegenera
     );
   };
 
+  const formatToolArgs = () => {
+    if (!toolCall) return "";
+    try {
+      const a = JSON.parse(toolCall.function.arguments);
+      const q = a.query || a.input || a.topic || a.content || Object.values(a)[0];
+      const s = typeof q === "string" ? q : JSON.stringify(a);
+      return s.slice(0, 300);
+    } catch {
+      return toolCall.function.arguments.slice(0, 300);
+    }
+  };
+
+  const toolResultContent = () => {
+    return message.content.replace(/^\[工具 .*? 返回\]\n?/, "");
+  };
+
   return (
     <>
     {isToolCall || isToolResult ? (
       <div className="flex gap-2 mb-4" style={{ alignItems: "flex-start" }}>
         <div className="rd-full flex items-center justify-center shrink-0"
-          style={{ width: 22, height: 22, flex: "0 0 22px", background: "var(--bg-hover)", alignSelf: "flex-start", marginTop: 2 }}>
-          <Wrench size={11} style={{ color: "var(--text-tertiary)" }} />
+          style={{ width: 26, height: 26, flex: "0 0 26px", background: "var(--accent-bg)", alignSelf: "flex-start", marginTop: 2 }}>
+          <Wrench size={13} style={{ color: "var(--accent)" }} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: "var(--fs-10)", color: "var(--text-muted)", marginBottom: 4 }}>
-            {isToolCall ? "工具调用" : "工具返回"}
+          <div style={{ fontSize: "var(--fs-11)", color: "var(--accent)", marginBottom: 6, fontWeight: 500 }}>
+            {isToolCall
+              ? (toolCall ? `调用工具：\${toolCall.function.name}` : "工具调用")
+              : (toolCall ? `工具返回：\${toolCall.function.name}` : "工具返回")}
           </div>
-          <div className="rd-10"
-            style={{
-              padding: "6px 10px",
-              background: "var(--bg-hover)",
-              border: "1px solid var(--border-subtle)",
-              fontSize: "var(--fs-11)",
-              fontFamily: "ui-monospace, monospace",
-              lineHeight: 1.5,
-              color: "var(--text-secondary)",
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-              maxHeight: 200,
-              overflowY: "auto",
-            }}>
-            {message.content}
-          </div>
+          {isToolCall && toolCall ? (
+            <div className="rd-10"
+              style={{
+                padding: "8px 12px",
+                background: "var(--bg-hover)",
+                border: "1px solid var(--border-subtle)",
+                fontSize: "var(--fs-12)",
+                lineHeight: 1.55,
+                color: "var(--text-secondary)",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}>
+              {formatToolArgs()}
+            </div>
+          ) : isToolResult ? (
+            <div className="rd-10"
+              style={{
+                padding: "10px 14px",
+                background: "var(--bg-hover)",
+                border: "1px solid var(--border-subtle)",
+                fontSize: "var(--fs-12)",
+                lineHeight: 1.6,
+                color: "var(--text-secondary)",
+                maxHeight: 400,
+                overflowY: "auto",
+              }}>
+              <MarkdownRender content={toolResultContent()} />
+            </div>
+          ) : null}
         </div>
       </div>
     ) : (
@@ -173,7 +204,6 @@ export function MessageBubble({ message, streaming, onDelete, onEdit, onRegenera
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Unified frame: avatar + content box together */}
       <div
         className={`flex rd-16 ${isUser ? "flex-row-reverse" : "flex-row"}`}
         style={{
@@ -188,7 +218,6 @@ export function MessageBubble({ message, streaming, onDelete, onEdit, onRegenera
           minWidth: 0,
         }}
       >
-        {/* Avatar */}
         <div
           className="rd-full flex items-center justify-center shrink-0"
           style={{
@@ -208,8 +237,7 @@ export function MessageBubble({ message, streaming, onDelete, onEdit, onRegenera
           )}
         </div>
 
-         {/* Content area */}
-        <div style={{ flex: 1, minWidth: 0 }}>
+         <div style={{ flex: 1, minWidth: 0 }}>
           {editing ? null : (
             <>
               {isUser && message.images && message.images.length > 0 && (

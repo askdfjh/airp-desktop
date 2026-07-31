@@ -312,3 +312,58 @@ MCP 服务器暴露的工具已接入 AI 工具调用管道，与内置搜索并
 
 **改动文件**：
 - `src/hooks/useChat.ts`：`editAndSend` 改为 `prev.slice(0, idx + 1)` + 遍历删除 DB 记录
+
+## 2026-07-31
+
+### 重构：Cookie 持久化系统（修复搜索 Cookie 失效）
+
+**问题**：
+1. http_fetch 每次调用报 missing required key args，搜索完全不可用
+2. Cookie 由 reqwest 内部自动管理，无可见性（不知道存了没、存了啥）
+3. DuckDuckGo 经常返回 CAPTCHA/验证页，导致 HTML 搜索策略失效
+
+**修复**：
+1. **Rust 端**：将 reqwest 内部 Jar 改为进程级 Arc<Jar> 单例，通过 .cookie_provider(jar) 注入 Client
+   - 新增 http_set_cookie：手动向 Jar 注入 Cookie（绕过服务器不标准 Set-Cookie）
+   - 新增 http_list_cookies：查看指定 URL 当前携带的 Cookie（调试用）
+   - 新增 http_clear_cookies：清空指定域名或常用搜索域的 Cookie
+   - http_fetch 增加完整 Cookie 诊断日志：请求前打印 cookies_sent，响应后打印 cookies_now
+   - http_fetch 改为扁平参数签名（url: String, method: Option<String>, headers: Option<...>, body: Option<String>），避免 Tauri invoke 结构体参数反序列化异常
+2. **前端**：searchDuckDuckGo 入口新增 Cookie 初始化
+   - 先 http_clear_cookies 清旧 Cookie
+   - 再 http_set_cookie 注入 ccept=auto 和 duckduckgo-accept=true，降低 CAPTCHA 概率
+   - 调用 http_list_cookies 确认 Cookie 已就绪
+3. **依赖**：Cargo.toml 新增 url = "2"
+
+**改动文件**：
+- src-tauri/Cargo.toml：新增 url 依赖
+- src-tauri/src/main.rs：重写 Cookie 管理（Arc<Jar> 单例 + 4 个命令 + 诊断日志）
+- src/tools/search.ts：searchDuckDuckGo 新增 Cookie 预注入逻辑
+
+### 修复：小说模式 vs 普通会话模式区分渲染
+
+**问题**：
+1. DialogueNovel 流式结束后正文格式变差（markdown 语法暴露）
+2. 普通会话模式工具调用/返回显示粗糙
+3. SessionPopup 底部按钮被挤压不显示
+4. 应用启动无会话时直接进入 onboarding，用户无空会话可用
+
+**修复**：
+1. **DialogueNovel**：移除 MarkdownRender，流式结束后恢复纯文本渲染（保持小说视角设计）
+2. **MessageBubble**：优化工具调用/返回显示
+   - 工具调用徽章：检测 message.toolCalls 数组，显示具体工具名和解析后的 query 参数
+   - 工具结果：使用 MarkdownRender 渲染搜索结果，最大高度 400px
+   - 统一使用 accent 色和更大字号
+3. **SessionPopup**：完全内联样式重写
+   - 弹窗宽度固定 480px，搜索框外包 div 控制 box-sizing
+   - Footer 用 flex: \"0 0 auto\" 固定高度，不被列表压缩
+   - 底部双按钮：空白会话（深色底+边框）+ 新建冒险（accent 底）
+4. **AppShell**：启动时检查 sessions.length === 0，自动调用 createBlankSession()
+5. **sessionStore**：新增 createBlankSession() 方法，创建标题为"空白会话"的新会话
+
+**改动文件**：
+- src/components/Chat/DialogueNovel.tsx：移除 MarkdownRender，恢复纯文本
+- src/components/Chat/MessageBubble.tsx：重写工具调用/返回显示逻辑
+- src/components/Chat/SessionPopup.tsx：完全内联样式，修复布局
+- src/components/Layout/AppShell.tsx：启动时自动创建空白会话
+- src/stores/sessionStore.ts：新增 createBlankSession 方法

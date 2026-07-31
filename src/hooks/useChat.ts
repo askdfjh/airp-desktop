@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { flushSync } from "react-dom";
 import type { Message, AttachedFile, ToolDefinition, ToolCall } from "@/types";
 import { chatStream } from "@/providers/openai";
 import type { ApiMessage } from "@/providers/openai";
@@ -323,7 +324,7 @@ export function useChat() {
           toolCalls: result.toolCalls,
           toolStatus: "running",
         };
-        setMessages((prev) => [...prev, asstMsg]);
+        flushSync(() => { setMessages((prev) => [...prev, asstMsg]); });
         messagesRef.current = [...messagesRef.current, asstMsg];
         insertMessage(asstMsg).catch(() => {});
 
@@ -498,7 +499,7 @@ export function useChat() {
         id: crypto.randomUUID(), sessionId, role: "assistant", content: "", createdAt: Date.now(),
         toolCalls: result.toolCalls, toolStatus: "running",
       };
-      setMessages((prev) => [...prev, asstMsg]);
+      flushSync(() => { setMessages((prev) => [...prev, asstMsg]); });
       messagesRef.current = [...messagesRef.current, asstMsg];
       insertMessage(asstMsg).catch(() => {});
 
@@ -514,6 +515,8 @@ export function useChat() {
         messagesRef.current = [...messagesRef.current, toolMsg];
         insertMessage(toolMsg).catch(() => {});
       }
+      setMessages((prev) => prev.map((m) => m.toolStatus === "running" ? { ...m, toolStatus: "done" } : m));
+      messagesRef.current = messagesRef.current.map((m) => m.toolStatus === "running" ? { ...m, toolStatus: "done" } : m);
       setToolRunning(false);
 
       const newApiMessages: ApiMessage[] = [];
@@ -600,7 +603,7 @@ export function useChat() {
         id: crypto.randomUUID(), sessionId, role: "assistant", content: "", createdAt: Date.now(),
         toolCalls: result.toolCalls, toolStatus: "running",
       };
-      setMessages((prev) => [...prev, asstMsg]);
+      flushSync(() => { setMessages((prev) => [...prev, asstMsg]); });
       messagesRef.current = [...messagesRef.current, asstMsg];
       insertMessage(asstMsg).catch(() => {});
 
@@ -616,6 +619,8 @@ export function useChat() {
         messagesRef.current = [...messagesRef.current, toolMsg];
         insertMessage(toolMsg).catch(() => {});
       }
+      setMessages((prev) => prev.map((m) => m.toolStatus === "running" ? { ...m, toolStatus: "done" } : m));
+      messagesRef.current = messagesRef.current.map((m) => m.toolStatus === "running" ? { ...m, toolStatus: "done" } : m);
       setToolRunning(false);
 
       const newApiMessages: ApiMessage[] = [];

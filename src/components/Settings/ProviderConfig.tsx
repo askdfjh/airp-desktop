@@ -92,8 +92,8 @@ const PRESET_ICONS: Record<string, React.ComponentType<{ size?: number; style?: 
 
 function PresetIcon({ type, size = 28, selected = false }: { type: ProviderType; size?: number; selected?: boolean }) {
   const Icon = PRESET_ICONS[type] || Server;
-  const bg = selected ? 'var(--accent-bg)' : 'var(--bg-elevated)';
-  const color = selected ? 'var(--accent)' : 'var(--text-secondary)';
+  const bg = selected ? 'var(--seed-accent-bg)' : 'var(--seed-surface)';
+  const color = selected ? 'var(--seed-accent)' : 'var(--seed-muted)';
   const iconSize = Math.round(size * 0.55);
   return (
     <div style={{
@@ -156,8 +156,8 @@ function CustomSelect<T extends string>({
         className='w-full flex items-center justify-between'
         style={{
           appearance: 'none', WebkitAppearance: 'none', height: 32, padding: '0 12px',
-          borderRadius: 10, background: 'var(--bg-input)', border: '1px solid var(--border-light)',
-          color: current ? 'var(--text-primary)' : 'var(--text-muted)', fontSize: 'var(--fs-12)',
+          borderRadius: 10, background: 'var(--seed-input-bg)', border: '1px solid var(--seed-border)',
+          color: current ? 'var(--seed-fg)' : 'var(--seed-muted)', fontSize: 'var(--fs-12)',
           opacity: disabled ? 0.4 : 1, cursor: disabled ? 'not-allowed' : 'pointer', transition: 'border-color 0.15s',
         }}
       >
@@ -167,7 +167,7 @@ function CustomSelect<T extends string>({
       {open && !disabled && (
         <div style={{
           position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, right: 0,
-          background: 'var(--bg-dropdown)', border: 'none', borderRadius: 10,
+          background: 'var(--seed-surface)', border: 'none', borderRadius: 10,
           boxShadow: '0 4px 16px rgba(0,0,0,0.12)', zIndex: 999,
           maxHeight: 200, overflowY: 'auto', padding: 4,
         }}>
@@ -178,8 +178,8 @@ function CustomSelect<T extends string>({
               className='w-full text-left flex items-center justify-between'
               style={{
                 appearance: 'none', WebkitAppearance: 'none', border: 'none',
-                background: o.value === value ? 'var(--accent-bg)' : 'transparent',
-                color: o.value === value ? 'var(--accent)' : 'var(--text-primary)',
+                background: o.value === value ? 'var(--seed-accent-bg)' : 'transparent',
+                color: o.value === value ? 'var(--seed-accent)' : 'var(--seed-fg)',
                 padding: '6px 10px', fontSize: 'var(--fs-12)', borderRadius: 6,
                 width: '100%', textAlign: 'left', cursor: 'pointer',
               }}
@@ -205,7 +205,7 @@ function Toggle({ checked, onChange, size = 'md' }: { checked: boolean; onChange
       className='cp tr-all'
       style={{
         width: w, height: h, borderRadius: h / 2, border: 'none', padding: 0,
-        background: checked ? 'var(--accent)' : 'var(--border-medium)', position: 'relative',
+        background: checked ? 'var(--seed-accent)' : 'var(--seed-border)', position: 'relative',
         flexShrink: 0, transition: 'background 0.2s ease', cursor: 'pointer',
       }}
     >
@@ -411,17 +411,17 @@ function ModelsSection() {
   }, [providers, searchQuery]);
 
   return (
-    <div style={{ display: 'flex', gap: 16, height: '100%', minHeight: 400 }}>
+    <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
       {/* Left Sidebar */}
       <div style={{
         width: 240, flexShrink: 0, display: 'flex', flexDirection: 'column',
-        background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-light)',
+        background: 'var(--seed-surface)', borderRadius: 12, border: '1px solid var(--seed-border)',
         overflow: 'hidden',
       }}>
         {/* Search */}
-        <div style={{ padding: '10px', borderBottom: '1px solid var(--border-subtle)' }}>
+        <div style={{ padding: '10px', borderBottom: '1px solid var(--seed-border)' }}>
           <div style={{ position: 'relative' }}>
-            <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--seed-muted)' }} />
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -429,18 +429,18 @@ function ModelsSection() {
               className='w-full on'
               style={{
                 padding: '7px 32px 7px 30px', borderRadius: 10,
-                background: 'var(--bg-input)', border: '1px solid var(--border-light)',
-                fontSize: 'var(--fs-11)', color: 'var(--text-primary)',
+                background: 'var(--seed-input-bg)', border: '1px solid var(--seed-border)',
+                fontSize: 'var(--fs-11)', color: 'var(--seed-fg)',
               }}
             />
-            <Filter size={12} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <Filter size={12} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--seed-muted)' }} />
           </div>
         </div>
 
         {/* Provider list */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '6px 8px' }}>
           {renderItems.length === 0 && (
-            <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-12)' }}>
+            <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--seed-muted)', fontSize: 'var(--fs-12)' }}>
               <Server size={20} style={{ margin: '0 auto 6px', opacity: 0.3 }} />
               <p style={{ fontSize: 'var(--fs-11)' }}>未找到匹配的 Provider</p>
             </div>
@@ -465,23 +465,23 @@ function ModelsSection() {
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10,
                   padding: '8px 8px', borderRadius: 10,
-                  background: isSelected ? 'var(--accent-bg)' : 'transparent',
-                  border: isSelected ? '1px solid var(--accent-border)' : '1px solid transparent',
+                  background: isSelected ? 'var(--seed-accent-bg)' : 'transparent',
+                  border: isSelected ? '1px solid var(--seed-accent-border)' : '1px solid transparent',
                   marginBottom: 2, cursor: 'pointer', transition: 'all 0.12s ease',
                 }}
-                onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--seed-hover-bg)'; }}
                 onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
               >
                 <PresetIcon type={item.type} size={28} selected={isSelected} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
                     fontSize: 'var(--fs-12)', fontWeight: 600,
-                    color: isSelected ? 'var(--accent)' : 'var(--text-primary)',
+                    color: isSelected ? 'var(--seed-accent)' : 'var(--seed-fg)',
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>{pName}</div>
                   {!item.isAdded && (
                     <div style={{
-                      fontSize: 'var(--fs-10)', color: 'var(--text-muted)',
+                      fontSize: 'var(--fs-10)', color: 'var(--seed-muted)',
                       marginTop: 2,
                     }}>点击添加</div>
                   )}
@@ -496,7 +496,7 @@ function ModelsSection() {
                     }} size='sm' />
                   </div>
                 ) : (
-                  <Plus size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                  <Plus size={14} style={{ color: 'var(--seed-muted)', flexShrink: 0 }} />
                 )}
               </div>
             );
@@ -504,25 +504,25 @@ function ModelsSection() {
         </div>
 
         {/* Bottom: Add custom provider */}
-        <div style={{ padding: '8px', borderTop: '1px solid var(--border-subtle)' }}>
+        <div style={{ padding: '8px', borderTop: '1px solid var(--seed-border)' }}>
           <button
             onClick={() => {
               addPreset('custom');
             }}
             style={{
               width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              padding: '9px 12px', borderRadius: 10, border: '1px dashed var(--border-light)',
-              background: 'var(--bg-elevated)', color: 'var(--text-secondary)',
+              padding: '9px 12px', borderRadius: 10, border: '1px dashed var(--seed-border)',
+              background: 'var(--seed-surface)', color: 'var(--seed-muted)',
               fontSize: 'var(--fs-11)', fontWeight: 500, cursor: 'pointer',
               transition: 'all 0.12s',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'var(--accent-border)';
-              e.currentTarget.style.color = 'var(--accent)';
+              e.currentTarget.style.borderColor = 'var(--seed-accent-border)';
+              e.currentTarget.style.color = 'var(--seed-accent)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'var(--border-light)';
-              e.currentTarget.style.color = 'var(--text-secondary)';
+              e.currentTarget.style.borderColor = 'var(--seed-border)';
+              e.currentTarget.style.color = 'var(--seed-muted)';
             }}
           >
             <Plus size={13} />
@@ -537,8 +537,8 @@ function ModelsSection() {
         {!selectedProvider ? (
           <div style={{
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--text-muted)', fontSize: 'var(--fs-13)',
-            background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-light)',
+            color: 'var(--seed-muted)', fontSize: 'var(--fs-13)',
+            background: 'var(--seed-surface)', borderRadius: 12, border: '1px solid var(--seed-border)',
           }}>
             <div style={{ textAlign: 'center' }}>
               <Server size={36} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
@@ -659,7 +659,7 @@ function ProviderDetail({
     unknown: '未检测', checking: '检测中...', online: '连接正常',
     offline: '连接失败', invalid_key: 'API Key 无效',
   };
-  const statusColor = status === 'online' ? '#22c55e' : status === 'offline' ? '#ef4444' : status === 'invalid_key' ? '#f59e0b' : 'var(--text-muted)';
+  const statusColor = status === 'online' ? '#22c55e' : status === 'offline' ? '#ef4444' : status === 'invalid_key' ? '#f59e0b' : 'var(--seed-muted)';
 
   const modelGroups = useMemo<{ group: string; items: string[] }[]>(() => groupModels(p.models), [p.models]);
 
@@ -692,14 +692,15 @@ function ProviderDetail({
 
   return (
     <div style={{
-      background: 'var(--bg-card)', borderRadius: 12,
-      border: '1px solid var(--border-light)', padding: 0,
+      background: 'var(--seed-surface)', borderRadius: 12,
+      border: '1px solid var(--seed-border)', padding: 0,
       overflow: 'hidden', display: 'flex', flexDirection: 'column',
+      flex: 1,
     }}>
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)',
+        padding: '16px 20px', borderBottom: '1px solid var(--seed-border)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <PresetIcon type={p.type} size={40} />
@@ -719,25 +720,25 @@ function ProviderDetail({
                 }
               }}
               style={{
-                fontSize: 'var(--fs-15)', fontWeight: 600, color: 'var(--text-primary)',
-                background: 'var(--bg-input)', border: '1px solid var(--border-light)',
+                fontSize: 'var(--fs-15)', fontWeight: 600, color: 'var(--seed-fg)',
+                background: 'var(--seed-input-bg)', border: '1px solid var(--seed-border)',
                 borderRadius: 10, padding: '4px 10px', width: 200, outline: 'none',
               }}
             />
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <div style={{ fontSize: 'var(--fs-15)', fontWeight: 600, color: 'var(--text-primary)' }}>{p.name}</div>
+              <div style={{ fontSize: 'var(--fs-15)', fontWeight: 600, color: 'var(--seed-fg)' }}>{p.name}</div>
               {p.type === 'custom' && (
               <button
                 onClick={() => { setNameDraft(p.name); setEditingName(true); }}
                 style={{
                   width: 20, height: 20, borderRadius: 4, border: 'none', cursor: 'pointer',
-                  background: 'var(--bg-elevated)', color: 'var(--text-muted)',
+                  background: 'var(--seed-surface)', color: 'var(--seed-muted)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   transition: 'color 0.15s',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--seed-accent)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--seed-muted)'; }}
                 title="编辑名称"
               >
                 <Pencil size={11} />
@@ -757,11 +758,11 @@ function ProviderDetail({
       </div>
 
       {/* Scrollable content */}
-      <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ padding: '20px 20px 12px', display: 'flex', flexDirection: 'column', gap: 20, flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {/* API Key Section */}
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <label style={{ fontSize: 'var(--fs-12)', fontWeight: 600, color: 'var(--text-primary)' }}>API 密钥</label>
+            <label style={{ fontSize: 'var(--fs-12)', fontWeight: 600, color: 'var(--seed-fg)' }}>API 密钥</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <button
                 onClick={() => testConnection(p.id)}
@@ -769,9 +770,9 @@ function ProviderDetail({
                 style={{
                   display: 'flex', alignItems: 'center', gap: 4,
                   padding: '5px 12px', fontSize: 'var(--fs-11)', borderRadius: 8, fontWeight: 500,
-                  background: status === 'checking' ? 'var(--bg-hover)' : 'var(--bg-elevated)',
-                  color: status === 'checking' ? 'var(--text-muted)' : 'var(--text-secondary)',
-                  border: '1px solid var(--border-light)', cursor: status === 'checking' ? 'not-allowed' : 'pointer',
+                  background: status === 'checking' ? 'var(--seed-hover-bg)' : 'var(--seed-surface)',
+                  color: status === 'checking' ? 'var(--seed-muted)' : 'var(--seed-muted)',
+                  border: '1px solid var(--seed-border)', cursor: status === 'checking' ? 'not-allowed' : 'pointer',
                 }}
               >
                 {status === 'checking' ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Wifi size={11} />}
@@ -787,9 +788,9 @@ function ProviderDetail({
               onChange={(e) => updateProvider(p.id, { apiKey: e.target.value })}
               placeholder='输入 API Key，多个密钥使用逗号分隔'
               style={{
-                width: '100%', color: 'var(--text-primary)', background: 'var(--bg-input)',
+                width: '100%', color: 'var(--seed-fg)', background: 'var(--seed-input-bg)',
                 fontSize: 'var(--fs-12)', padding: '10px 38px 10px 12px)', borderRadius: 10,
-                border: '1px solid var(--border-light)', outline: 'none',
+                border: '1px solid var(--seed-border)', outline: 'none',
               }}
             />
             <button
@@ -797,14 +798,14 @@ function ProviderDetail({
               style={{
                 position: 'absolute', right: 0, top: 0, height: '100%', width: 36,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
+                background: 'none', border: 'none', color: 'var(--seed-muted)', cursor: 'pointer',
               }}
             >
               {showKey[p.id] ? <EyeOff size={14} /> : <Eye size={14} />}
             </button>
           </div>
           <div style={{
-            fontSize: 'var(--fs-10)', color: 'var(--text-muted)', marginTop: 6,
+            fontSize: 'var(--fs-10)', color: 'var(--seed-muted)', marginTop: 6,
             display: 'flex', justifyContent: 'space-between',
           }}>
             <span>多个密钥使用逗号分隔</span>
@@ -816,7 +817,7 @@ function ProviderDetail({
 
         {/* API URL Section */}
         <div>
-          <label style={{ fontSize: 'var(--fs-12)', fontWeight: 600, color: 'var(--text-primary)', display: 'block', marginBottom: 8 }}>
+          <label style={{ fontSize: 'var(--fs-12)', fontWeight: 600, color: 'var(--seed-fg)', display: 'block', marginBottom: 8 }}>
             API 地址
           </label>
           <div style={{ position: 'relative' }}>
@@ -825,21 +826,21 @@ function ProviderDetail({
               onChange={(e) => updateProvider(p.id, { baseUrl: e.target.value })}
               placeholder='https://api.example.com/v1'
               style={{
-                width: '100%', color: 'var(--text-primary)', background: 'var(--bg-input)',
+                width: '100%', color: 'var(--seed-fg)', background: 'var(--seed-input-bg)',
                 fontSize: 'var(--fs-12)', padding: '10px 38px 10px 12px)', borderRadius: 10,
-                border: '1px solid var(--border-light)', outline: 'none',
+                border: '1px solid var(--seed-border)', outline: 'none',
               }}
             />
             <button style={{
               position: 'absolute', right: 0, top: 0, height: '100%', width: 36,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
+              background: 'none', border: 'none', color: 'var(--seed-muted)', cursor: 'pointer',
             }}>
               <Cog size={13} />
             </button>
           </div>
           {previewUrl && (
-            <div style={{ fontSize: 'var(--fs-10)', color: 'var(--text-muted)', marginTop: 6 }}>
+            <div style={{ fontSize: 'var(--fs-10)', color: 'var(--seed-muted)', marginTop: 6 }}>
               预览: {previewUrl}
             </div>
           )}
@@ -849,10 +850,10 @@ function ProviderDetail({
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 'var(--fs-12)', fontWeight: 600, color: 'var(--text-primary)' }}>模型</span>
+              <span style={{ fontSize: 'var(--fs-12)', fontWeight: 600, color: 'var(--seed-fg)' }}>模型</span>
               <span style={{
-                fontSize: 'var(--fs-10)', color: 'var(--text-muted)',
-                background: 'var(--bg-hover)', padding: '1px 7px', borderRadius: 10,
+                fontSize: 'var(--fs-10)', color: 'var(--seed-muted)',
+                background: 'var(--seed-hover-bg)', padding: '1px 7px', borderRadius: 10,
               }}>{p.models.length}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -861,8 +862,8 @@ function ProviderDetail({
                 title='视觉支持'
                 style={{
                   width: 24, height: 24, borderRadius: 6, border: 'none', cursor: 'pointer',
-                  background: p.supportsImages ? 'var(--accent-bg)' : 'var(--bg-elevated)',
-                  color: p.supportsImages ? 'var(--accent)' : 'var(--text-muted)',
+                  background: p.supportsImages ? 'var(--seed-accent-bg)' : 'var(--seed-surface)',
+                  color: p.supportsImages ? 'var(--seed-accent)' : 'var(--seed-muted)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
               >
@@ -878,9 +879,9 @@ function ProviderDetail({
                 style={{
                   display: 'flex', alignItems: 'center', gap: 4,
                   padding: '5px 12px', fontSize: 'var(--fs-11)', borderRadius: 8, fontWeight: 500,
-                  background: fetchingNow ? 'var(--bg-hover)' : 'var(--bg-elevated)',
-                  color: fetchingNow ? 'var(--text-muted)' : 'var(--text-secondary)',
-                  border: '1px solid var(--border-light)', cursor: fetchingNow ? 'not-allowed' : 'pointer',
+                  background: fetchingNow ? 'var(--seed-hover-bg)' : 'var(--seed-surface)',
+                  color: fetchingNow ? 'var(--seed-muted)' : 'var(--seed-muted)',
+                  border: '1px solid var(--seed-border)', cursor: fetchingNow ? 'not-allowed' : 'pointer',
                 }}
               >
                 <Download size={11} />
@@ -891,7 +892,7 @@ function ProviderDetail({
                 title='手动添加模型'
                 style={{
                   width: 24, height: 24, borderRadius: 6, border: 'none', cursor: 'pointer',
-                  background: 'var(--accent-bg)', color: 'var(--accent)',
+                  background: 'var(--seed-accent-bg)', color: 'var(--seed-accent)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
               >
@@ -902,7 +903,7 @@ function ProviderDetail({
 
 
           {modelGroups.length === 0 && !hasFetched && (
-            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-11)' }}>
+            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--seed-muted)', fontSize: 'var(--fs-11)' }}>
               暂无模型，点击上方「获取模型列表」或手动添加
             </div>
           )}
@@ -915,14 +916,14 @@ function ProviderDetail({
                   onClick={() => toggleGroup(group)}
                   style={{
                     width: '100%', display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-subtle)',
+                    padding: '8px 10px', borderRadius: 8, border: '1px solid var(--seed-border)',
                     background: 'var(--bg-surface)', cursor: 'pointer',
-                    fontSize: 'var(--fs-11)', fontWeight: 600, color: 'var(--text-primary)',
+                    fontSize: 'var(--fs-11)', fontWeight: 600, color: 'var(--seed-fg)',
                   }}
                 >
                   {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
                   <span>{group}</span>
-                  <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({items.length})</span>
+                  <span style={{ color: 'var(--seed-muted)', fontWeight: 400 }}>({items.length})</span>
                 </button>
                 {!isCollapsed && (
                   <div style={{ padding: '4px 0 4px 22px' }}>
@@ -941,10 +942,10 @@ function ProviderDetail({
                           style={{
                             display: 'flex', alignItems: 'center', gap: 6,
                             padding: '6px 8px', borderRadius: 6, marginBottom: 2,cursor: 'pointer',
-                            background: isActive ? 'var(--accent-bg)' : 'transparent',
+                            background: isActive ? 'var(--seed-accent-bg)' : 'transparent',
                             transition: 'background 0.12s',
                           }}
-                          onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                          onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--seed-hover-bg)'; }}
                           onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                         >
                           <button
@@ -957,8 +958,8 @@ function ProviderDetail({
                             title={isActive ? '使用中' : '启用'}
                             style={{
                               width: 22, height: 22, borderRadius: 6, border: 'none', cursor: 'pointer',
-                              background: isActive ? 'var(--accent)' : isEnabled ? 'var(--accent-bg)' : 'var(--bg-elevated)',
-                              color: isActive || isEnabled ? 'var(--accent)' : 'var(--text-muted)',
+                              background: isActive ? 'var(--seed-accent)' : isEnabled ? 'var(--seed-accent-bg)' : 'var(--seed-surface)',
+                              color: isActive || isEnabled ? 'var(--seed-accent)' : 'var(--seed-muted)',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                             }}
                           >
@@ -966,7 +967,7 @@ function ProviderDetail({
                           </button>
                           <span style={{
                             flex: 1, minWidth: 0, fontSize: 'var(--fs-11)',
-                            color: isActive ? 'var(--accent)' : 'var(--text-primary)',
+                            color: isActive ? 'var(--seed-accent)' : 'var(--seed-fg)',
                             fontWeight: isActive ? 600 : 400,
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                           }}>{m}</span>
@@ -979,7 +980,7 @@ function ProviderDetail({
                             style={{
                               width: 20, height: 20, borderRadius: 4, border: 'none', cursor: 'pointer',
                               background: isThinking ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
-                              color: isThinking ? '#f59e0b' : 'var(--text-muted)',
+                              color: isThinking ? '#f59e0b' : 'var(--seed-muted)',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                             }}
                           >
@@ -997,7 +998,7 @@ function ProviderDetail({
                             title={presetDefaultModels.includes(m) ? '禁用预设模型' : '移除'}
                             style={{
                               width: 20, height: 20, borderRadius: 4, border: 'none', cursor: 'pointer',
-                              background: 'transparent', color: 'var(--text-muted)',
+                              background: 'transparent', color: 'var(--seed-muted)',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                             }}
                           >
@@ -1015,15 +1016,15 @@ function ProviderDetail({
           {/* Manual add */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: 6,
-            padding: '6px 8px', borderRadius: 6, border: '1px dashed var(--border-light)',
+            padding: '6px 8px', borderRadius: 6, border: '1px dashed var(--seed-border)',
             marginTop: 6,
           }}>
-            <Plus size={11} style={{ color: 'var(--text-muted)' }} />
+            <Plus size={11} style={{ color: 'var(--seed-muted)' }} />
             <input
               placeholder='添加自定义模型名...'
               style={{
                 flex: 1, border: 'none', outline: 'none', background: 'transparent',
-                fontSize: 'var(--fs-11)', color: 'var(--text-primary)',
+                fontSize: 'var(--fs-11)', color: 'var(--seed-fg)',
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -1036,7 +1037,7 @@ function ProviderDetail({
         </div>
 
         {/* Delete button */}
-        <div style={{ paddingTop: 8, borderTop: '1px solid var(--border-subtle)' }}>
+        <div style={{ paddingTop: 8, borderTop: '1px solid var(--seed-border)' }}>
           <button
             onClick={() => removeProvider(p.id)}
             style={{
@@ -1062,23 +1063,23 @@ function ProviderDetail({
           <div style={{
             width: 520, maxHeight: '75vh',
             background: 'var(--bg-overlay)',
-            border: '1px solid var(--border-medium)',
+            border: '1px solid var(--seed-border)',
             borderRadius: 14,
             boxShadow: '0 12px 40px rgba(0,0,0,0.35)',
-            backdropFilter: 'var(--blur-lg)',
-            WebkitBackdropFilter: 'var(--blur-lg)',
+            backdropFilter: 'blur(30px)',
+            WebkitBackdropFilter: 'blur(30px)',
             display: 'flex', flexDirection: 'column', overflow: 'hidden',
           }} onClick={(e) => e.stopPropagation()}>
             {/* Header */}
-            <div style={{ padding: '12px 14px 8px', borderBottom: '1px solid var(--border-light)' }}>
+            <div style={{ padding: '12px 14px 8px', borderBottom: '1px solid var(--seed-border)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Bot size={14} style={{ color: 'var(--accent)' }} />
-                <span style={{ fontSize: 'var(--fs-13)', fontWeight: 600, color: 'var(--text-primary)' }}>
+                <Bot size={14} style={{ color: 'var(--seed-accent)' }} />
+                <span style={{ fontSize: 'var(--fs-13)', fontWeight: 600, color: 'var(--seed-fg)' }}>
                 {p.name} 模型
                 </span>
                 {fetched.length > 0 && (
-                <span style={{ fontSize: 'var(--fs-11)', color: 'var(--text-muted)' }}>
+                <span style={{ fontSize: 'var(--fs-11)', color: 'var(--seed-muted)' }}>
                 ({fetched.length})
                 </span>
                 )}
@@ -1088,13 +1089,13 @@ function ProviderDetail({
                 </button>
               </div>
               {/* Search */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 8, background: 'var(--bg-input)', border: '1px solid var(--border-light)' }}>
-                <Search size={11} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 8, background: 'var(--seed-input-bg)', border: '1px solid var(--seed-border)' }}>
+                <Search size={11} style={{ color: 'var(--seed-muted)', flexShrink: 0 }} />
                 <input
                 value={modalSearch}
                 onChange={(e) => setModalSearch(e.target.value)}
                 placeholder="搜索模型 ID 或名称..."
-                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: 'var(--fs-12)', fontFamily: 'inherit', minWidth: 0 }}
+                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--seed-fg)', fontSize: 'var(--fs-12)', fontFamily: 'inherit', minWidth: 0 }}
                 />
                 {modalSearch && (
                 <button onClick={() => setModalSearch('')} className="btn-ghost" style={{ width: 16, height: 16, padding: 0 }}>
@@ -1106,7 +1107,7 @@ function ProviderDetail({
             {/* Body */}
             <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
               {fetchingNow && (
-                <div style={{ padding: '30px 12px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <div style={{ padding: '30px 12px', textAlign: 'center', color: 'var(--seed-muted)' }}>
                 <Loader2 size={18} style={{ margin: '0 auto 6px', animation: 'spin 1s linear infinite' }} />
                 <p style={{ fontSize: 'var(--fs-12)' }}>正在获取模型列表...</p>
                 </div>
@@ -1115,13 +1116,13 @@ function ProviderDetail({
                 <div style={{ padding: '20px 12px', textAlign: 'center' }}>
                 <div style={{ padding: '10px 12px', color: '#ef4444', background: 'rgba(239, 68, 68, 0.1)', borderRadius: 8, fontSize: 'var(--fs-11)', marginBottom: 10 }}>{fetchErr}</div>
                 <button onClick={() => handleFetchModels(p.id)} className="cp"
-                style={{ padding: '5px 14px', borderRadius: 6, fontSize: 'var(--fs-11)', color: 'var(--text-tertiary)', background: 'transparent', border: '1px solid var(--border-light)' }}>
+                style={{ padding: '5px 14px', borderRadius: 6, fontSize: 'var(--fs-11)', color: 'var(--seed-muted)', background: 'transparent', border: '1px solid var(--seed-border)' }}>
                 重试
                 </button>
                 </div>
               )}
               {!fetchingNow && !fetchErr && filteredFetched.length === 0 && (
-                <div style={{ padding: '30px 12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-12)' }}>
+                <div style={{ padding: '30px 12px', textAlign: 'center', color: 'var(--seed-muted)', fontSize: 'var(--fs-12)' }}>
                 {modalSearch ? '未找到匹配的模型' : '暂无模型，请手动添加'}
                 </div>
               )}
@@ -1142,7 +1143,7 @@ function ProviderDetail({
                 const allEnabled = models.every((m) => p.models.includes(m));
                 const someEnabled = models.some((m) => p.models.includes(m));
                 return (
-                <div key={groupName} style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+                <div key={groupName} style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid var(--seed-border)' }}>
                 <button
                 onClick={() => toggleGroup(`modal-${p.id}-${groupName}`)}
                 className="cp"
@@ -1150,11 +1151,11 @@ function ProviderDetail({
                 width: '100%', display: 'flex', alignItems: 'center', gap: 6,
                 padding: '7px 10px', background: 'var(--bg-surface)',
                 border: 'none', cursor: 'pointer',
-                fontSize: 'var(--fs-12)', fontWeight: 600, color: 'var(--text-primary)',
+                fontSize: 'var(--fs-12)', fontWeight: 600, color: 'var(--seed-fg)',
                 }}>
                 {isGroupCollapsed ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
                 <span>{groupName}</span>
-                <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 'var(--fs-11)' }}>({models.length})</span>
+                <span style={{ color: 'var(--seed-muted)', fontWeight: 400, fontSize: 'var(--fs-11)' }}>({models.length})</span>
                 <span style={{ flex: 1 }} />
                 <button
                 onClick={(e) => {
@@ -1171,9 +1172,9 @@ function ProviderDetail({
                 style={{
                 padding: '3px 10px', borderRadius: 6, fontSize: 'var(--fs-11)',
                 fontWeight: 500,
-                background: allEnabled ? 'var(--accent-bg)' : 'var(--bg-hover)',
-                color: allEnabled ? 'var(--accent)' : someEnabled ? 'var(--accent)' : 'var(--text-muted)',
-                border: allEnabled ? '1px solid var(--accent-border)' : '1px solid var(--border-light)',
+                background: allEnabled ? 'var(--seed-accent-bg)' : 'var(--seed-hover-bg)',
+                color: allEnabled ? 'var(--seed-accent)' : someEnabled ? 'var(--seed-accent)' : 'var(--seed-muted)',
+                border: allEnabled ? '1px solid var(--seed-accent-border)' : '1px solid var(--seed-border)',
                 cursor: 'pointer',
                 }}>
                 {allEnabled ? '全部取消' : '全部启用'}
@@ -1200,11 +1201,11 @@ function ProviderDetail({
                 style={{
                 display: 'flex', alignItems: 'center', gap: 8,
                 padding: '5px 10px',cursor: 'pointer',
-                background: isEnabled ? 'var(--accent-bg)' : 'transparent',
-                borderTop: '1px solid var(--border-subtle)',
+                background: isEnabled ? 'var(--seed-accent-bg)' : 'transparent',
+                borderTop: '1px solid var(--seed-border)',
                 transition: 'background 0.12s',
                 }}
-                onMouseEnter={(e) => { if (!isEnabled) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                onMouseEnter={(e) => { if (!isEnabled) e.currentTarget.style.background = 'var(--seed-hover-bg)'; }}
                 onMouseLeave={(e) => { if (!isEnabled) e.currentTarget.style.background = 'transparent'; }}
                 >
                 <button
@@ -1223,8 +1224,8 @@ function ProviderDetail({
                 className="cp"
                 style={{
                 width: 22, height: 22, borderRadius: 6, border: 'none', cursor: 'pointer',
-                background: isEnabled ? 'var(--accent)' : 'var(--bg-elevated)',
-                color: isEnabled ? '#fff' : 'var(--text-muted)',
+                background: isEnabled ? 'var(--seed-accent)' : 'var(--seed-surface)',
+                color: isEnabled ? '#fff' : 'var(--seed-muted)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
                 >
@@ -1232,7 +1233,7 @@ function ProviderDetail({
                 </button>
                 <span style={{
                 flex: 1, minWidth: 0, fontSize: 'var(--fs-12)',
-                color: isEnabled ? 'var(--accent)' : 'var(--text-primary)',
+                color: isEnabled ? 'var(--seed-accent)' : 'var(--seed-fg)',
                 fontWeight: isEnabled ? 600 : 400,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}>{m}</span>
@@ -1243,7 +1244,7 @@ function ProviderDetail({
                 style={{
                 width: 22, height: 22, borderRadius: 6, border: 'none', cursor: 'pointer',
                 background: isThinking ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
-                color: isThinking ? '#f59e0b' : 'var(--text-muted)',
+                color: isThinking ? '#f59e0b' : 'var(--seed-muted)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
                 >
@@ -1262,7 +1263,7 @@ function ProviderDetail({
                 className="cp"
                 style={{
                 width: 22, height: 22, borderRadius: 6, border: 'none', cursor: 'pointer',
-                background: 'transparent', color: 'var(--text-muted)',
+                background: 'transparent', color: 'var(--seed-muted)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
                 >
@@ -1311,9 +1312,9 @@ export function ProviderConfigPanel() {
   }, [activeProviderId]);
 
     return (
-    <div className="fixed inset-0 z-50" style={{ display: "flex", flexDirection: "column", background: "var(--seed-bg)" }}>
+    <div className="fixed inset-0" style={{ zIndex: 200, display: "flex", flexDirection: "column", background: "var(--seed-bg)" }}>
       {/* 主内容区 */}
-      <div ref={rightContentRef} style={{ flex: 1, overflowY: "auto", background: "var(--seed-bg)" }}>
+      <div ref={rightContentRef} style={{ flex: 1, background: "var(--seed-bg)", display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div style={{
           padding: "20px 24px 0",
           display: "flex", alignItems: "center", gap: 8,
@@ -1321,7 +1322,7 @@ export function ProviderConfigPanel() {
           <h2 className="text-base font-semibold txt-primary">{NAV_LABELS[activeTab]}</h2>
         </div>
 
-        <div style={{ padding: "20px 24px 40px" }}>
+        <div style={{ padding: "20px 24px 0", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
           <SectionContent activeTab={activeTab} />
         </div>
       </div>
@@ -1331,10 +1332,9 @@ export function ProviderConfigPanel() {
         background: "var(--seed-glass)",
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
-        borderTop: "1px solid var(--seed-border)",
         flexShrink: 0,
       }}>
-        <div style={{ maxWidth: 720, margin: "0 auto", padding: "16px 24px 12px" }}>
+        <div style={{ maxWidth: 720, margin: "0 auto", padding: "0 24px 12px" }}>
           <nav className="seed-func-bar">
             {NAV_ITEMS.map((item) => {
               const isActive = activeTab === item.key;

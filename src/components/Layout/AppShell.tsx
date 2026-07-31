@@ -80,7 +80,11 @@ export function AppShell() {
         // 仅首次启动时判定一次，避免后续切换会话被覆盖
         if (!phaseInitializedRef.current) {
           phaseInitializedRef.current = true;
-          const { sessions, activeId } = useSessionStore.getState();
+          const { sessions, activeId, createBlankSession } = useSessionStore.getState();
+          // 若无任何会话，自动创建一个空白会话
+          if (sessions.length === 0) {
+            createBlankSession();
+          }
           const hasActive = activeId && sessions.some((s) => s.id === activeId);
           // 若无活跃会话且有历史会话，激活最近一条
           if (!hasActive && sessions.length > 0) {
@@ -207,7 +211,7 @@ export function AppShell() {
         }}
       />
 
-      {!settingsOpen && <DialogueNovel />}
+      <DialogueNovel />
 
       {/* 传统 Sidebar：默认不显示，仅当用户从 FunctionBar 外的途径打开时渲染 */}
       {sidebarOpen && !settingsOpen && (

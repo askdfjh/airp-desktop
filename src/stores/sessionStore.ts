@@ -32,6 +32,7 @@ interface SessionState {
   clearSearch: () => void;
   jumpToMessage: (sessionId: string, messageId: string) => void;
   clearTargetMessage: () => void;
+  createBlankSession: () => string;
   updateSystemPrompt: (id: string, systemPrompt: string) => void;
   toggleThinking: (id: string) => void;
   setThinkingEnabled: (id: string, enabled: boolean) => void;
@@ -160,6 +161,25 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   clearTargetMessage: () => set({ targetMessageId: null }),
+
+
+  createBlankSession: () => {
+    const now = Date.now();
+    const id = 's_' + now + '_' + Math.random().toString(36).slice(2, 8);
+    const session = {
+      id,
+      title: '空白会话',
+      systemPrompt: '',
+      providerId: '',
+      model: '',
+      thinkingEnabled: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    set((st) => ({ sessions: [session, ...st.sessions], activeId: id }));
+    insertSession(session).catch((e) => console.error('[db] insertSession failed:', e));
+    return id;
+  },
 
   updateSystemPrompt: (id, systemPrompt) => {
     const now = Date.now();
