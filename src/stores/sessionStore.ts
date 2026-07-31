@@ -2,6 +2,8 @@
 import type { Session } from "@/types";
 import {
   loadSessions, insertSession, deleteSession, deleteAllSessions, updateSession,
+  loadTrashedSessions, restoreSession as restoreSessionDb,
+  purgeSession as purgeSessionDb, purgeExpiredTrash,
   loadFavorites, addFavorite as addFavoriteDb,
   removeFavorite as removeFavoriteDb, searchMessages as searchMessagesDb,
   type Favorite, type SearchResult,
@@ -9,6 +11,7 @@ import {
 
 interface SessionState {
   sessions: Session[];
+  trash: Session[];
   activeId: string | null;
   loaded: boolean;
   favorites: Favorite[];
@@ -27,6 +30,10 @@ interface SessionState {
   unfavorite: (favoriteId: string) => void;
   isFavorited: (sessionId: string) => boolean;
   loadFromDb: () => Promise<void>;
+  loadTrashFromDb: () => Promise<void>;
+  restoreFromTrash: (id: string) => void;
+  purgeFromTrash: (id: string) => void;
+  clearExpiredTrash: () => Promise<void>;
   setSearchQuery: (q: string) => void;
   doSearch: (q: string) => Promise<void>;
   clearSearch: () => void;
@@ -40,6 +47,7 @@ interface SessionState {
 
 export const useSessionStore = create<SessionState>((set, get) => ({
   sessions: [],
+  trash: [],
   activeId: null,
   loaded: false,
   favorites: [],
@@ -58,8 +66,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (isFav) {
       return { ok: false, reason: "该对话已收藏，请先取消收藏再删除" };
     }
+    const target = get().sessions.find((s) => s.id === id);
     set((st) => ({
       sessions: st.sessions.filter((s) => s.id !== id),
+      trash: target ? [{ ...target, deletedAt: Date.now() }, ...st.trash] : st.trash,
       activeId: st.activeId === id ? null : st.activeId,
     }));
     deleteSession(id).catch((e) => console.error("[db] deleteSession failed:", e));
@@ -67,7 +77,15 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   removeAll: () => {
-    set({ sessions: [], activeId: null, favorites: [] });
+    set((st) => ({
+      sessions: [],
+      trash: [
+        ...st.sessions.map((s) => ({ ...s, deletedAt: Date.now() })),
+        ...st.trash,
+      ],
+      activeId: null,
+      favorites: [],
+    }));
     deleteAllSessions().catch((e) => console.error("[db] deleteAllSessions failed:", e));
   },
 
@@ -136,6 +154,39 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
   },
 
+  loadTrashFromDb: async () => {
+    try {
+      const trash = await loadTrashedSessions();
+      set({ trash });
+    } catch (e) {
+      console.error("[db] loadTrashedSessions failed:", e);
+    }
+  },
+
+  restoreFromTrash: (id) => {
+    const target = get().trash.find((t) => t.id === id);
+    if (!target) return;
+    set((st) => ({
+      trash: st.trash.filter((t) => t.id !== id),
+      sessions: [{ ...target, deletedAt: undefined }, ...st.sessions],
+    }));
+    restoreSessionDb(id).catch((e) => console.error("[db] restoreSession failed:", e));
+  },
+
+  purgeFromTrash: (id) => {
+    set((st) => ({ trash: st.trash.filter((t) => t.id !== id) }));
+    purgeSessionDb(id).catch((e) => console.error("[db] purgeSession failed:", e));
+  },
+
+  clearExpiredTrash: async () => {
+    try {
+      const n = await purgeExpiredTrash();
+      if (n > 0) get().loadTrashFromDb();
+    } catch (e) {
+      console.error("[db] purgeExpiredTrash failed:", e);
+    }
+  },
+
   setSearchQuery: (q) => set({ searchQuery: q }),
 
   doSearch: async (q) => {
@@ -172,7 +223,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       systemPrompt: '',
       providerId: '',
       model: '',
-      thinkingEnabled: false,
+      thinkingEnabled: true,
+      kind: 'blank' as const,
       createdAt: now,
       updatedAt: now,
     };

@@ -2786,3 +2786,130 @@ useChat hook 中的流式状态随组件卸载而丢失，导致会话中断。
 - `npx tsc --noEmit` 零错误 ✅
 - 设置面板完全覆盖在对话上方 ✅
 
+### 2026-07-31（会话管理重构 + 回收站 + 空白会话排版优化）
+
+**会话管理弹窗显示不完全（关键 BUG）**
+- 现象：点击底栏"会话管理"弹出后底部按钮被裁切，内容显示不全
+- 根因：SessionPopup 渲染在 `.seed-input-area`（含 `backdrop-filter: blur(20px)`）内部，Chromium 中 backdrop-filter 祖先会成为 `position: fixed` 后代的包含块 → 覆盖层被限制在底部输入栏区域内
+- 验证：Edge headless 截图 + 像素采样（屏幕上方未遮罩、面板被限制在底部 120px 条内）
+- 修复：`FunctionBar.tsx` 用 `createPortal` 把弹窗和 Toast 挂到 `document.body`
+- 涉及：`FunctionBar.tsx`
+
+**Portal 主题失效（衍生 BUG）**
+- 现象：浅色主题下会话管理弹窗仍是暗色
+- 根因：portal 挂到 body 后脱离 `theme-light`/`theme-dark` 包裹层，`--seed-*` 变量回落到暗色 `:root` 默认值
+- 修复：portal 内容外包一层 `<div className={"theme-" + effectiveTheme()}>`
+- 涉及：`FunctionBar.tsx`
+
+**白天底栏阴影**
+- 根因：亮色主题 `--seed-glass` 透明度 0.92，滚动内容透过毛玻璃渗色成模糊条带
+- 修复：`index.css` 亮色 `--seed-glass` 0.92 → 0.97
+
+**未配置模型服务提示 + 手动跳转**
+- 需求：无模型配置时发送消息无提示，需提示 + 进入模型配置界面（手动点击跳转，不自动跳）
+- 实现：
+  1. `useChat.ts` 新增 `getSendBlocker()`（无 Provider/已停用/缺地址/缺 Key/未选模型）+ `blockSend()`，sendMessage/regenerate/editAndSend 三入口拦截
+  2. `uiStore.ts` 新增全局 `toast`/`toastAction`/`notify(msg, action?)`
+  3. Toast 尾部"前往配置 ›"标识，点击跳转设置；普通 Toast 不可点击
+  4. DialogueNovel `handleSend` 拦截时不清空输入框
+- BUG 修复：`.seed-toast` 有 `pointer-events: none`，点击无效 → `.seed-toast--clickable` 补 `pointer-events: auto`
+- 涉及：`useChat.ts`, `uiStore.ts`, `DialogueNovel.tsx`, `FunctionBar.tsx`, `index.css`
+
+**模型切换 + 思考模式快捷开关（旧实现删除重建）**
+- 旧实现（MessageInput/ChatPane）在新 UI 中已不渲染，为死代码 → 删除 `MessageInput.tsx` + `ChatPane.tsx`
+- 重新实现并合并到底栏 FunctionBar 同一排（不增加底栏高度）：
+  ```
+  [服务 ▾] [模型 ▾] [🧠思考] [📡联网] │ [设置] [主题] [字体] [会话] [世界]
+  ```
+- 服务/模型 chip：32px 与功能按钮同高、文字截断 + 完整名 tooltip、下拉向上弹出（底部空间不足）、实体背景无 backdrop-filter（沿用 WebView2 教训）、点击外部/Esc 关闭
+- 切换模型同步 `updateSessionModel`；思考开关调用 `toggleThinking` 持久化
+- 思考模式所有模型默认开启：FunctionBar 切换模型、空白会话、开局流程、SessionList 全部 `thinkingEnabled: true`
+- 涉及：`FunctionBar.tsx`（重写）, `index.css`（seed-func-chip）
+
+**思考按钮"不亮"排查（未改代码）**
+- 现象：用户反馈点击思考模式按钮不亮
+- 排查：用 Edge + CDP + Tauri API mock 加载真实 bundle，自动化点击验证 class 正常切换 `seed-func-btn` ↔ `seed-func-btn--active`，计算样式 15% 紫底 + 紫图标，开→关→开完全正常
+- 结论：代码无误；用户旧实例（19:48 启动）HMR 状态损坏且仅残留图片查看窗口 → 关闭旧实例重启解决
+
+**空白会话正文排版优化**
+- 需求：空白会话（非冒险）正文按输出内容排版，符合当前 UI
+- 实现：
+  1. `MarkdownRenderer.tsx` 重写为 seed-* 设计系统：代码块（深色容器 + 语言标签 + 复制按钮 + 横向滚动）、行内代码 chip、标题 h1-h4、列表、引用（紫左边条）、表格、链接、加粗/斜体/分割线，全部跟随深浅主题
+  2. `DialogueNovel.tsx`：空白会话 AI 回复完成态用 `<MarkdownRender>` 渲染，流式期间仍为 StreamingText 逐字渐显；去掉"第一章"章节分隔线、首字下沉；空状态文案"开始对话"；占位"输入消息..."
+  3. 判断依据：`activeSession.systemPrompt` 为空 → 空白排版（后续改为 kind 判断）
+- 涉及：`MarkdownRenderer.tsx`, `DialogueNovel.tsx`, `index.css`（seed-chat-assistant）
+
+**工具调用徽章隐藏 + 空白条修复**
+- 需求：工具调用完成后徽章直接隐藏
+- 修复 1：仅 `running`/`aborted` 时渲染徽章（done 隐藏）
+- 修复 2：`toolStatus` 为内存字段不持久化，重载后 undefined，旧条件 `!== "done"` 导致旧消息徽章残留 → 改为只渲染 running/aborted
+- 修复 3：入库的工具调用消息 content 为空，重载后渲染成空白气泡 → content 为空的 assistant 消息一律不渲染
+- 涉及：`DialogueNovel.tsx`
+
+**悬浮提示 UI 统一**
+- 消息操作按钮（复制/编辑/重新回答）补 `data-tooltip` ::after 样式，与设置区一致
+- 新增通用 `.seed-tip`（向上）/`.seed-tip--down`（向下）类，SessionPopup 全部按钮从原生 `title` 改为自定义 tooltip（面板顶部元素向下弹出避免被 overflow:hidden 裁切）
+- BUG 修复：tooltip 继承按钮 font-weight，激活 tab 提示偏粗 → 三处 ::after 统一 `font-weight: 400`
+- 涉及：`index.css`, `DialogueNovel.tsx`, `SessionPopup.tsx`
+
+**回收站系统（删除进回收站 30 天）**
+- 需求：所有会话删除进回收站，保留一段时间可恢复
+- 实现：
+  1. `db.ts`：`sessions` 表加 `deleted`/`deletedAt` 列（ALTER TABLE + catch 兼容旧库）；`deleteSession`/`deleteAllSessions` 改为软删除；新增 `TRASH_RETENTION_MS`(30天)、`loadTrashedSessions`/`restoreSession`/`purgeSession`（彻底删除）/`purgeExpiredTrash`
+  2. `sessionStore.ts`：新增 `trash` 状态 + `loadTrashFromDb`/`restoreFromTrash`/`purgeFromTrash`/`clearExpiredTrash`
+  3. `AppShell.tsx`：启动时清理过期回收站 + 加载回收站
+  4. `SessionPopup.tsx`：回收站 tab（删除时间 + 剩余 X 天 + 恢复/彻底删除按钮，彻底删除二次确认）
+  5. 删除确认文案改为"删除后可在回收站中恢复"
+- 涉及：`db.ts`, `sessionStore.ts`, `AppShell.tsx`, `SessionPopup.tsx`
+
+**会话分类（冒险 / 空白）**
+- 需求：会话分两类——冒险会话和空白会话，名称可编辑
+- 第一版：按 `systemPrompt` 分组 → 缺陷："直接开始"创建的冒险会话 systemPrompt 为空，全落进空白组
+- 最终方案：`sessions` 表新增 `kind` 列（adventure/blank）：
+  1. 迁移：默认 `adventure`，标题为"空白会话"的旧数据自动修正为 `blank`（pragma_table_info 检测避免重复迁移）
+  2. 创建时标记：开局流程 → `adventure`；空白会话/启动自动创建 → `blank`
+  3. `DialogueNovel.isBlank` 同步改用 kind 判断（小说/普通排版与分组一致）
+- SessionPopup 顶栏改为三个纯图标 tab（无文字，悬停自定义 tooltip）：
+  - 📄 文件图标 = 会话（空白会话）
+  - 🗂 层级图标 = 冒险
+  - 🗑 垃圾桶图标 = 回收站
+  - 图标与 FunctionBar 一致（同款 SVG 线性图标 1.8 描边），激活态紫色
+- 会话行重命名：✏️ 按钮 → 行内 input 编辑，Enter 保存 / Esc 取消 / 失焦自动保存
+- 涉及：`types/index.ts`, `db.ts`, `sessionStore.ts`, `OnboardingFlow.tsx`, `DialogueNovel.tsx`, `SessionPopup.tsx`
+
+**验证**
+- `npx tsc --noEmit` 零错误 ✅
+
+### 2026-07-31（自绘标题栏 — 修复标题栏颜色与正文不一致）
+
+**标题栏颜色跟随壁纸（关键 BUG）**
+- 现象：浅色主题下，系统标题栏颜色跟随 Windows 壁纸渐变，与正文 `--seed-bg` 不一致
+- 根因：`tauri.conf.json` 默认 `decorations: true`，标题栏由系统绘制，颜色不可控
+- 方案对比：
+  1. windowEffects / mica / 系统主题色 API → 只能影响系统标题栏按钮区，无法彻底统一
+  2. `decorations: false` + 自绘 40px 标题栏（最终方案）
+- 实现：
+  1. `tauri.conf.json`：`"decorations": false`（保留 `transparent: false`）
+  2. `capabilities/default.json`：新增 `core:window:allow-start-dragging` / `allow-minimize` / `allow-toggle-maximize`（`core:default` 已含 is-maximized 与 internal-toggle-maximize）
+  3. 新建 `src/components/Layout/TitleBar.tsx`：40px fixed 顶栏（z-index 5000），容器+标题区 `data-tauri-drag-region` 走 Tauri 原生拖拽（2.11 内置 drag.js）；三个 lucide 按钮 Minus / Square↔Copy（最大化切换，`isMaximized` + onResized 实时刷新图标）/ X（关闭），按钮不加拖拽属性、`tabIndex={-1}`；close hover `#e81123` 白字
+  4. `AppShell.tsx`：loading / onboarding / dialogue 三分支均挂 `<TitleBar />`；删除旧 32px 透明拖拽层
+  5. `index.css`：新增 `.seed-titlebar` 系（bg 取 `--seed-bg`、border-bottom `--seed-border`、按钮 46px 宽）；`.seed-info-badge` top 16→56px 避让标题栏
+  6. `ProviderConfig.tsx`：`fixed inset-0` → `fixed` + `top: 40`（设置面板下移避让标题栏）
+- 涉及：`tauri.conf.json`, `capabilities/default.json`, `TitleBar.tsx`（新建）, `AppShell.tsx`, `index.css`, `ProviderConfig.tsx`
+
+**验证（像素采样 + CDP 自动化）**
+- 浅色：标题栏 y=20 整行像素 = `#F4F3EE` = 正文 `--seed-bg` ✅
+- 深色：标题栏整行 = `#0C0C10` = 正文 ✅（原 Bug 彻底修复，双主题颜色统一）
+- 最大化点击 → 窗口 2062x1118（L=-7 T=-7）✅；图标切为还原 ✅；再点还原 → 1014x708 ✅
+- 关闭点击 → "退出 AIRP" 确认框（退出/取消）✅；点取消（968,626）→ 对话框关闭、进程存活 ✅
+- `plugin:window|start_dragging` invoke 返回 ok，原生 drag.js 注入确认存在；拖拽经用户手动确认可用 ✅
+- 调试要点：OS 级鼠标事件被全屏独占游戏（Client-Win64-Shipping）拦截 → 改用 WebView2 CDP（`--remote-debugging-port=9222` + `Input.dispatchMouseEvent`）注入点击验证
+
+**主题切换 Toast 被标题栏遮挡（衍生 BUG）**
+- 现象：切主题 toast（top 20px）被 40px 标题栏盖住
+- 修复：`.seed-toast` top 20→56px（vite HMR 自动生效）
+- 涉及：`index.css`
+
+**验证**
+- `npm run build` ✅（仅既有 CSS unterminated-string 警告）、`cargo build` ✅（仅既有 FetchArgs 死代码警告）
+

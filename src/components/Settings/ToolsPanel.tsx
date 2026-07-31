@@ -45,10 +45,10 @@ export function ToolsPanel() {
   const cfg = SEARCH_PROVIDERS[provider];
 
   return (
-    <div style={{ maxWidth: 520, width: "100%", display: "flex", flexDirection: "column", gap: 20, flex: 1, minHeight: 0, overflowY: "auto", margin: "0 auto" }}>
-      <div style={{ padding: 16, borderRadius: 12, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
+    <div style={{ maxWidth: 640, width: "100%", display: "flex", flexDirection: "column", gap: 16, flex: 1, minHeight: 0, overflowY: "auto", margin: "0 auto" }}>
+      <div style={{ padding: 18, borderRadius: 18, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: "var(--seed-accent-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--seed-accent-bg)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <Search size={18} style={{ color: "var(--seed-accent)" }} />
           </div>
           <div style={{ flex: 1 }}>
@@ -63,10 +63,6 @@ export function ToolsPanel() {
 
         {enabled && (
           <>
-            <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.5, marginBottom: 16, padding: "8px 12px", background: "var(--seed-hover-bg)", borderRadius: 8 }}>
-              启用后 AI 在需要时会自动调用联网搜索获取最新信息。选择下方的搜索服务并配置 API Key（DuckDuckGo 免费免配置）。
-            </div>
-
             {/* Provider selector */}
             <div style={{ marginBottom: 14 }}>
               <label style={{ fontSize: "var(--fs-11)", fontWeight: 500, color: "var(--seed-muted)", display: "block", marginBottom: 6 }}>搜索服务</label>
@@ -76,7 +72,7 @@ export function ToolsPanel() {
                   const isActive = provider === k;
                   return (
                     <button key={k} onClick={() => changeProvider(k)}
-                      style={{ padding: "8px 4px", borderRadius: 8, cursor: "pointer", fontSize: "var(--fs-11)", fontWeight: 500, textAlign: "center", background: isActive ? "var(--seed-accent-bg)" : "var(--seed-hover-bg)", border: isActive ? "1px solid var(--seed-accent-border)" : "1px solid var(--seed-border)", color: isActive ? "var(--seed-accent)" : "var(--seed-muted)", transition: "all 0.12s" }}>
+                      style={{ padding: "8px 4px", borderRadius: 12, cursor: "pointer", fontSize: "var(--fs-11)", fontWeight: 500, textAlign: "center", background: isActive ? "var(--seed-accent-bg)" : "var(--seed-hover-bg)", border: isActive ? "1px solid var(--seed-accent-border)" : "1px solid var(--seed-border)", color: isActive ? "var(--seed-accent)" : "var(--seed-muted)", transition: "all 0.12s" }}>
                       <Wifi size={12} style={{ display: "block", margin: "0 auto 3px", color: isActive ? "var(--seed-accent)" : "var(--seed-muted)" }} />
                       {p.name}
                     </button>
@@ -94,9 +90,9 @@ export function ToolsPanel() {
                 <div style={{ display: "flex", gap: 6 }}>
                   <input value={apiKey} onChange={(e) => changeApiKey(e.target.value)}
                     placeholder={cfg.keyPlaceholder}
-                    style={{ flex: 1, padding: "8px 12px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-12)", fontFamily: "inherit", outline: "none" }} />
+                    style={{ flex: 1, padding: "9px 12px", borderRadius: 12, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-12)", fontFamily: "inherit", outline: "none" }} />
                   <a href={cfg.signupUrl} target="_blank" rel="noreferrer"
-                    style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 10px", borderRadius: 8, fontSize: "var(--fs-11)", color: "var(--seed-accent)", textDecoration: "none", border: "1px solid var(--seed-accent-border)", background: "var(--seed-accent-bg)", whiteSpace: "nowrap" }}>
+                    style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 12px", borderRadius: 12, fontSize: "var(--fs-11)", color: "var(--seed-accent)", textDecoration: "none", border: "1px solid var(--seed-accent-border)", background: "var(--seed-accent-bg)", whiteSpace: "nowrap" }}>
                     <ExternalLink size={11} /> 注册
                   </a>
                 </div>
@@ -105,16 +101,17 @@ export function ToolsPanel() {
             )}
 
             {provider === "duckduckgo" && (
-              <div style={{ padding: "8px 12px", borderRadius: 8, background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", fontSize: "var(--fs-11)", color: "var(--seed-muted)" }}>
+              <div style={{ padding: "8px 12px", borderRadius: 12, background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", fontSize: "var(--fs-11)", color: "var(--seed-muted)" }}>
                 DuckDuckGo 无需 API Key，直接可用。结果质量和数量有限，建议使用专用搜索 API 以获得更好的搜索结果。
               </div>
             )}
           </>
         )}
-      </div>
 
-      <div style={{ padding: "10px 14px", borderRadius: 8, background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.5 }}>
-        <strong style={{ color: "var(--seed-muted)" }}>工作原理：</strong>AI 判断需要搜索时自动调用 web_search 工具，将搜索结果整合到回复中。支持 5 种搜索引擎，可在上方切换。
+        {/* How it works - integrated as muted text inside card */}
+        <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.5, marginTop: enabled ? 16 : 0, paddingTop: enabled ? 12 : 0, borderTop: enabled ? "1px solid var(--seed-border)" : "none" }}>
+          <strong style={{ color: "var(--seed-muted)" }}>工作原理：</strong>AI 判断需要搜索时自动调用 web_search 工具，将搜索结果整合到回复中。支持 5 种搜索引擎，可在上方切换。
+        </div>
       </div>
     </div>
   );

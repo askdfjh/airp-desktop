@@ -16,6 +16,29 @@ export interface AttachedFile {
   content: string;
 }
 
+export interface GenerationPreset {
+  id: string;
+  name: string;
+  description: string;
+  temperature: number;
+  topP: number;
+  topK: number;
+  minP: number;
+  presencePenalty: number;
+  frequencyPenalty: number;
+  maxTokens: number;
+  outputStyle: string;
+  isBuiltin: boolean;
+}
+
+export interface PromptInjection {
+  id: string;
+  text: string;
+  modelIds: string[];
+  applied: boolean;
+  createdAt: number;
+}
+
 export interface Session {
   id: string;
   title: string;
@@ -25,6 +48,8 @@ export interface Session {
   thinkingEnabled: boolean;
   createdAt: number;
   updatedAt: number;
+  deletedAt?: number;
+  kind?: "adventure" | "blank";
 }
 
 export interface Message {

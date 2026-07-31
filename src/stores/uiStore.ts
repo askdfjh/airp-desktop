@@ -1,16 +1,22 @@
-import { create } from "zustand";
+﻿import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 export type ThemeMode = "dark" | "light" | "system";
 export type MessageFontSize = "xs" | "sm" | "md" | "lg" | "xl";
 
+let toastTimer: ReturnType<typeof setTimeout> | null = null;
+
 interface UIState {
   sidebarOpen: boolean;
+  setSidebarOpen: (v: boolean) => void;
   settingsOpen: boolean;
   theme: ThemeMode;
   messageFontSize: MessageFontSize;
   webSearchOn: boolean;
   mcpActive: boolean;
+  toast: string | null;
+  toastAction: "settings" | null;
+  notify: (msg: string, action?: "settings" | null) => void;
   // Onboarding state
   appPhase: "onboarding" | "dialogue";
   onboardingStep: 1 | 2 | 3;
@@ -21,6 +27,8 @@ interface UIState {
   selectedCharacterName: string | null;
   selectedScenarioId: string | null;
   selectedScenarioName: string | null;
+  // 开局自动发送标记：开始冒险后由 OnboardingFlow 写入，useChat 加载完成后消费
+  pendingOpeningMessage: string | null;
   // Existing methods
   toggleSidebar: () => void;
   setSettingsOpen: (v: boolean) => void;
@@ -36,18 +44,26 @@ interface UIState {
   setSelectedMode: (mode: "novel" | "player" | "custom" | null) => void;
   setSelectedCharacter: (id: string | null, name: string | null) => void;
   setSelectedScenario: (id: string | null, name: string | null) => void;
+  setPendingOpeningMessage: (msg: string | null) => void;
   resetOnboarding: () => void;
 }
 
 export const useUIStore = create<UIState>()(
   persist(
     (set, get) => ({
-      sidebarOpen: true,
+      sidebarOpen: false,
       settingsOpen: false,
       theme: "dark",
       messageFontSize: "sm",
       webSearchOn: false,
       mcpActive: false,
+      toast: null,
+      toastAction: null,
+      notify: (msg, action) => {
+        set({ toast: msg, toastAction: action ?? null });
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => set({ toast: null, toastAction: null }), 2200);
+      },
       // Onboarding state defaults
       appPhase: "onboarding",
       onboardingStep: 1,
@@ -58,7 +74,9 @@ export const useUIStore = create<UIState>()(
       selectedCharacterName: null,
       selectedScenarioId: null,
       selectedScenarioName: null,
+      pendingOpeningMessage: null,
       // Existing methods
+      setSidebarOpen: (v) => set({ sidebarOpen: v }),
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
       setSettingsOpen: (v) => set({ settingsOpen: v }),
       setTheme: (t) => set({ theme: t }),
@@ -79,6 +97,7 @@ export const useUIStore = create<UIState>()(
       setSelectedMode: (mode) => set({ selectedMode: mode }),
       setSelectedCharacter: (id, name) => set({ selectedCharacterId: id, selectedCharacterName: name }),
       setSelectedScenario: (id, name) => set({ selectedScenarioId: id, selectedScenarioName: name }),
+      setPendingOpeningMessage: (msg) => set({ pendingOpeningMessage: msg }),
       resetOnboarding: () =>
         set({
           onboardingStep: 1,
@@ -89,10 +108,11 @@ export const useUIStore = create<UIState>()(
           selectedCharacterName: null,
           selectedScenarioId: null,
           selectedScenarioName: null,
+          pendingOpeningMessage: null,
         }),
     }),
     {
-      name: "airp-ui-v2",
+      name: "airp-ui-v3",
       // 仅持久化用户偏好,不持久化开局流程状态
       // appPhase/onboardingStep/selected* 每次启动由 AppShell 根据有无活跃会话重新判定
       partialize: (s) => ({

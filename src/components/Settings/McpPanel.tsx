@@ -134,42 +134,33 @@ export function McpPanel({ onClose }: McpPanelProps) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Server size={16} style={{ color: "var(--seed-accent)" }} />
-          <span style={{ fontSize: "var(--fs-15)", fontWeight: 600, color: "var(--seed-fg)" }}>MCP 工具集成</span>
+          <span style={{ fontSize: "var(--fs-15)", fontWeight: 600, color: "var(--seed-fg)" }}>MCP 服务器</span>
+          <span className="seed-tag-pill" style={{ fontSize: "var(--fs-10)", padding: "1px 7px" }}>{servers.length}</span>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="cp"
-          style={{
-            display: "flex", alignItems: "center", gap: 4,
-            padding: "6px 14px", borderRadius: 8,
-            fontSize: "var(--fs-12)", fontWeight: 500,
-            background: showForm ? "var(--seed-accent-bg)" : "var(--seed-accent)",
-            color: showForm ? "var(--seed-accent)" : "#fff",
-            border: showForm ? "1px solid var(--seed-accent-border)" : "none",
-            transition: "all 0.15s ease",
-          }}
-        >
-          <Plus size={13} /> 添加 MCP 服务器
-        </button>
+        {servers.length > 0 && (
+          <button onClick={() => setShowForm(!showForm)} className="seed-btn-secondary" style={{ padding: "6px 14px", fontSize: "var(--fs-11)" }}>
+            <Plus size={12} /> 添加服务器
+          </button>
+        )}
       </div>
 
-      <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.5, padding: "10px 12px", background: "var(--seed-hover-bg)", borderRadius: 8 }}>
-        MCP (Model Context Protocol) 允许 AI 连接外部工具和服务。添加 MCP 服务器后，可以在对话中调用 API、查询数据库、操作文件等。
+      <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.5, maxWidth: 560 }}>
+        添加 MCP 服务器后，AI 可在对话中调用外部工具与数据服务。
       </div>
 
       {showForm && (
-        <div style={{ padding: 12, background: "var(--seed-surface)", borderRadius: 10, border: "1px solid var(--seed-border)", display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ padding: 14, background: "var(--seed-surface)", borderRadius: 16, border: "1px solid var(--seed-border)", display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ display: "flex", gap: 8 }}>
             <input
               value={formName}
               onChange={(e) => setFormName(e.target.value)}
               placeholder="服务器名称（如：文件管理）"
-              style={{ flex: 1, padding: "8px 12px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-12)", fontFamily: "inherit", outline: "none" }}
+              style={{ flex: 1, padding: "9px 12px", borderRadius: 12, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-12)", fontFamily: "inherit", outline: "none" }}
             />
             <select
               value={formTransport}
               onChange={(e) => setFormTransport(e.target.value as "http" | "sse" | "stdio")}
-              style={{ padding: "8px 10px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-12)", fontFamily: "inherit", outline: "none" }}
+              style={{ padding: "9px 10px", borderRadius: 12, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-12)", fontFamily: "inherit", outline: "none" }}
             >
               <option value="http">HTTP</option>
               <option value="sse">SSE</option>
@@ -180,21 +171,19 @@ export function McpPanel({ onClose }: McpPanelProps) {
             value={formUrl}
             onChange={(e) => setFormUrl(e.target.value)}
             placeholder="服务器地址（如：http://localhost:3000）"
-            style={{ width: "100%", padding: "8px 12px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-12)", fontFamily: "inherit", outline: "none" }}
+            style={{ width: "100%", padding: "9px 12px", borderRadius: 12, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-12)", fontFamily: "inherit", outline: "none" }}
           />
           <textarea
             value={formHeaders}
             onChange={(e) => setFormHeaders(e.target.value)}
             placeholder="Headers（JSON 格式，可选）"
-            style={{ width: "100%", padding: "8px 12px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-11)", minHeight: 50, resize: "vertical", outline: "none", fontFamily: "ui-monospace, monospace" }}
+            style={{ width: "100%", padding: "9px 12px", borderRadius: 12, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-11)", minHeight: 50, resize: "vertical", outline: "none", fontFamily: "ui-monospace, monospace" }}
           />
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-            <button onClick={() => { setShowForm(false); setFormName(""); setFormUrl(""); setFormHeaders(""); }} className="cp"
-              style={{ padding: "6px 14px", borderRadius: 7, fontSize: "var(--fs-12)", color: "var(--seed-muted)", background: "transparent", border: "1px solid var(--seed-border)" }}>
+            <button onClick={() => { setShowForm(false); setFormName(""); setFormUrl(""); setFormHeaders(""); }} className="seed-btn-secondary" style={{ padding: "6px 14px", fontSize: "var(--fs-12)" }}>
               取消
             </button>
-            <button onClick={handleAdd} disabled={!formName.trim() || !formUrl.trim()} className="cp"
-              style={{ padding: "6px 16px", borderRadius: 7, fontSize: "var(--fs-12)", fontWeight: 500, background: "var(--seed-accent)", color: "#fff", border: "none", opacity: !formName.trim() || !formUrl.trim() ? 0.5 : 1, cursor: !formName.trim() || !formUrl.trim() ? "not-allowed" : "pointer" }}>
+            <button onClick={handleAdd} disabled={!formName.trim() || !formUrl.trim()} className="seed-btn-primary" style={{ padding: "6px 16px", fontSize: "var(--fs-12)" }}>
               添加
             </button>
           </div>
@@ -203,8 +192,15 @@ export function McpPanel({ onClose }: McpPanelProps) {
 
       <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
         {servers.length === 0 && (
-          <div style={{ padding: "40px 16px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-13)" }}>
-            暂无 MCP 服务器，点击上方按钮添加
+          <div className="seed-empty-state" style={{ flex: 1, background: "var(--seed-surface)", borderRadius: 18, border: "1px solid var(--seed-border)" }}>
+            <div className="seed-empty-icon">
+              <Server size={28} style={{ color: "var(--seed-accent)" }} />
+            </div>
+            <div className="seed-empty-title">还没有 MCP 服务器</div>
+            <div className="seed-empty-sub">连接外部工具服务，扩展 AI 的能力边界</div>
+            <button className="seed-btn-primary" onClick={() => setShowForm(true)}>
+              <Plus size={13} /> 添加 MCP 服务器
+            </button>
           </div>
         )}
 
@@ -216,7 +212,7 @@ export function McpPanel({ onClose }: McpPanelProps) {
           const testOk = testResults[server.id];
 
           return (
-            <div key={server.id} style={{ padding: 12, background: "var(--seed-surface)", borderRadius: 10, border: isActive ? "1px solid var(--seed-accent-border)" : "1px solid var(--seed-border)", transition: "border-color 0.15s ease" }}>
+            <div key={server.id} style={{ padding: 14, background: "var(--seed-surface)", borderRadius: 16, border: isActive ? "1px solid var(--seed-accent-border)" : "1px solid var(--seed-border)", transition: "border-color 0.15s ease" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                   <button onClick={() => toggleServerExpand(server.id)} className="cp"
@@ -263,7 +259,7 @@ export function McpPanel({ onClose }: McpPanelProps) {
                     className="cp"
                     title="删除"
                     style={{ width: 24, height: 24, borderRadius: 5, background: "transparent", color: "var(--seed-muted)", border: "1px solid var(--seed-border)", display: "flex", alignItems: "center", justifyContent: "center" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger);" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger)"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.color = "var(--seed-muted)"; }}
                   >
                     <Trash2 size={11} />
@@ -314,8 +310,8 @@ export function McpPanel({ onClose }: McpPanelProps) {
         })}
       </div>
 
-      <div style={{ padding: "8px 12px", background: "var(--seed-hover-bg)", borderRadius: 8, fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.5 }}>
-        <strong style={{ color: "var(--seed-muted)" }}>提示：</strong>启用 MCP 服务器后，AI 在对话中可以自动调用可用工具。需要模型支持 Function Calling 能力。
+      <div style={{ fontSize: "var(--fs-10)", color: "var(--seed-muted)", opacity: 0.8, lineHeight: 1.5, textAlign: "center" }}>
+        提示：启用后 AI 可在对话中自动调用可用工具，需要模型支持 Function Calling
       </div>
     </div>
   );

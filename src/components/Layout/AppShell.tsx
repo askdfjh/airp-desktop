@@ -12,6 +12,7 @@ import { SessionList } from "@/components/Sidebar/SessionList";
 import { useEffect, useState, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ConfirmDialog } from "@/components/Layout/ConfirmDialog";
+import { TitleBar } from "@/components/Layout/TitleBar";
 
 export function AppShell() {
   const {
@@ -32,6 +33,8 @@ export function AppShell() {
   const loadCharacters = useCharacterStore((s) => s.loadFromDb);
   const loadMcps = useMcpStore((s) => s.loadFromDb);
   const loadWorldRules = useWorldStore((s) => s.loadFromDb);
+  const loadTrashFromDb = useSessionStore((s) => s.loadTrashFromDb);
+  const clearExpiredTrash = useSessionStore((s) => s.clearExpiredTrash);
   const [eff, setEff] = useState<"dark" | "light">(() => {
     try {
       const raw = localStorage.getItem("airp-ui-v2");
@@ -58,6 +61,8 @@ export function AppShell() {
       .then(() => loadCharacters())
       .then(() => loadMcps())
       .then(() => loadWorldRules())
+      .then(() => clearExpiredTrash())
+      .then(() => loadTrashFromDb())
       .then(async () => {
         // Initialize tools enabled flag from DB
         try {
@@ -101,7 +106,7 @@ export function AppShell() {
         console.error("[db] init failed:", e);
         setDbReady(false);
       });
-  }, [loadFromDb, loadTemplates, loadCharacters, loadMcps, loadWorldRules]);
+  }, [loadFromDb, loadTemplates, loadCharacters, loadMcps, loadWorldRules, loadTrashFromDb, clearExpiredTrash]);
 
   useEffect(() => {
     const currentTheme = effectiveTheme();
@@ -158,6 +163,7 @@ export function AppShell() {
   if (dbReady === null) {
     return (
       <div className={`theme-${eff}`} style={{ height: "100vh", width: "100vw", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--seed-bg, #0c0c10)" }}>
+        <TitleBar />
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
           <div style={{
             width: 32, height: 32, borderRadius: "50%",
@@ -176,6 +182,7 @@ export function AppShell() {
   if (appPhase === "onboarding") {
     return (
       <div className={`theme-${eff}`} style={{ height: "100vh", width: "100vw", overflow: "hidden", background: "var(--seed-bg)" }}>
+        <TitleBar />
         <OnboardingFlow />
         {settingsOpen && <ProviderConfigPanel />}
         {showExitConfirm && (
@@ -196,8 +203,8 @@ export function AppShell() {
   // 设计稿 dialogue 页面无顶部 header，仅靠右上角 info-badge 与底部 FunctionBar
   return (
     <div className={`theme-${eff}`} style={{ height: "100vh", width: "100vw", position: "relative", overflow: "hidden", background: "var(--seed-bg)" }}>
-      {/* 透明窗口拖拽层：不占布局空间，仅用于 Tauri 窗口拖拽 */}
-      <div data-tauri-drag-region style={{ position: "absolute", top: 0, left: 0, right: 0, height: 32, zIndex: 50 }} />
+      {/* 自绘标题栏：无边框窗口的拖拽区 + 窗口控制按钮 */}
+      <TitleBar />
 
       {/* DB 状态指示灯：右上角 info-badge 下方，低调显示 */}
       <div
@@ -245,7 +252,7 @@ export function AppShell() {
       {deleteTarget && (
         <ConfirmDialog
           title="删除对话"
-          message={`确定要删除「${deleteTarget.title}」吗？删除后对话记录和消息将一并清除，无法恢复。`}
+          message={`确定要删除「${deleteTarget.title}」吗？删除后可在回收站中恢复。`}
           confirmLabel="删除"
           cancelLabel="取消"
           onConfirm={handleDeleteConfirm}
@@ -256,7 +263,7 @@ export function AppShell() {
       {showRemoveAllConfirm && (
         <ConfirmDialog
           title="清空所有对话"
-          message="确定要删除所有对话吗？所有对话记录和消息将一并清除，无法恢复。"
+          message="确定要删除所有对话吗？删除后可在回收站中恢复。"
           confirmLabel="清空"
           cancelLabel="取消"
           onConfirm={() => { removeAllSessions(); setShowRemoveAllConfirm(false); }}

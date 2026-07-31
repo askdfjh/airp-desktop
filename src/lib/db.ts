@@ -44,6 +44,18 @@ export async function initDb(): Promise<void> {
   // 迁移：旧表可能缺少新列
   await db.execute(`ALTER TABLE sessions ADD COLUMN thinkingEnabled INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
   await db.execute(`ALTER TABLE messages ADD COLUMN thinking TEXT;`).catch(() => {});
+  // 回收站：软删除标记 + 删除时间
+  await db.execute(`ALTER TABLE sessions ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
+  await db.execute(`ALTER TABLE sessions ADD COLUMN deletedAt INTEGER;`).catch(() => {});
+  // 会话类型：adventure（冒险）/ blank（空白会话）
+  const kindCol = await db.select<{ c: number }[]>(
+    "SELECT COUNT(*) AS c FROM pragma_table_info('sessions') WHERE name = 'kind';"
+  );
+  if (!(kindCol[0]?.c > 0)) {
+    await db.execute(`ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'adventure';`);
+    // 旧数据修正：标题为"空白会话"的归为 blank
+    await db.execute(`UPDATE sessions SET kind = 'blank' WHERE title = '空白会话';`);
+  }
   await db.execute(`
     CREATE TABLE IF NOT EXISTS favorites (
       id TEXT PRIMARY KEY,
@@ -212,6 +224,9 @@ interface SessionRow {
   thinkingEnabled: number;
   createdAt: number;
   updatedAt: number;
+  deleted?: number;
+  deletedAt?: number | null;
+  kind?: string | null;
 }
 
 interface MessageRow {
@@ -234,6 +249,8 @@ function rowToSession(r: SessionRow): Session {
     thinkingEnabled: r.thinkingEnabled === 1,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
+    deletedAt: r.deletedAt ?? undefined,
+    kind: r.kind === "blank" ? "blank" : "adventure",
   };
 }
 
@@ -251,11 +268,11 @@ function rowToMessage(r: MessageRow): Message {
 
 /* ---------- Session CRUD ---------- */
 
-/** 加载全部会话，按 updatedAt 倒序。 */
+/** 加载全部会话（不含回收站），按 updatedAt 倒序。 */
 export async function loadSessions(): Promise<Session[]> {
   console.log("[db] loadSessions...");
   const rows = await getDb().select<SessionRow[]>(
-    "SELECT * FROM sessions ORDER BY updatedAt DESC;"
+    "SELECT * FROM sessions WHERE deleted = 0 ORDER BY updatedAt DESC;"
   );
   console.log("[db] loadSessions returned", rows.length, "rows");
   return rows.map(rowToSession);
@@ -264,21 +281,61 @@ export async function loadSessions(): Promise<Session[]> {
 export async function insertSession(s: Session): Promise<void> {
   console.log("[db] insertSession", s.id, s.title);
   await getDb().execute(
-    "INSERT INTO sessions (id, title, systemPrompt, providerId, model, thinkingEnabled, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);",
-    [s.id, s.title, s.systemPrompt, s.providerId, s.model, s.thinkingEnabled ? 1 : 0, s.createdAt, s.updatedAt]
+    "INSERT INTO sessions (id, title, systemPrompt, providerId, model, thinkingEnabled, createdAt, updatedAt, kind) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);",
+    [s.id, s.title, s.systemPrompt, s.providerId, s.model, s.thinkingEnabled ? 1 : 0, s.createdAt, s.updatedAt, s.kind === "blank" ? "blank" : "adventure"]
   );
 }
 
-/** 删除会话及其全部消息。 */
+/** 回收站保留时长：30 天 */
+export const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** 删除会话（软删除，进入回收站，消息保留可恢复）。 */
 export async function deleteSession(id: string): Promise<void> {
+  await getDb().execute(
+    "UPDATE sessions SET deleted = 1, deletedAt = $2 WHERE id = $1;",
+    [id, Date.now()]
+  );
+}
+
+/** 删除所有会话（软删除，进入回收站）。 */
+export async function deleteAllSessions(): Promise<void> {
+  await getDb().execute(
+    "UPDATE sessions SET deleted = 1, deletedAt = $1 WHERE deleted = 0;",
+    [Date.now()]
+  );
+}
+
+/** 加载回收站中的会话，按删除时间倒序。 */
+export async function loadTrashedSessions(): Promise<Session[]> {
+  const rows = await getDb().select<SessionRow[]>(
+    "SELECT * FROM sessions WHERE deleted = 1 ORDER BY deletedAt DESC;"
+  );
+  return rows.map(rowToSession);
+}
+
+/** 从回收站恢复会话。 */
+export async function restoreSession(id: string): Promise<void> {
+  await getDb().execute(
+    "UPDATE sessions SET deleted = 0, deletedAt = NULL WHERE id = $1;",
+    [id]
+  );
+}
+
+/** 彻底删除会话及其全部消息（不可恢复）。 */
+export async function purgeSession(id: string): Promise<void> {
   await getDb().execute("DELETE FROM messages WHERE sessionId = $1;", [id]);
   await getDb().execute("DELETE FROM sessions WHERE id = $1;", [id]);
 }
 
-/** 删除所有会话和消息。 */
-export async function deleteAllSessions(): Promise<void> {
-  await getDb().execute("DELETE FROM messages;", []);
-  await getDb().execute("DELETE FROM sessions;", []);
+/** 清理过期回收站条目，返回清除数量。 */
+export async function purgeExpiredTrash(): Promise<number> {
+  const cutoff = Date.now() - TRASH_RETENTION_MS;
+  const rows = await getDb().select<{ id: string }[]>(
+    "SELECT id FROM sessions WHERE deleted = 1 AND deletedAt IS NOT NULL AND deletedAt < $1;",
+    [cutoff]
+  );
+  for (const r of rows) await purgeSession(r.id);
+  return rows.length;
 }
 
 const SESSION_FIELDS = ["title", "systemPrompt", "providerId", "model", "thinkingEnabled", "updatedAt"] as const;

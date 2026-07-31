@@ -7,12 +7,13 @@ import { ModeSelect } from "./ModeSelect";
 import { CharacterOpeningSelect } from "./CharacterOpeningSelect";
 
 export function OnboardingFlow() {
-  const { onboardingStep, setAppPhase, resetOnboarding, selectedWorldId, selectedCharacterId, selectedScenarioId, selectedCharacterName, selectedMode } = useUIStore();
+  const { onboardingStep, setAppPhase, resetOnboarding, setPendingOpeningMessage, selectedWorldId, selectedCharacterId, selectedScenarioId, selectedCharacterName, selectedMode } = useUIStore();
   const addSession = useSessionStore((s) => s.add);
   const setActive = useSessionStore((s) => s.setActive);
   const activeProviderId = useProviderStore((s) => s.activeProviderId);
   const activeModel = useProviderStore((s) => s.activeModel);
   const buildSystemPrompt = useOnboardingStore((s) => s.buildSystemPrompt);
+  const buildOpeningMessage = useOnboardingStore((s) => s.buildOpeningMessage);
 
   const handleComplete = () => {
     // 允许无角色/无场景/无模式直接开始：未选时用空 systemPrompt
@@ -24,6 +25,10 @@ export function OnboardingFlow() {
           selectedMode
         )
       : "";
+    // 开局开场消息：选中开局场景时，按场景设定自动发送给 AI 作为第一条消息
+    const openingMessage = selectedScenarioId
+      ? buildOpeningMessage(selectedScenarioId, selectedCharacterName || "主角")
+      : "";
 
     const now = Date.now();
     const session = {
@@ -34,7 +39,8 @@ export function OnboardingFlow() {
       systemPrompt,
       providerId: activeProviderId || "",
       model: activeModel || "",
-      thinkingEnabled: false,
+      thinkingEnabled: true,
+      kind: "adventure" as const,
       createdAt: now,
       updatedAt: now,
     };
@@ -44,6 +50,9 @@ export function OnboardingFlow() {
     setActive(session.id);
     resetOnboarding();
     setAppPhase("dialogue");
+    if (openingMessage) {
+      setPendingOpeningMessage(openingMessage);
+    }
   };
 
   // Render floating particles

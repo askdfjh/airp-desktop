@@ -1,19 +1,41 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { flushSync } from "react-dom";
 import type { Message, AttachedFile, ToolDefinition, ToolCall } from "@/types";
 import { chatStream } from "@/providers/openai";
 import type { ApiMessage } from "@/providers/openai";
+import { SCENE_TEMPLATE_PROMPT } from "@/lib/sceneTemplate";
 import { useProviderStore } from "@/stores/providerStore";
 import { useSessionStore } from "@/stores/sessionStore";
 import { loadMessages, insertMessage, updateMessageContent, updateMessageThinking, deleteMessage as deleteMessageDb, getAppSetting } from "@/lib/db";
 import { getBuiltinTools, executeBuiltinTool } from "@/tools/builtinTools";
 import { useMcpStore } from "@/stores/mcpStore";
 import { callTool as callMcpTool } from "@/lib/mcpClient";
+import { useUIStore } from "@/stores/uiStore";
+import { useWorldStore } from "@/stores/worldStore";
+import { buildWorldContext } from "@/lib/worldBookEngine";
+import { useGenerationStore } from "@/stores/generationStore";
+import { usePromptInjectionStore } from "@/stores/promptInjectionStore";
 
 let _toolsEnabled = false;
 export function setToolsEnabled(v: boolean) {
   console.log("[tools] setToolsEnabled:", v, new Error().stack?.split("\n").slice(1, 4).join("\n"));
   _toolsEnabled = v;
+}
+
+// 检查当前是否配置了可用的模型服务；未配置时返回提示文案，配置正常返回 null
+export function getSendBlocker(): string | null {
+  const ps = useProviderStore.getState();
+  const provider = ps.providers.find((p) => p.id === ps.activeProviderId);
+  if (!provider) return "未配置模型服务，请先在设置中配置";
+  if (ps.enabledProviders[provider.id] === false) return "当前模型服务已停用，请在设置中启用";
+  if (!provider.baseUrl) return "模型服务缺少 API 地址，请在设置中补充";
+  if (!provider.apiKey || !provider.apiKey.trim()) return "模型服务缺少 API Key，请在设置中填写";
+  if (!ps.activeModel) return "未选择模型，请在设置中选择";
+  return null;
+}
+
+function blockSend(reason: string) {
+  useUIStore.getState().notify(reason, "settings");
 }
 
 async function collectTools(): Promise<ToolDefinition[]> {
@@ -75,6 +97,19 @@ export function useChat() {
     s.activeId ? s.sessions.find((ss) => ss.id === s.activeId) : null,
   );
   const activeProvider = providers.find((p) => p.id === activeProviderId);
+  const activeWorldBook = useWorldStore((s) => s.activeBook);
+  const activeGenPreset = useGenerationStore((s) =>
+    s.activePresetId === "none" ? undefined : s.presets.find((p) => p.id === s.activePresetId) || s.presets[0],
+  );
+  const allInjections = usePromptInjectionStore((s) => s.items);
+  const activeInjections = useMemo(
+    () =>
+      allInjections
+        .filter((i) => i.applied && (i.modelIds.length === 0 || i.modelIds.includes(activeModel ?? "")))
+        .map((i) => i.text.trim())
+        .filter(Boolean),
+    [allInjections, activeModel],
+  );
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
@@ -113,18 +148,41 @@ export function useChat() {
     (history: Message[], lastUserContent: string, images?: string[], toolHint?: boolean): ApiMessage[] => {
       const result: ApiMessage[] = [];
       const basePrompt = activeSession?.systemPrompt || "";
-      if (toolHint) {
-        const now = new Date();
-        const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
-        const weekday = ["周日","周一","周二","周三","周四","周五","周六"][now.getDay()];
-        const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
-        const dateContext = `今天是 ${dateStr} ${weekday}，当前时间 ${timeStr}。`;
-        const toolSystemPrompt = basePrompt
-          ? basePrompt + `\n\n【重要】${dateContext} 你有可用的工具。当用户询问需要实时信息、新闻、数据时，必须使用 web_search 工具搜索，而不是凭知识回答。搜索时请使用当前日期。`
-          : `${dateContext}你是一个智能助手。你拥有 web_search 工具可以搜索互联网。当用户询问需要实时信息、新闻、当前事件、具体数据或事实核查时，你必须调用 web_search 工具来获取准确答案，而不是凭你的知识直接回答。`;
-        result.push({ role: "system", content: toolSystemPrompt });
-      } else if (basePrompt) {
-        result.push({ role: "system", content: basePrompt });
+      // 固定回复模板（仅冒险会话）：要求 AI 按【场景信息】【正文】【对话推荐】输出，驱动版面更新
+      const sceneTemplate = activeSession?.kind !== "blank"
+        ? `\n\n${SCENE_TEMPLATE_PROMPT}`
+        : "";
+      // 模型提示词注入：已应用且绑定当前模型的注入词，合并注入到 system prompt 最开头
+      if (activeInjections.length > 0) {
+        result.push({ role: "system", content: activeInjections.join("\n\n") });
+      }
+        const styleInstr = activeGenPreset?.outputStyle?.trim()
+          ? `\n\n【输出风格】${activeGenPreset.outputStyle.trim()}`
+          : "";
+        if (toolHint) {
+          const now = new Date();
+          const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
+          const weekday = ["周日","周一","周二","周三","周四","周五","周六"][now.getDay()];
+          const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+          const dateContext = `今天是 ${dateStr} ${weekday}，当前时间 ${timeStr}。`;
+          const toolSystemPrompt = basePrompt
+            ? basePrompt + `\n\n【重要】${dateContext} 你有可用的工具。当用户询问需要实时信息、新闻、数据时，必须使用 web_search 工具搜索，而不是凭知识回答。搜索时请使用当前日期。`
+            : `${dateContext}你是一个智能助手。你拥有 web_search 工具可以搜索互联网。当用户询问需要实时信息、新闻、当前事件、具体数据或事实核查时，你必须调用 web_search 工具来获取准确答案，而不是凭你的知识直接回答。`;
+          result.push({ role: "system", content: toolSystemPrompt + styleInstr + sceneTemplate });
+        } else if (basePrompt) {
+          result.push({ role: "system", content: basePrompt + styleInstr + sceneTemplate });
+        } else if (styleInstr) {
+          result.push({ role: "system", content: styleInstr.trim() + sceneTemplate });
+        }
+      if (activeWorldBook) {
+        const recentContext = [
+          ...history.slice(-2).map((m) => m.content),
+          lastUserContent,
+        ].join("\n");
+        const world = buildWorldContext(activeWorldBook, recentContext);
+        if (world.text) {
+          result.push({ role: "system", content: world.text });
+        }
       }
       for (const m of history) {
         result.push({ role: m.role, content: m.content });
@@ -142,7 +200,7 @@ export function useChat() {
       }
       return result;
     },
-    [activeSession],
+    [activeSession, activeWorldBook, activeGenPreset, activeInjections],
   );
 
   const startStream = useCallback(
@@ -197,6 +255,17 @@ export function useChat() {
 
         (async () => {
           try {
+            const genParams: Record<string, unknown> = {};
+            if (activeGenPreset) {
+              const p = activeGenPreset;
+              genParams.temperature = p.temperature;
+              if (p.topP > 0) genParams.top_p = p.topP;
+              if (p.topK > 0) genParams.top_k = p.topK;
+              if (p.minP > 0) genParams.min_p = p.minP;
+              if (p.presencePenalty !== 0) genParams.presence_penalty = p.presencePenalty;
+              if (p.frequencyPenalty !== 0) genParams.frequency_penalty = p.frequencyPenalty;
+              if (p.maxTokens > 0) genParams.max_tokens = p.maxTokens;
+            }
             for await (const chunk of chatStream(
               apiMessages,
               activeModel,
@@ -205,6 +274,7 @@ export function useChat() {
               thinkingEnabled,
               tools,
               abortController.signal,
+              genParams,
             )) {
               if (abortController.signal.aborted) break;
               if (chunk.toolCalls && chunk.toolCalls.length > 0) {
@@ -264,12 +334,18 @@ export function useChat() {
         })();
       });
     },
-    [activeModel, activeProvider, activeSession],
+    [activeModel, activeProvider, activeSession, activeGenPreset],
   );
 
   const sendMessage = useCallback(
     async (content: string, images?: string[], files?: AttachedFile[]) => {
-      if (!activeProvider || !activeModel || !activeSession || streaming) return;
+      if (streaming) return;
+      const blocker = getSendBlocker();
+      if (blocker) {
+        blockSend(blocker);
+        return;
+      }
+      if (!activeProvider || !activeModel || !activeSession) return;
       const sessionId = activeSession.id;
       activeSessionIdRef.current = sessionId;
 
@@ -408,6 +484,14 @@ export function useChat() {
     [activeProvider, activeModel, activeSession, streaming, buildApiMessages, startStream],
   );
 
+  // 开局自动发送：OnboardingFlow 设置 pendingOpeningMessage 后，等消息加载完成自动发出开场消息
+  const pendingOpeningMessage = useUIStore((s) => s.pendingOpeningMessage);
+  useEffect(() => {
+    if (!pendingOpeningMessage || !activeSession || loadingMessages) return;
+    useUIStore.getState().setPendingOpeningMessage(null);
+    void sendMessage(pendingOpeningMessage);
+  }, [pendingOpeningMessage, activeSession?.id, loadingMessages, sendMessage]);
+
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort();
     // 标记正在运行的工具调用为 aborted（红色底）
@@ -456,6 +540,11 @@ export function useChat() {
 
   const regenerate = useCallback(async (assistantId: string) => {
     if (streaming) return;
+    const blocker = getSendBlocker();
+    if (blocker) {
+      blockSend(blocker);
+      return;
+    }
     const prev = messagesRef.current;
     const idx = prev.findIndex((m) => m.id === assistantId);
     if (idx < 0) return;
@@ -559,6 +648,11 @@ export function useChat() {
 
   const editAndSend = useCallback(async (userId: string, newContent: string) => {
     if (streaming) return;
+    const blocker = getSendBlocker();
+    if (blocker) {
+      blockSend(blocker);
+      return;
+    }
     const prev = messagesRef.current;
     const idx = prev.findIndex((m) => m.id === userId);
     if (idx < 0) return;

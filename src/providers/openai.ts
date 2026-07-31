@@ -99,10 +99,11 @@ export async function* chatStream(
   thinkingEnabled: boolean,
   tools?: ToolDefinition[],
   signal?: AbortSignal,
+  params?: Record<string, unknown>,
 ): AsyncGenerator<ChatStreamChunk> {
   const url = `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
 
-  const body: Record<string, unknown> = { model, messages, stream: true };
+  const body: Record<string, unknown> = { model, messages, stream: true, ...params };
   const hasTools = tools && tools.length > 0;
   if (thinkingEnabled && !hasTools) {
     body.thinking = { type: "enabled" };

@@ -16,11 +16,10 @@
         "height": 700,
         "minWidth": 640,
         "minHeight": 480,
-"resizable": true,
-        "decorations": true,
-        "transparent": true,
-        "dragDropEnabled": false,
-        "windowEffects": { "effects": ["mica"], "state": "active" }
+        "resizable": true,
+        "decorations": false,
+        "transparent": false,
+        "dragDropEnabled": false
       }
     ],
     "security": { "csp": null }

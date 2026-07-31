@@ -5,27 +5,39 @@ import { fetchAvailableModels } from "@/providers/openai";
 import {
   Plus, Trash2, Eye, EyeOff, Sparkles, Download, Check, ChevronDown, ChevronLeft,
   Server, Brain, Users, Globe, Search, Bot, Settings2, Zap, Wrench, Shield, Cpu,
-  Wifi, Loader2, Code2, Filter, Image, Cog, ChevronRight, Pencil, X,
+  Wifi, Loader2, Code2, Filter, Image, Cog, ChevronRight, Pencil, X, SlidersHorizontal, RotateCcw,
 } from "lucide-react";
 import type { ProviderType } from "@/types";
 import { McpPanel } from "./McpPanel";
 import { CharacterPanel } from "./CharacterPanel";
 import { WorldPanel } from "./WorldPanel";
 import { ToolsPanel } from "./ToolsPanel";
+import { GenerationPanel } from "./GenerationPanel";
+import { PromptInjectionSection } from "./PromptInjectionSection";
 
-type NavKey = "models" | "character" | "world" | "mcp" | "tools";
+type NavKey = "models" | "character" | "world" | "mcp" | "tools" | "generation";
 type ConnectionStatus = "unknown" | "checking" | "online" | "offline" | "invalid_key";
 
 const NAV_ITEMS: { key: NavKey; icon: React.ComponentType<{ size?: number }>; label: string }[] = [
   { key: "models", icon: Sparkles, label: "模型服务" },
   { key: "character", icon: Users, label: "角色" },
   { key: "world", icon: Globe, label: "世界观" },
+  { key: "generation", icon: SlidersHorizontal, label: "输出" },
   { key: "tools", icon: Search, label: "工具" },
   { key: "mcp", icon: Server, label: "MCP 服务器" },
 ];
 
 const NAV_LABELS: Record<NavKey, string> = {
-  models: "模型服务", character: "角色", world: "世界观", mcp: "MCP 服务器", tools: "工具",
+  models: "模型服务", character: "角色", world: "世界观", mcp: "MCP 服务器", tools: "工具", generation: "输出预设",
+};
+
+const NAV_SUBTITLES: Record<NavKey, string> = {
+  models: "管理 AI 模型接入与 API 密钥",
+  character: "管理 AI 角色的设定与经历",
+  world: "选择或创建故事发生的宇宙",
+  tools: "启用 AI 可调用的外部能力",
+  mcp: "连接外部工具扩展 AI 能力",
+  generation: "调节 AI 的创意与输出风格",
 };
 
 const PRESETS: Record<string, { name: string; baseUrl: string; models: string[]; supportsImages: boolean; thinkingModels: string[]; color: string }> = {
@@ -415,7 +427,7 @@ function ModelsSection() {
       {/* Left Sidebar */}
       <div style={{
         width: 240, flexShrink: 0, display: 'flex', flexDirection: 'column',
-        background: 'var(--seed-surface)', borderRadius: 12, border: '1px solid var(--seed-border)',
+        background: 'var(--seed-surface)', borderRadius: 16, border: '1px solid var(--seed-border)',
         overflow: 'hidden',
       }}>
         {/* Search */}
@@ -464,9 +476,10 @@ function ModelsSection() {
                 }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '8px 8px', borderRadius: 10,
+                  padding: '8px 8px 8px 12px', borderRadius: 10,
                   background: isSelected ? 'var(--seed-accent-bg)' : 'transparent',
-                  border: isSelected ? '1px solid var(--seed-accent-border)' : '1px solid transparent',
+                  border: '1px solid transparent',
+                  boxShadow: isSelected ? 'inset 3px 0 0 0 var(--seed-accent)' : 'none',
                   marginBottom: 2, cursor: 'pointer', transition: 'all 0.12s ease',
                 }}
                 onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--seed-hover-bg)'; }}
@@ -504,26 +517,13 @@ function ModelsSection() {
         </div>
 
         {/* Bottom: Add custom provider */}
-        <div style={{ padding: '8px', borderTop: '1px solid var(--seed-border)' }}>
+        <div style={{ padding: '10px' }}>
           <button
             onClick={() => {
               addPreset('custom');
             }}
-            style={{
-              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              padding: '9px 12px', borderRadius: 10, border: '1px dashed var(--seed-border)',
-              background: 'var(--seed-surface)', color: 'var(--seed-muted)',
-              fontSize: 'var(--fs-11)', fontWeight: 500, cursor: 'pointer',
-              transition: 'all 0.12s',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'var(--seed-accent-border)';
-              e.currentTarget.style.color = 'var(--seed-accent)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'var(--seed-border)';
-              e.currentTarget.style.color = 'var(--seed-muted)';
-            }}
+            className="seed-btn-secondary"
+            style={{ width: '100%' }}
           >
             <Plus size={13} />
             添加自定义
@@ -535,16 +535,14 @@ function ModelsSection() {
       {/* Right Detail Panel */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         {!selectedProvider ? (
-          <div style={{
-            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--seed-muted)', fontSize: 'var(--fs-13)',
-            background: 'var(--seed-surface)', borderRadius: 12, border: '1px solid var(--seed-border)',
+          <div className="seed-empty-state" style={{
+            flex: 1, background: 'var(--seed-surface)', borderRadius: 16, border: '1px solid var(--seed-border)',
           }}>
-            <div style={{ textAlign: 'center' }}>
-              <Server size={36} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-              <p>从左侧选择一个 Provider 查看详情</p>
-              <p style={{ fontSize: 'var(--fs-11)', marginTop: 6, opacity: 0.6 }}>点击列表项即可添加或选择</p>
+            <div className="seed-empty-icon">
+              <Server size={28} style={{ color: 'var(--seed-accent)' }} />
             </div>
+            <div className="seed-empty-title">选择一个 Provider</div>
+            <div className="seed-empty-sub">点击左侧列表项即可添加或选择</div>
           </div>
         ) : (
           <ProviderDetail
@@ -692,7 +690,7 @@ function ProviderDetail({
 
   return (
     <div style={{
-      background: 'var(--seed-surface)', borderRadius: 12,
+      background: 'var(--seed-surface)', borderRadius: 16,
       border: '1px solid var(--seed-border)', padding: 0,
       overflow: 'hidden', display: 'flex', flexDirection: 'column',
       flex: 1,
@@ -767,13 +765,8 @@ function ProviderDetail({
               <button
                 onClick={() => testConnection(p.id)}
                 disabled={status === 'checking'}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  padding: '5px 12px', fontSize: 'var(--fs-11)', borderRadius: 8, fontWeight: 500,
-                  background: status === 'checking' ? 'var(--seed-hover-bg)' : 'var(--seed-surface)',
-                  color: status === 'checking' ? 'var(--seed-muted)' : 'var(--seed-muted)',
-                  border: '1px solid var(--seed-border)', cursor: status === 'checking' ? 'not-allowed' : 'pointer',
-                }}
+                className="seed-btn-secondary"
+                style={{ padding: '5px 14px', fontSize: 'var(--fs-11)' }}
               >
                 {status === 'checking' ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Wifi size={11} />}
                 检测
@@ -789,7 +782,7 @@ function ProviderDetail({
               placeholder='输入 API Key，多个密钥使用逗号分隔'
               style={{
                 width: '100%', color: 'var(--seed-fg)', background: 'var(--seed-input-bg)',
-                fontSize: 'var(--fs-12)', padding: '10px 38px 10px 12px)', borderRadius: 10,
+                fontSize: 'var(--fs-12)', padding: '10px 38px 10px 12px)', borderRadius: 14,
                 border: '1px solid var(--seed-border)', outline: 'none',
               }}
             />
@@ -827,7 +820,7 @@ function ProviderDetail({
               placeholder='https://api.example.com/v1'
               style={{
                 width: '100%', color: 'var(--seed-fg)', background: 'var(--seed-input-bg)',
-                fontSize: 'var(--fs-12)', padding: '10px 38px 10px 12px)', borderRadius: 10,
+                fontSize: 'var(--fs-12)', padding: '10px 38px 10px 12px)', borderRadius: 14,
                 border: '1px solid var(--seed-border)', outline: 'none',
               }}
             />
@@ -876,13 +869,8 @@ function ProviderDetail({
                 }}
                 disabled={fetchingNow}
                 title='获取模型列表'
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  padding: '5px 12px', fontSize: 'var(--fs-11)', borderRadius: 8, fontWeight: 500,
-                  background: fetchingNow ? 'var(--seed-hover-bg)' : 'var(--seed-surface)',
-                  color: fetchingNow ? 'var(--seed-muted)' : 'var(--seed-muted)',
-                  border: '1px solid var(--seed-border)', cursor: fetchingNow ? 'not-allowed' : 'pointer',
-                }}
+                className="seed-btn-primary"
+                style={{ padding: '5px 14px', fontSize: 'var(--fs-11)' }}
               >
                 <Download size={11} />
                 {fetchingNow ? '获取中' : '获取模型列表'}
@@ -917,7 +905,7 @@ function ProviderDetail({
                   style={{
                     width: '100%', display: 'flex', alignItems: 'center', gap: 6,
                     padding: '8px 10px', borderRadius: 8, border: '1px solid var(--seed-border)',
-                    background: 'var(--bg-surface)', cursor: 'pointer',
+                    background: 'var(--seed-surface)', cursor: 'pointer',
                     fontSize: 'var(--fs-11)', fontWeight: 600, color: 'var(--seed-fg)',
                   }}
                 >
@@ -941,8 +929,9 @@ function ProviderDetail({
                           }}
                           style={{
                             display: 'flex', alignItems: 'center', gap: 6,
-                            padding: '6px 8px', borderRadius: 6, marginBottom: 2,cursor: 'pointer',
+                            padding: '6px 8px 6px 10px', borderRadius: 6, marginBottom: 2,cursor: 'pointer',
                             background: isActive ? 'var(--seed-accent-bg)' : 'transparent',
+                            boxShadow: isEnabled ? 'inset 2px 0 0 0 var(--seed-accent)' : 'none',
                             transition: 'background 0.12s',
                           }}
                           onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--seed-hover-bg)'; }}
@@ -1291,9 +1280,17 @@ function ProviderDetail({
 
 
 function SectionContent({ activeTab }: { activeTab: NavKey }) {
-  if (activeTab === "models") return <ModelsSection />;
+  if (activeTab === "models") {
+    return (
+      <>
+        <ModelsSection />
+        <PromptInjectionSection />
+      </>
+    );
+  }
   if (activeTab === "character") return <CharacterPanel />;
   if (activeTab === "world") return <WorldPanel />;
+  if (activeTab === "generation") return <GenerationPanel />;
   if (activeTab === "tools") return <ToolsPanel />;
   return <McpPanel />;
 }
@@ -1309,21 +1306,24 @@ export function ProviderConfigPanel() {
   useEffect(() => {
     const el = rightContentRef.current;
     if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [activeProviderId]);
+  }, [activeProviderId, activeTab]);
 
     return (
-    <div className="fixed inset-0" style={{ zIndex: 200, display: "flex", flexDirection: "column", background: "var(--seed-bg)" }}>
+    <div className="fixed seed-settings-panel" style={{ top: 40, left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", flexDirection: "column", background: "radial-gradient(ellipse 80% 60% at 50% 0%, var(--seed-accent-bg) 0%, transparent 60%), radial-gradient(ellipse 60% 50% at 20% 100%, color-mix(in srgb, var(--seed-accent) 3%, transparent) 0%, transparent 50%), var(--seed-bg)" }}>
       {/* 主内容区 */}
-      <div ref={rightContentRef} style={{ flex: 1, background: "var(--seed-bg)", display: "flex", flexDirection: "column", minHeight: 0 }}>
-        <div style={{
-          padding: "20px 24px 0",
-          display: "flex", alignItems: "center", gap: 8,
-        }}>
-          <h2 className="text-base font-semibold txt-primary">{NAV_LABELS[activeTab]}</h2>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <div className="seed-page-header">
+          <div className="seed-page-title">{NAV_LABELS[activeTab]}</div>
+          <div className="seed-page-subtitle">{NAV_SUBTITLES[activeTab]}</div>
         </div>
 
-        <div style={{ padding: "20px 24px 0", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-          <SectionContent activeTab={activeTab} />
+        <div
+          ref={rightContentRef}
+          style={{ padding: "16px 24px 24px", flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}
+        >
+          <div style={{ width: "100%", maxWidth: activeTab === "models" ? 1040 : 760, margin: "0 auto" }}>
+            <SectionContent activeTab={activeTab} />
+          </div>
         </div>
       </div>
 

@@ -1,22 +1,33 @@
 import { useRef, useEffect, useState, useCallback } from "react";
-import { useChat } from "@/hooks/useChat";
+import { useChat, getSendBlocker } from "@/hooks/useChat";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useUIStore } from "@/stores/uiStore";
 import { StreamingText } from "./StreamingText";
 import { FunctionBar } from "./FunctionBar";
+import { MarkdownRender } from "./MarkdownRender";
+import { parseSceneReply, type SceneInfo } from "@/lib/sceneTemplate";
 
 export function DialogueNovel() {
   const { messages, sendMessage, streaming, stopStreaming, regenerate, editAndSend } = useChat();
   const activeSession = useSessionStore((s) =>
     s.activeId ? s.sessions.find((ss) => ss.id === s.activeId) : null
   );
-  const { selectedWorldName, selectedCharacterName, selectedMode, messageFontSize } = useUIStore();
+  const { selectedWorldName, selectedCharacterName, selectedMode, messageFontSize, notify } = useUIStore();
   const [inputValue, setInputValue] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [sceneBarOpen, setSceneBarOpen] = useState(true);
+  const [suggestBarOpen, setSuggestBarOpen] = useState(true);
+  const [sceneOverflow, setSceneOverflow] = useState(false);
+  const sceneMeasureRef = useRef<HTMLDivElement>(null);
+  const sceneUserToggledRef = useRef(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // 空白会话（kind=blank，无角色设定）使用普通对话排版，冒险会话使用小说排版
+  const isBlank = (activeSession?.kind ?? "adventure") === "blank";
 
   // Auto-scroll when at bottom
   const handleScroll = useCallback(() => {
@@ -37,6 +48,11 @@ export function DialogueNovel() {
   const handleSend = () => {
     const text = inputValue.trim();
     if (!text || streaming) return;
+    const blocker = getSendBlocker();
+    if (blocker) {
+      notify(blocker, "settings");
+      return;
+    }
     setInputValue("");
     sendMessage(text);
   };
@@ -50,7 +66,8 @@ export function DialogueNovel() {
 
   // Copy message content
   const handleCopy = (msg: typeof messages[0]) => {
-    navigator.clipboard.writeText(msg.content);
+    const parsed = parseSceneReply(msg.content);
+    navigator.clipboard.writeText(parsed.body);
     setCopiedId(msg.id);
     setTimeout(() => setCopiedId(null), 1500);
   };
@@ -96,6 +113,57 @@ export function DialogueNovel() {
   const visibleMessages = messages.filter((m) => m.role !== "system");
   const lastMsg = visibleMessages[visibleMessages.length - 1];
 
+  // 固定模板解析：取最新一条非空 assistant 回复（含流式中），实时解析版面数据
+  const lastAssistantMsg = (() => {
+    for (let i = visibleMessages.length - 1; i >= 0; i--) {
+      const m = visibleMessages[i];
+      if (m.role === "assistant" && m.content) return m;
+    }
+    return null;
+  })();
+  const parsedReply = lastAssistantMsg ? parseSceneReply(lastAssistantMsg.content) : null;
+  const isParsingLive = streaming && lastMsg === lastAssistantMsg;
+  const sceneInfo = parsedReply?.scene ?? null;
+  const suggestions = parsedReply?.suggestions ?? [];
+
+  // 场景条一行自适应：用隐藏测量行检测单行是否放得下（测量与显示解耦，避免结构切换震荡）
+  useEffect(() => {
+    const el = sceneMeasureRef.current;
+    if (!el) return;
+    const check = () => {
+      const over = el.scrollWidth > el.clientWidth + 8;
+      setSceneOverflow(over);
+      if (over && !sceneUserToggledRef.current) setSceneBarOpen(false);
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    window.addEventListener("resize", check);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", check);
+    };
+  }, [lastAssistantMsg?.content, isBlank]);
+
+  // 新场景内容到来时，重新允许自动折叠判断
+  useEffect(() => {
+    sceneUserToggledRef.current = false;
+  }, [lastAssistantMsg?.content]);
+
+  const handleSuggest = (text: string) => {
+    if (!text.trim() || streaming) return;
+    const blocker = getSendBlocker();
+    if (blocker) {
+      notify(blocker, "settings");
+      return;
+    }
+    setInputValue(text.trim());
+    if (inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.scrollIntoView({ block: "nearest" });
+    }
+  };
+
   // Floating particles
   const particles = Array.from({ length: 5 }, (_, i) => (
     <div
@@ -126,11 +194,43 @@ export function DialogueNovel() {
         </div>
       )}
 
+      {/* 场景信息条（顶部，一行自适应：放得下直接显示，放不下折叠） */}
+      {!isBlank && visibleMessages.length > 0 && (
+        <div className="seed-scene-bar">
+          <div className="seed-scene-measure" aria-hidden="true">
+            <SceneInfoBar innerRef={sceneMeasureRef} scene={sceneInfo} streaming={false} />
+          </div>
+          {sceneOverflow ? (
+            <>
+              <div className="seed-scene-bar-head" onClick={() => { sceneUserToggledRef.current = true; setSceneBarOpen((v) => !v); }}>
+                <span className="seed-scene-bar-title">场景</span>
+                {!sceneBarOpen && sceneInfo && (
+                  <span className="seed-scene-bar-summary">
+                    {[sceneInfo.location, sceneInfo.time, sceneInfo.characters].filter(Boolean).join(" · ") || "暂无信息"}
+                  </span>
+                )}
+                <svg
+                  className={`seed-scene-chevron${sceneBarOpen ? " is-open" : ""}`}
+                  width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </div>
+              {sceneBarOpen && (
+                <SceneInfoBar scene={sceneInfo} streaming={isParsingLive} wrap />
+              )}
+            </>
+          ) : (
+            <SceneInfoBar scene={sceneInfo} streaming={isParsingLive} />
+          )}
+        </div>
+      )}
+
       {/* Scrollable content */}
       <div className="seed-dialogue-scroll" ref={scrollRef} onScroll={handleScroll}>
         <div className="seed-dialogue-content">
-          {/* Chapter divider：第一章 · 会话标题 */}
-          {visibleMessages.length > 0 && (
+          {/* Chapter divider：第一章 · 会话标题（仅冒险会话） */}
+          {visibleMessages.length > 0 && !isBlank && (
             <div className="seed-chapter-divider">
               <span>第一章 · {activeSession?.title || "冒险开始"}</span>
               <span className="seed-chapter-line" />
@@ -142,6 +242,8 @@ export function DialogueNovel() {
             // 找到第一个 assistant 消息的 id，用于首字下沉
             const firstAssistantId = visibleMessages.find((m) => m.role === "assistant")?.id;
             return visibleMessages.map((msg, idx) => {
+              // 空内容的 assistant 消息（工具调用占位/未完成的流式占位）不渲染，避免空白条
+              if (msg.role === "assistant" && !msg.content) return null;
               if (msg.role === "user") {
                 if (editingId === msg.id) {
                   return (
@@ -184,8 +286,8 @@ export function DialogueNovel() {
                   </div>
                 );
               }
-              // 工具调用消息：渲染为工具调用卡片（不显示内容/参数）
-              if (msg.toolCalls && msg.toolCalls.length > 0) {
+              // 工具调用消息：仅 running/aborted 时显示徽章，完成后直接隐藏（未持久化的状态视为已完成）
+              if (msg.toolCalls && msg.toolCalls.length > 0 && (msg.toolStatus === "running" || msg.toolStatus === "aborted")) {
                 return (
                   <ToolCallBadge
                     key={msg.id}
@@ -197,15 +299,22 @@ export function DialogueNovel() {
               }
               // Assistant message：首段加 drop-cap class
               const isStreaming = streaming && msg === lastMsg && msg.role === "assistant";
-              const isDropCap = msg.id === firstAssistantId;
+              const isDropCap = !isBlank && msg.id === firstAssistantId;
+              const parsed = isBlank ? null : parseSceneReply(msg.content);
               return (
                 <div key={msg.id} className="seed-msg-wrapper" style={{ animationDelay: `${Math.min(idx * 0.05, 0.5)}s` }}>
                   <div
-                    className={`seed-narration${isDropCap ? " seed-narration--drop-cap" : ""}`}
+                    className={isBlank
+                      ? "seed-chat-assistant"
+                      : `seed-narration${isDropCap ? " seed-narration--drop-cap" : ""}`}
                     style={{ fontSize: msgFontSize }}
                   >
                     {isStreaming ? (
                       <StreamingText content={msg.content} active={isStreaming} />
+                    ) : isBlank ? (
+                      <MarkdownRender content={msg.content} />
+                    ) : parsed && parsed.body !== msg.content.trim() ? (
+                      parsed.body
                     ) : (
                       msg.content
                     )}
@@ -242,20 +351,43 @@ export function DialogueNovel() {
           {/* Empty state */}
           {visibleMessages.length === 0 && (
             <div style={{ textAlign: "center", padding: "80px 0", color: "var(--seed-muted)" }}>
-              <p style={{ fontSize: 16, marginBottom: 8 }}>故事即将开始</p>
-              <p style={{ fontSize: 14, opacity: 0.7 }}>输入你的第一句话，开启冒险之旅</p>
+              <p style={{ fontSize: 16, marginBottom: 8 }}>{isBlank ? "开始对话" : "故事即将开始"}</p>
+              <p style={{ fontSize: 14, opacity: 0.7 }}>
+                {isBlank ? "输入你的问题，开始交流" : "输入你的第一句话，开启冒险之旅"}
+              </p>
             </div>
           )}
         </div>
       </div>
+
+      {/* 对话推荐条（输入框上方，可折叠） */}
+      {!isBlank && (suggestions.length > 0 || isParsingLive) && (
+        <div className="seed-suggest-bar">
+          <div className="seed-suggest-head" onClick={() => setSuggestBarOpen((v) => !v)}>
+            <span className="seed-suggest-head-title">
+              对话推荐{suggestions.length > 0 ? ` (${suggestions.length})` : ""}
+            </span>
+            <svg
+              className={`seed-scene-chevron${suggestBarOpen ? " is-open" : ""}`}
+              width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </div>
+          {suggestBarOpen && (
+            <SuggestBar suggestions={suggestions} streaming={isParsingLive} onPick={handleSuggest} />
+          )}
+        </div>
+      )}
 
       {/* Bottom input area */}
       <div className="seed-input-area">
         <div className="seed-input-inner">
           <div className="seed-input-row">
             <textarea
+              ref={inputRef}
               className="seed-text-input"
-              placeholder={streaming ? "AI 正在书写..." : "继续书写故事..."}
+              placeholder={streaming ? "AI 正在回复..." : isBlank ? "输入消息..." : "继续书写故事..."}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -279,6 +411,65 @@ export function DialogueNovel() {
           <FunctionBar />
         </div>
       </div>
+    </div>
+  );
+}
+
+// === 场景信息条：顶部横条，地点 · 时间 · 出场角色 · 起因 ===
+function SceneInfoBar({
+  scene,
+  streaming,
+  wrap,
+  innerRef,
+}: {
+  scene: SceneInfo | null;
+  streaming: boolean;
+  wrap?: boolean;
+  innerRef?: React.Ref<HTMLDivElement>;
+}) {
+  const fields = [
+    { icon: <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />, label: "地点", value: scene?.location ?? "" },
+    { icon: <><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>, label: "时间", value: scene?.time ?? "" },
+    { icon: <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>, label: "出场角色", value: scene?.characters ?? "" },
+    { icon: <><circle cx="12" cy="12" r="10" /><path d="M2 12h20" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></>, label: "起因", value: scene?.cause ?? "" },
+  ];
+  return (
+    <div ref={innerRef} className={`seed-scene-bar-inner${wrap ? " is-wrap" : ""}`}>
+      {fields.map((f) => (
+        <span key={f.label} className="seed-scene-field">
+          <svg className="seed-scene-field-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{f.icon}</svg>
+          <span className="seed-scene-field-label">{f.label}</span>
+          <span className="seed-scene-field-value">{f.value || "——"}</span>
+        </span>
+      ))}
+      {streaming && (
+        <span className="seed-scene-live">更新中…</span>
+      )}
+    </div>
+  );
+}
+
+// === 对话推荐条：输入框上方横向按钮 ===
+function SuggestBar({
+  suggestions,
+  streaming,
+  onPick,
+}: {
+  suggestions: string[];
+  streaming: boolean;
+  onPick: (text: string) => void;
+}) {
+  return (
+    <div className="seed-suggest-inner">
+      {suggestions.map((s, i) => (
+        <button key={i} className="seed-suggest-chip" onClick={() => onPick(s)} disabled={streaming}>
+          <span className="seed-suggest-num">{i + 1}</span>
+          {s}
+        </button>
+      ))}
+      {streaming && suggestions.length === 0 && (
+        <span className="seed-suggest-live">AI 正在推荐下一步…</span>
+      )}
     </div>
   );
 }

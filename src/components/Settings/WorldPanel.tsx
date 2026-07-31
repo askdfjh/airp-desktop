@@ -137,7 +137,7 @@ export function WorldPanel() {
         )}
 
         {/* Book list */}
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
           {books.length === 0 && !showBookForm && (
             <div style={{ padding: "30px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>
               暂无世界，点击新建
@@ -146,7 +146,7 @@ export function WorldPanel() {
           {books.map((book) => (
             <div key={book.id}
               onClick={() => selectBook(book.id)}
-              style={{ padding: 10, borderRadius: 10, cursor: "pointer", background: selectedBookId === book.id ? "var(--seed-accent-bg)" : "transparent", border: "1px solid " + (selectedBookId === book.id ? "var(--seed-accent-border)" : "var(--seed-border)"), transition: "all 0.12s ease", display: "flex", flexDirection: "column", gap: 4 }}>
+              style={{ position: "relative", padding: 12, borderRadius: 16, cursor: "pointer", background: selectedBookId === book.id ? "var(--seed-accent-bg)" : "var(--seed-surface)", border: "1px solid " + (selectedBookId === book.id ? "var(--seed-accent-border)" : "var(--seed-border)"), boxShadow: selectedBookId === book.id ? "inset 3px 0 0 0 var(--seed-accent)" : "none", transition: "all 0.12s ease", display: "flex", flexDirection: "column", gap: 6 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                   <div style={{ width: 28, height: 28, borderRadius: 8, background: "var(--seed-surface)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -161,7 +161,7 @@ export function WorldPanel() {
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
                   {book.isBuiltin ? (
-                    <span style={{ fontSize: "var(--fs-8)", padding: "0 4px", borderRadius: 3, background: "var(--seed-hover-bg)", color: "var(--seed-muted)", fontWeight: 500 }}>内置</span>
+                    <span className="seed-tag-pill" style={{ fontSize: "var(--fs-9)", padding: "1px 7px" }}>内置</span>
                   ) : (
                     <>
                       <button onClick={(e) => { e.stopPropagation(); setEditingBook(book); setShowBookForm(false); }} title="编辑"
@@ -177,9 +177,9 @@ export function WorldPanel() {
                 </div>
               </div>
               {book.tags && book.tags.length > 0 && (
-                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 2 }}>
                   {book.tags.slice(0, 3).map((tag, i) => (
-                    <span key={i} style={{ fontSize: "var(--fs-9)", padding: "1px 5px", borderRadius: 3, background: "var(--seed-hover-bg)", color: "var(--seed-muted)" }}>{tag}</span>
+                    <span key={i} className="seed-tag-pill" style={{ fontSize: "var(--fs-9)", padding: "1px 7px" }}>{tag}</span>
                   ))}
                 </div>
               )}
@@ -191,17 +191,20 @@ export function WorldPanel() {
       {/* Right: Detail & Entries */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
         {!selectedBook ? (
-          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--seed-muted)", fontSize: "var(--fs-13)" }}>
-            <div style={{ textAlign: "center" }}>
-              <Globe size={32} style={{ margin: "0 auto 12px", opacity: 0.3 }} />
-              <p>选择一个世界查看详情</p>
-              <p style={{ fontSize: "var(--fs-11)", marginTop: 6, opacity: 0.6 }}>或点击左侧新建世界</p>
+          <div className="seed-empty-state" style={{ flex: 1, background: "var(--seed-surface)", borderRadius: 18, border: "1px solid var(--seed-border)" }}>
+            <div className="seed-empty-icon">
+              <Globe size={28} style={{ color: "var(--seed-accent)" }} />
             </div>
+            <div className="seed-empty-title">还没有世界</div>
+            <div className="seed-empty-sub">创建一个专属的故事宇宙，让 AI 沉浸其中</div>
+            <button className="seed-btn-primary" onClick={() => { setShowBookForm(true); setEditingBook(null); }}>
+              <Plus size={13} /> 创建世界
+            </button>
           </div>
         ) : (
           <>
             {/* Book Info Section */}
-            <div style={{ padding: 16, borderRadius: 12, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
+            <div style={{ padding: 18, borderRadius: 18, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{ width: 44, height: 44, borderRadius: 12, background: "var(--seed-accent-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -211,7 +214,7 @@ export function WorldPanel() {
                     <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <span style={{ fontSize: "var(--fs-15)", fontWeight: 600, color: "var(--seed-fg)" }}>{selectedBook.name}</span>
                       {selectedBook.isBuiltin && (
-                        <span style={{ fontSize: "var(--fs-9)", padding: "1px 6px", borderRadius: 3, background: "var(--seed-hover-bg)", color: "var(--seed-muted)", fontWeight: 500 }}>内置</span>
+                        <span className="seed-tag-pill" style={{ fontSize: "var(--fs-9)", padding: "1px 7px" }}>内置</span>
                       )}
                     </span>
                     {selectedBook.description && (
@@ -256,7 +259,7 @@ export function WorldPanel() {
             </div>
 
             {/* Entries Section */}
-            <div style={{ padding: 16, borderRadius: 12, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
+            <div style={{ padding: 18, borderRadius: 18, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <FileText size={16} style={{ color: "var(--seed-accent)" }} />

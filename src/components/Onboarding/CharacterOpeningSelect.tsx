@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useUIStore } from "@/stores/uiStore";
 import { useCharacterStore } from "@/stores/characterStore";
 import { useOnboardingStore } from "@/stores/onboardingStore";
+import { useGenerationStore } from "@/stores/generationStore";
 
 interface Props {
   onComplete: () => void;
@@ -14,6 +15,7 @@ export function CharacterOpeningSelect({ onComplete }: Props) {
   } = useUIStore();
   const characters = useCharacterStore((s) => s.characters);
   const getScenariosByTheme = useOnboardingStore((s) => s.getScenariosByTheme);
+  const { presets, activePresetId, setActivePreset } = useGenerationStore();
 
   const [selectedChar, setSelectedChar] = useState<string | null>(null);
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
@@ -21,6 +23,21 @@ export function CharacterOpeningSelect({ onComplete }: Props) {
   const scenarios = getScenariosByTheme(selectedWorldId || "cultivation");
 
   const modeLabel = selectedMode === "novel" ? "小说视角" : selectedMode === "player" ? "玩家视角" : "自定义模式";
+
+  // 玩家视角：自动启用「玩家视角 · 行动对话自主」预设（行动与对话完全由玩家控制）
+  useEffect(() => {
+    if (selectedMode === "player" && activePresetId !== "player-control") {
+      setActivePreset("player-control");
+    }
+  }, [selectedMode, activePresetId, setActivePreset]);
+
+  const handlePresetSelect = (id: string) => {
+    if (activePresetId === id) {
+      setActivePreset("none");
+    } else {
+      setActivePreset(id);
+    }
+  };
 
   const handleCharSelect = (id: string, name: string) => {
     setSelectedChar(id);
@@ -197,6 +214,68 @@ export function CharacterOpeningSelect({ onComplete }: Props) {
             </div>
           )}
         </div>
+      </div>
+
+      {/* 预设文风格（按视角） */}
+      <div style={{ marginBottom: 52 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, fontSize: 14, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--seed-muted)" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--seed-accent)" }}>
+            <path d="M4 7V4h16v3" />
+            <path d="M9 20h6" />
+            <path d="M12 4v16" />
+          </svg>
+          {selectedMode === "player" ? "已启用 · 玩家视角执行准则" : "预设文风格"}
+          <div style={{ flex: 1, height: 1, background: "var(--seed-border)", marginLeft: 8 }} />
+        </div>
+
+        {selectedMode === "player" ? (
+          <div
+            className="seed-card seed-card--selected"
+            style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 6 }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--seed-accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              <span style={{ fontSize: 15, fontWeight: 600, color: "var(--seed-fg)" }}>玩家视角 · 行动对话自主</span>
+              <span className="seed-tag-pill" style={{ fontSize: 10, padding: "1px 7px", background: "var(--seed-accent-bg)", color: "var(--seed-accent)" }}>已启用</span>
+            </div>
+            <div style={{ fontSize: 12, lineHeight: 1.7, color: "var(--seed-muted)" }}>
+              行动与对话完全由你控制：AI 只描述世界、反馈环境与 NPC 的回应，绝不代写你的言行。可在 设置 → 输出 中调整。
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 12 }}>
+            {presets.map((p) => (
+              <div
+                key={p.id}
+                onClick={() => handlePresetSelect(p.id)}
+                style={{
+                  position: "relative",
+                  padding: "14px 16px",
+                  borderRadius: 16,
+                  cursor: "pointer",
+                  background: p.id === activePresetId ? "var(--seed-accent-bg)" : "var(--seed-surface)",
+                  border: "1px solid " + (p.id === activePresetId ? "var(--seed-accent-border)" : "var(--seed-border)"),
+                  boxShadow: p.id === activePresetId ? "inset 3px 0 0 0 var(--seed-accent)" : "none",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "var(--seed-fg)" }}>{p.name}</span>
+                  {p.id === activePresetId && (
+                    <svg style={{ marginLeft: "auto" }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--seed-accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </div>
+                <div style={{ fontSize: 12, lineHeight: 1.5, color: "var(--seed-muted)" }}>{p.description}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* CTA */}

@@ -3,7 +3,6 @@ import { useSessionStore } from "@/stores/sessionStore";
 import { useProviderStore } from "@/stores/providerStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useWorldStore } from "@/stores/worldStore";
-import { isThinkingModel } from "@/providers/openai";
 import {
   Plus,
   Trash2,
@@ -302,7 +301,7 @@ export function SessionList({ onDeleteRequest, onRemoveAllRequest }: { onDeleteR
                 systemPrompt: activeBook ? "【世界观：" + activeBook.name + "】\n" + activeBook.entries.map(e => e.content).join("\n") + "\n\n" : "",
                 providerId: pid,
                 model: activeModel,
-                thinkingEnabled: isThinkingModel(activeModel ?? ""),
+                thinkingEnabled: true,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
               });

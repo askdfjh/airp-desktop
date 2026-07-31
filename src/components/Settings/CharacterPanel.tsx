@@ -192,7 +192,7 @@ export function CharacterPanel() {
         )}
 
         {/* Character list */}
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
           {filtered.length === 0 && (
             <div style={{ padding: "30px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>
               {searchQuery ? "未找到匹配的角色" : "暂无角色，点击右上角新建"}
@@ -203,7 +203,7 @@ export function CharacterPanel() {
             return (
             <div key={c.id}
               onClick={() => { toggleChar(c.id); }}
-              style={{ padding: 10, borderRadius: 10, cursor: "pointer", background: isSelected ? "var(--seed-accent-bg)" : "transparent", border: "1px solid " + (isSelected ? "var(--seed-accent-border)" : "var(--seed-border)"), transition: "all 0.12s ease", display: "flex", flexDirection: "column", gap: 4 }}>
+              style={{ padding: 12, borderRadius: 16, cursor: "pointer", background: isSelected ? "var(--seed-accent-bg)" : "var(--seed-surface)", border: "1px solid " + (isSelected ? "var(--seed-accent-border)" : "var(--seed-border)"), boxShadow: isSelected ? "inset 3px 0 0 0 var(--seed-accent)" : "none", transition: "all 0.12s ease", display: "flex", flexDirection: "column", gap: 6 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                   <div style={{ width: 28, height: 28, borderRadius: 8, background: "var(--seed-surface)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -228,7 +228,7 @@ export function CharacterPanel() {
               {c.tags.length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
                   {c.tags.slice(0, 3).map((tag) => (
-                    <span key={tag} style={{ fontSize: "var(--fs-9)", padding: "1px 5px", borderRadius: 3, background: "var(--seed-accent-bg)", color: "var(--seed-accent)", fontWeight: 500 }}>{tag}</span>
+                    <span key={tag} className="seed-tag-pill" style={{ fontSize: "var(--fs-9)", padding: "1px 7px", background: "var(--seed-accent-bg)", color: "var(--seed-accent)", fontWeight: 500 }}>{tag}</span>
                   ))}
                 </div>
               )}
@@ -241,17 +241,17 @@ export function CharacterPanel() {
       {/* Right: Character detail */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
         {!selected ? (
-          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--seed-muted)", fontSize: "var(--fs-13)" }}>
-            <div style={{ textAlign: "center" }}>
-              <User size={32} style={{ margin: "0 auto 12px", opacity: 0.3 }} />
-              <p>从左侧选择一个角色查看详情</p>
-              <p style={{ fontSize: "var(--fs-11)", marginTop: 6, opacity: 0.6 }}>或点击右上角新建角色</p>
+          <div className="seed-empty-state" style={{ flex: 1, background: "var(--seed-surface)", borderRadius: 18, border: "1px solid var(--seed-border)" }}>
+            <div className="seed-empty-icon">
+              <Users size={28} style={{ color: "var(--seed-accent)" }} />
             </div>
+            <div className="seed-empty-title">选择一个角色</div>
+            <div className="seed-empty-sub">从左侧选择角色查看设定与经历，或点击右上角新建</div>
           </div>
         ) : (
           <>
             {/* Character info */}
-            <div style={{ padding: 16, borderRadius: 12, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
+            <div style={{ padding: 18, borderRadius: 18, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{ width: 44, height: 44, borderRadius: 12, background: "var(--seed-accent-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -297,7 +297,7 @@ export function CharacterPanel() {
             </div>
 
             {/* World context + arcs */}
-            <div style={{ padding: 16, borderRadius: 12, background: "var(--seed-surface)", border: "1px solid var(--seed-border)", flex: 1, display: "flex", flexDirection: "column", minHeight: 200 }}>
+            <div style={{ padding: 18, borderRadius: 18, background: "var(--seed-surface)", border: "1px solid var(--seed-border)", flex: 1, display: "flex", flexDirection: "column", minHeight: 200 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <Sparkles size={14} style={{ color: "var(--seed-accent)" }} />
