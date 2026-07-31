@@ -1310,115 +1310,56 @@ export function ProviderConfigPanel() {
     if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activeProviderId]);
 
-  return (
-    <div className="fixed inset-0 z-50" style={{ display: "flex", flexDirection: "column", background: "var(--bg-app)" }}>
-      <div data-tauri-drag-region style={{
-        height: 40, display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 12px", flexShrink: 0, borderBottom: "1px solid var(--border-light)",
-        background: "var(--header-bg)", backdropFilter: "var(--blur-lg)", WebkitBackdropFilter: "var(--blur-lg)",
-      }}>
-        <div style={{ width: 80, display: "flex", alignItems: "center" }}>
-          <button
-            onClick={() => setSettingsOpen(false)}
-            className="btn-ghost flex items-center gap-1"
-            style={{ padding: "2px 4px" }}
-          >
-            <ChevronLeft size={14} />
-            <span className="text-11 txt-tertiary">返回</span>
-          </button>
+    return (
+    <div className="fixed inset-0 z-50" style={{ display: "flex", flexDirection: "column", background: "var(--seed-bg)" }}>
+      {/* 主内容区 */}
+      <div ref={rightContentRef} style={{ flex: 1, overflowY: "auto", background: "var(--seed-bg)" }}>
+        <div style={{
+          padding: "20px 24px 0",
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
+          <h2 className="text-base font-semibold txt-primary">{NAV_LABELS[activeTab]}</h2>
         </div>
-        <span className="text-sm font-medium txt-secondary">设置</span>
-        <div style={{ width: 80, display: "flex", justifyContent: "flex-end" }} />
+
+        <div style={{ padding: "20px 24px 40px" }}>
+          <SectionContent activeTab={activeTab} />
+        </div>
       </div>
 
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        <nav style={{
-          width: 200, flexShrink: 0, overflowY: "auto",
-          borderRight: "1px solid var(--border-light)",
-          background: "var(--sidebar-bg)", backdropFilter: "var(--blur-lg)", WebkitBackdropFilter: "var(--blur-lg)",
-        }}>
-          <div style={{ padding: "8px 6px" }}>
+      {/* 底部导航栏 - 与 FunctionBar 高度完全一致 */}
+      <div style={{
+        background: "var(--seed-glass)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        borderTop: "1px solid var(--seed-border)",
+        flexShrink: 0,
+      }}>
+        <div style={{ maxWidth: 720, margin: "0 auto", padding: "16px 24px 12px" }}>
+          <nav className="seed-func-bar">
             {NAV_ITEMS.map((item) => {
               const isActive = activeTab === item.key;
               const Icon = item.icon;
               return (
                 <button
                   key={item.key}
+                  className={"seed-func-btn" + (isActive ? " seed-func-btn--active" : "")}
+                  data-tooltip={item.label}
                   onClick={() => setActiveTab(item.key)}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 10,
-                    width: "100%", padding: "8px 12px",
-                    borderRadius: 10,
-                    fontSize: "var(--fs-13)",
-                    fontWeight: isActive ? 500 : 400,
-                    color: isActive ? "var(--accent)" : "var(--text-secondary)",
-                    background: isActive ? "var(--accent-bg)" : "transparent",
-                    border: "none", cursor: "pointer",
-                    transition: "all 0.12s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.background = "var(--bg-hover)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) e.currentTarget.style.background = "transparent";
-                  }}
                 >
-                  <Icon size={15} />
-                  <span>{item.label}</span>
+                  <Icon size={16} />
                 </button>
               );
             })}
-          </div>
-        </nav>
-
-        <div ref={rightContentRef} style={{
-          flex: 1, overflowY: "auto",
-          background: "var(--bg-surface)",
-        }}>
-          <div style={{
-            padding: "20px 24px 0",
-            display: "flex", alignItems: "center", gap: 8,
-          }}>
-            <h2 className="text-base font-semibold txt-primary">{NAV_LABELS[activeTab]}</h2>
-          </div>
-
-          <div style={{ padding: "20px 24px 40px" }}>
-            <SectionContent activeTab={activeTab} />
-          </div>
+            <button
+              className="seed-func-btn"
+              data-tooltip="关闭"
+              onClick={() => setSettingsOpen(false)}
+            >
+              <X size={16} />
+            </button>
+          </nav>
         </div>
       </div>
-
-      {activeTab === "models" && providers.length > 0 && (
-        <div style={{
-          flexShrink: 0, borderTop: "1px solid var(--border-light)",
-          background: "var(--bg-surface)",
-          padding: "12px 24px",
-        }}>
-          <div className="flex items-center gap-3">
-            <span className="text-11 txt-muted shrink-0">当前使用</span>
-            <CustomSelect
-              value={activeProviderId ?? ""}
-              onChange={(pid) => {
-                setActiveProvider(pid);
-                const prov = providers.find((pr) => pr.id === pid);
-                if (prov) setActiveModel(prov.models[0] ?? "");
-              }}
-              options={providers.map((pr) => ({ value: pr.id, label: pr.name }))}
-              placeholder="选择 Provider"
-            />
-            <CustomSelect
-              value={activeModel ?? ""}
-              onChange={(m) => setActiveModel(m)}
-              options={(activeProvider?.models ?? []).map((m) => ({ value: m, label: m }))}
-              placeholder="选择模型"
-              disabled={!activeProvider || activeProvider.models.length === 0}
-            />
-          </div>
-          {activeProvider && activeProvider.models.length === 0 && (
-            <p className="text-11 txt-muted text-center mt-2">暂无可用模型，请在上方获取或手动添加</p>
-          )}
-        </div>
-      )}
     </div>
   );
 }

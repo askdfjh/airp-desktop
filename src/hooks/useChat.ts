@@ -314,14 +314,14 @@ export function useChat() {
       while (result?.toolCalls && result.toolCalls.length > 0) {
         setToolRunning(true);
         // Add assistant tool_call message
-        const toolCallMsgContent = result.toolCalls.map(tc =>
-          `工具调用: ${tc.function.name}(${tc.function.arguments})`).join("\n");
         const asstMsg: Message = {
           id: crypto.randomUUID(),
           sessionId,
           role: "assistant",
-          content: toolCallMsgContent,
+          content: "",
           createdAt: Date.now(),
+          toolCalls: result.toolCalls,
+          toolStatus: "running",
         };
         setMessages((prev) => [...prev, asstMsg]);
         messagesRef.current = [...messagesRef.current, asstMsg];
@@ -348,6 +348,9 @@ export function useChat() {
           messagesRef.current = [...messagesRef.current, toolMsg];
           insertMessage(toolMsg).catch(() => {});
         }
+        // 工具调用正常完成,标记为 done
+        setMessages((prev) => prev.map((m) => m.toolStatus === "running" ? { ...m, toolStatus: "done" } : m));
+        messagesRef.current = messagesRef.current.map((m) => m.toolStatus === "running" ? { ...m, toolStatus: "done" } : m);
         setToolRunning(false);
 
         // Build new apiMessages including tool results
@@ -371,7 +374,7 @@ export function useChat() {
             newApiMessages.push({ role: "user", content: m.content });
           } else if (m.role === "assistant") {
             // Skip display-only tool call messages (content starts with "工具调用:")
-            if (!m.content.startsWith("工具调用:")) {
+            if (!m.toolCalls) {
               newApiMessages.push({ role: "assistant", content: m.content });
             }
           }
@@ -404,7 +407,13 @@ export function useChat() {
     [activeProvider, activeModel, activeSession, streaming, buildApiMessages, startStream],
   );
 
-  const stopStreaming = useCallback(() => abortRef.current?.abort(), []);
+  const stopStreaming = useCallback(() => {
+    abortRef.current?.abort();
+    // 标记正在运行的工具调用为 aborted（红色底）
+    setMessages((prev) => prev.map((m) => m.toolStatus === "running" ? { ...m, toolStatus: "aborted" } : m));
+    messagesRef.current = messagesRef.current.map((m) => m.toolStatus === "running" ? { ...m, toolStatus: "aborted" } : m);
+    setToolRunning(false);
+  }, []);
 
   const deleteMessage = useCallback(async (id: string) => {
     const prev = messagesRef.current;
@@ -485,10 +494,9 @@ export function useChat() {
 
     while (result?.toolCalls && result.toolCalls.length > 0) {
       setToolRunning(true);
-      const toolCallMsgContent = result.toolCalls.map(tc =>
-        `工具调用: ${tc.function.name}(${tc.function.arguments})`).join("\n");
       const asstMsg: Message = {
-        id: crypto.randomUUID(), sessionId, role: "assistant", content: toolCallMsgContent, createdAt: Date.now(),
+        id: crypto.randomUUID(), sessionId, role: "assistant", content: "", createdAt: Date.now(),
+        toolCalls: result.toolCalls, toolStatus: "running",
       };
       setMessages((prev) => [...prev, asstMsg]);
       messagesRef.current = [...messagesRef.current, asstMsg];
@@ -525,7 +533,7 @@ export function useChat() {
       for (const m of messagesRef.current) {
         if (m.role === "user") {
           newApiMessages.push({ role: "user", content: m.content });
-        } else if (m.role === "assistant" && !m.content.startsWith("工具调用:")) {
+        } else if (m.role === "assistant" && !m.toolCalls) {
           newApiMessages.push({ role: "assistant", content: m.content });
         }
       }
@@ -588,10 +596,9 @@ export function useChat() {
 
     while (result?.toolCalls && result.toolCalls.length > 0) {
       setToolRunning(true);
-      const toolCallMsgContent = result.toolCalls.map(tc =>
-        `工具调用: ${tc.function.name}(${tc.function.arguments})`).join("\n");
       const asstMsg: Message = {
-        id: crypto.randomUUID(), sessionId, role: "assistant", content: toolCallMsgContent, createdAt: Date.now(),
+        id: crypto.randomUUID(), sessionId, role: "assistant", content: "", createdAt: Date.now(),
+        toolCalls: result.toolCalls, toolStatus: "running",
       };
       setMessages((prev) => [...prev, asstMsg]);
       messagesRef.current = [...messagesRef.current, asstMsg];
@@ -628,7 +635,7 @@ export function useChat() {
       for (const m of messagesRef.current) {
         if (m.role === "user") {
           newApiMessages.push({ role: "user", content: m.content });
-        } else if (m.role === "assistant" && !m.content.startsWith("工具调用:")) {
+        } else if (m.role === "assistant" && !m.toolCalls) {
           newApiMessages.push({ role: "assistant", content: m.content });
         }
       }

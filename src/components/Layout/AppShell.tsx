@@ -5,22 +5,26 @@ import { useCharacterStore } from "@/stores/characterStore";
 import { useMcpStore } from "@/stores/mcpStore";
 import { useWorldStore } from "@/stores/worldStore";
 import { initDb } from "@/lib/db";
-import { SessionList } from "@/components/Sidebar/SessionList";
-import { ChatPane } from "@/components/Chat/ChatPane";
+import { DialogueNovel } from "@/components/Chat/DialogueNovel";
+import { OnboardingFlow } from "@/components/Onboarding/OnboardingFlow";
 import { ProviderConfigPanel } from "@/components/Settings/ProviderConfig";
-import { PanelLeftClose, PanelLeft, Sparkles, Sun, Moon, Monitor } from "lucide-react";
+import { SessionList } from "@/components/Sidebar/SessionList";
 import { useEffect, useState, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ConfirmDialog } from "@/components/Layout/ConfirmDialog";
 
-function ThemeIcon({ theme }: { theme: string }) {
-  if (theme === "light") return <Sun size={13} />;
-  if (theme === "dark") return <Moon size={13} />;
-  return <Monitor size={13} />;
-}
-
 export function AppShell() {
-  const { sidebarOpen, toggleSidebar, settingsOpen, theme, setTheme, effectiveTheme, setWebSearchOn, setMcpActive } = useUIStore();
+  const {
+    sidebarOpen,
+    settingsOpen,
+    theme,
+    setTheme,
+    effectiveTheme,
+    setWebSearchOn,
+    setMcpActive,
+    appPhase,
+    setAppPhase,
+  } = useUIStore();
   const loadFromDb = useSessionStore((s) => s.loadFromDb);
   const removeSession = useSessionStore((s) => s.remove);
   const removeAllSessions = useSessionStore((s) => s.removeAll);
@@ -44,6 +48,7 @@ export function AppShell() {
   const exitConfirmRef = useRef(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [showRemoveAllConfirm, setShowRemoveAllConfirm] = useState(false);
+  const phaseInitializedRef = useRef(false);
 
   // 应用启动：初始化 SQLite 并加载历史会话
   useEffect(() => {
@@ -70,6 +75,22 @@ export function AppShell() {
             } catch {}
           }
         } catch {}
+
+        // 启动阶段判定：有活跃会话则进入对话模式，否则进入开局流程
+        // 仅首次启动时判定一次，避免后续切换会话被覆盖
+        if (!phaseInitializedRef.current) {
+          phaseInitializedRef.current = true;
+          const { sessions, activeId } = useSessionStore.getState();
+          const hasActive = activeId && sessions.some((s) => s.id === activeId);
+          // 若无活跃会话且有历史会话，激活最近一条
+          if (!hasActive && sessions.length > 0) {
+            const latest = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt)[0];
+            if (latest) useSessionStore.getState().setActive(latest.id);
+          }
+          const finalActiveId = useSessionStore.getState().activeId;
+          setAppPhase(finalActiveId ? "dialogue" : "onboarding");
+        }
+
         setDbReady(true);
       })
       .catch((e) => {
@@ -128,62 +149,81 @@ export function AppShell() {
 
   const handleDeleteCancel = () => setDeleteTarget(null);
 
-  const cycleTheme = () => {
-    const next = theme === "dark" ? "light" : theme === "light" ? "system" : "dark";
-    setTheme(next);
-  };
-
-  return (
-    
-    <div className={`theme-${eff}`} style={{ height: "100vh", width: "100vw", display: "flex", overflow: "hidden", background: "var(--bg-app)" }}>
-      {/* Sidebar */}
-      <div style={{
-        display: "flex", flexDirection: "column",
-        transition: "all 0.25s ease-out", overflow: "hidden",
-        width: sidebarOpen ? 240 : 0, minWidth: sidebarOpen ? 240 : 0,
-        opacity: sidebarOpen ? 1 : 0,
-      }}>
-        <div className="glass-sidebar">
-          {sidebarOpen && <SessionList onDeleteRequest={(id, title) => setDeleteTarget({ id, title })} onRemoveAllRequest={() => setShowRemoveAllConfirm(true)} />}
+  // DB 初始化完成前显示加载态,避免 persist 的旧状态闪烁
+  // uiStore 已用 partialize 排除 appPhase/onboardingStep,但保险起见在 DB ready 前统一不渲染
+  if (dbReady === null) {
+    return (
+      <div className={`theme-${eff}`} style={{ height: "100vh", width: "100vw", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--seed-bg, #0c0c10)" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: "50%",
+            border: "2px solid var(--seed-accent, #7c6aef)",
+            borderTopColor: "transparent",
+            animation: "spin 0.8s linear infinite",
+          }} />
+          <span style={{ fontSize: 13, color: "var(--seed-muted, #6b6880)", letterSpacing: "0.05em" }}>正在加载...</span>
         </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
+    );
+  }
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <div data-tauri-drag-region className={eff === "dark" ? "header-dark" : "header-light"} style={{ height:40, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 12px", flexShrink:0 }}>
-          <button onClick={toggleSidebar}
-            className="btn-ghost" style={{ display:"flex" }}
-            title={sidebarOpen ? "收起侧边栏" : "展开侧边栏"}>
-            {sidebarOpen ? <PanelLeftClose size={15} /> : <PanelLeft size={15} />}
-          </button>
-
-          <div className="flex items-center gap-2">
-            <Sparkles size={12} style={{ color: "var(--accent)", opacity: 0.6 }} />
-            <span className="text-11 txt-muted uppercase tracking-wider font-medium">AIRP</span>
-          </div>
-
-          {/* Theme toggle */}
-          <button onClick={cycleTheme}
-            className="btn-ghost" style={{ display:"flex", alignItems:"center", gap:4 }}
-            title={`当前: ${theme === "system" ? "跟随系统" : theme === "dark" ? "深色" : "浅色"} (点击切换)`}>
-            <ThemeIcon theme={theme} />
-          </button>
-
-          {/* DB status */}
-          <div
-            title={dbReady === true ? "SQLite 已连接" : dbReady === false ? "SQLite 连接失败" : "SQLite 连接中..."}
-            style={{
-              width: 7, height: 7, borderRadius: "50%",
-              background: dbReady === true ? "var(--success)" : dbReady === false ? "var(--danger)" : "var(--warning)",
-              boxShadow: `0 0 6px ${dbReady === true ? "var(--success)" : dbReady === false ? "var(--danger)" : "var(--warning)"}`,
-              marginLeft: 6,
-            }}
+  // 开局流程：全屏覆盖，无 sidebar/header
+  if (appPhase === "onboarding") {
+    return (
+      <div className={`theme-${eff}`} style={{ height: "100vh", width: "100vw", overflow: "hidden", background: "var(--seed-bg)" }}>
+        <OnboardingFlow />
+        {settingsOpen && <ProviderConfigPanel />}
+        {showExitConfirm && (
+          <ConfirmDialog
+            title="退出 AIRP"
+            message="确定要退出吗？"
+            confirmLabel="退出"
+            cancelLabel="取消"
+            onConfirm={handleExitConfirm}
+            onCancel={handleExitCancel}
           />
-        </div>
-
-        <ChatPane />
+        )}
       </div>
+    );
+  }
+
+  // 对话模式：全屏沉浸式小说对话（DialogueNovel 内置 FunctionBar 与会话管理）
+  // 设计稿 dialogue 页面无顶部 header，仅靠右上角 info-badge 与底部 FunctionBar
+  return (
+    <div className={`theme-${eff}`} style={{ height: "100vh", width: "100vw", position: "relative", overflow: "hidden", background: "var(--seed-bg)" }}>
+      {/* 透明窗口拖拽层：不占布局空间，仅用于 Tauri 窗口拖拽 */}
+      <div data-tauri-drag-region style={{ position: "absolute", top: 0, left: 0, right: 0, height: 32, zIndex: 50 }} />
+
+      {/* DB 状态指示灯：右上角 info-badge 下方，低调显示 */}
+      <div
+        title={dbReady === true ? "SQLite 已连接" : dbReady === false ? "SQLite 连接失败" : "SQLite 连接中..."}
+        style={{
+          position: "fixed", bottom: 14, right: 18, zIndex: 200,
+          width: 6, height: 6, borderRadius: "50%",
+          background: dbReady === true ? "var(--success)" : dbReady === false ? "var(--danger)" : "var(--warning)",
+          boxShadow: `0 0 6px ${dbReady === true ? "var(--success)" : dbReady === false ? "var(--danger)" : "var(--warning)"}`,
+          opacity: 0.6,
+        }}
+      />
+
+      {!settingsOpen && <DialogueNovel />}
+
+      {/* 传统 Sidebar：默认不显示，仅当用户从 FunctionBar 外的途径打开时渲染 */}
+      {sidebarOpen && !settingsOpen && (
+        <div style={{
+          position: "absolute", top: 0, left: 0, bottom: 0, zIndex: 150,
+          display: "flex", flexDirection: "column",
+          width: 240, minWidth: 240,
+          background: "var(--seed-glass)", backdropFilter: "blur(20px)",
+          borderRight: "1px solid var(--seed-border)",
+          boxShadow: "4px 0 24px rgba(0,0,0,0.3)",
+        }}>
+          <div className="glass-sidebar" style={{ flex: 1 }}>
+            <SessionList onDeleteRequest={(id, title) => setDeleteTarget({ id, title })} onRemoveAllRequest={() => setShowRemoveAllConfirm(true)} />
+          </div>
+        </div>
+      )}
 
       {settingsOpen && <ProviderConfigPanel />}
 
