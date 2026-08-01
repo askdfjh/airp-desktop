@@ -65,6 +65,8 @@ export interface Message {
   // 工具调用相关（运行时内存字段，不持久化到 DB）
   toolCalls?: ToolCall[];
   toolStatus?: "running" | "done" | "aborted";
+  // 已调用的工具名（持久化到 DB，用于完成后/刷新后的轻量提示）
+  tools?: string[];
 }
 
 export interface ChatStreamChunk {

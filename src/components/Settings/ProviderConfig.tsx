@@ -5,17 +5,18 @@ import { fetchAvailableModels } from "@/providers/openai";
 import {
   Plus, Trash2, Eye, EyeOff, Sparkles, Download, Check, ChevronDown, ChevronLeft,
   Server, Brain, Users, Globe, Search, Bot, Settings2, Zap, Wrench, Shield, Cpu,
-  Wifi, Loader2, Code2, Filter, Image, Cog, ChevronRight, Pencil, X, SlidersHorizontal, RotateCcw,
+  Wifi, Loader2, Code2, Filter, Image, Cog, ChevronRight, Pencil, X, SlidersHorizontal, RotateCcw, Database,
 } from "lucide-react";
 import type { ProviderType } from "@/types";
 import { McpPanel } from "./McpPanel";
+import { DataPanel } from "./DataPanel";
 import { CharacterPanel } from "./CharacterPanel";
 import { WorldPanel } from "./WorldPanel";
 import { ToolsPanel } from "./ToolsPanel";
 import { GenerationPanel } from "./GenerationPanel";
 import { PromptInjectionSection } from "./PromptInjectionSection";
 
-type NavKey = "models" | "character" | "world" | "mcp" | "tools" | "generation";
+type NavKey = "models" | "character" | "world" | "mcp" | "tools" | "generation" | "data";
 type ConnectionStatus = "unknown" | "checking" | "online" | "offline" | "invalid_key";
 
 const NAV_ITEMS: { key: NavKey; icon: React.ComponentType<{ size?: number }>; label: string }[] = [
@@ -25,10 +26,11 @@ const NAV_ITEMS: { key: NavKey; icon: React.ComponentType<{ size?: number }>; la
   { key: "generation", icon: SlidersHorizontal, label: "输出" },
   { key: "tools", icon: Search, label: "工具" },
   { key: "mcp", icon: Server, label: "MCP 服务器" },
+  { key: "data", icon: Database, label: "数据" },
 ];
 
 const NAV_LABELS: Record<NavKey, string> = {
-  models: "模型服务", character: "角色", world: "世界观", mcp: "MCP 服务器", tools: "工具", generation: "输出预设",
+  models: "模型服务", character: "角色", world: "世界观", mcp: "MCP 服务器", tools: "工具", generation: "输出预设", data: "数据管理",
 };
 
 const NAV_SUBTITLES: Record<NavKey, string> = {
@@ -37,7 +39,7 @@ const NAV_SUBTITLES: Record<NavKey, string> = {
   world: "选择或创建故事发生的宇宙",
   tools: "启用 AI 可调用的外部能力",
   mcp: "连接外部工具扩展 AI 能力",
-  generation: "调节 AI 的创意与输出风格",
+  generation: "调节 AI 的创意与输出风格", data: "导出与导入全部设置",
 };
 
 export const PRESETS: Record<string, { name: string; baseUrl: string; models: string[]; supportsImages: boolean; thinkingModels: string[]; color: string }> = {
@@ -1292,6 +1294,7 @@ function SectionContent({ activeTab }: { activeTab: NavKey }) {
   if (activeTab === "world") return <WorldPanel />;
   if (activeTab === "generation") return <GenerationPanel />;
   if (activeTab === "tools") return <ToolsPanel />;
+  if (activeTab === "data") return <DataPanel />;
   return <McpPanel />;
 }
 

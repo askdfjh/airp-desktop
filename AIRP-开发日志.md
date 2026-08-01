@@ -2913,3 +2913,59 @@ useChat hook 中的流式状态随组件卸载而丢失，导致会话中断。
 **验证**
 - `npm run build` ✅（仅既有 CSS unterminated-string 警告）、`cargo build` ✅（仅既有 FetchArgs 死代码警告）
 
+### 2026-08-01（设置导出导入 / 世界面板优化 / 对话分支 / 联网工具提示与优化）
+
+**设置导出与导入（数据管理面板）**
+- 需求：设置里增加“导出/导入当前所有设置”；导出可勾选项目；导入成功后标注实际导入的项目
+- 实现：
+  1. 新建 `DataPanel.tsx`：设置 → 数据管理 tab（Database 图标）
+  2. `settingsBackup.ts`：12 类可勾选数据项（模型服务/界面偏好/输出预设/提示词注入/工具设置/MCP 服务器/模板库/角色卡/角色/世界规则/世界书/对话记录），导出 JSON 备份文件（含类型标识与版本号）
+  3. 导出：系统保存对话框 + 勾选项过滤；导入：文件校验（类型/版本）→ 确认弹窗 → 逐项恢复 → 完成后列出实际导入的项目
+  4. 备份/恢复底层接口下沉 `db.ts`：snapshotSettingsTables / restoreSettingsTables / snapshotConversations / restoreConversations（设置类表先清空再写入；对话按会话+消息重建，保留原 ID 防冲突）
+- 涉及：`DataPanel.tsx`（新建）, `settingsBackup.ts`（新建）, `db.ts`, `ProviderConfig.tsx`
+
+**默认世界空状态**
+- 需求：打开时未选择世界应为空状态，不再默认“修仙世界”
+- 修复：`worldStore.ts` 启动加载时取消“自动激活第一本世界书”逻辑，未主动选择则保持无世界
+- 涉及：`worldStore.ts`
+
+**世界信息面板 UI 优化**
+- 需求：世界信息不再用大弹窗，仅提示所处世界；世界设定条目收起，点击打开再点击关闭；去掉 X；图标与文字对齐居中
+- 实现：
+  1. 世界信息按钮改为切换式（active 态高亮），面板以按钮为锚点弹出紧凑浮层
+  2. 世界设定条目默认折叠，点击条目头展开/收起；点击外部或 Esc 关闭
+  3. 移除关闭 X 按钮，头部纯文字居中展示当前世界
+- 涉及：`WorldInfoPanel.tsx`（重写）, `FunctionBar.tsx`, `index.css`
+
+**对话编辑保存 + 创建分支**
+- 需求：用户消息原来只有“编辑发送”；增加原地保存；再增加“创建分支”——以所选消息为分叉点，把该条及以上所有内容复制到新话题
+- 实现：
+  1. 用户消息编辑框：发送（保存修改并重新生成 AI 回复）/ 保存（仅原地保存，不触发生成）/ 取消
+  2. AI 消息新增“编辑”：文本框 + 保存（原地保存入库）/ 取消；消息操作栏常显半透明（悬停加深），复制/编辑/重新回答/创建分支
+  3. 分支：消息操作栏“创建分支” → 确认弹窗 → `db.ts createBranchSession` 复制该消息（含）之前全部消息到新会话（继承标题/系统提示/模型/思考/kind）→ 自动切换到新话题，两个话题各自独立
+- 涉及：`DialogueNovel.tsx`, `useChat.ts`, `sessionStore.ts`, `db.ts`
+
+**联网搜索工具提示（轻量）**
+- 需求：调用联网搜索时给出提示，不用太显眼
+- 实现：
+  1. 运行中：一行小字“正在联网搜索”+ 小转圈 + 计时（无边框无进度条，11px 灰字）；完成后：“已联网搜索”；停止：“已停止”
+  2. 修复工具调用消息被空内容过滤误杀（带 tools 标记的空消息保留渲染）
+  3. 刷新后仍可见“已联网搜索”完成记录（tools 字段已持久化）
+- 涉及：`DialogueNovel.tsx`, `useChat.ts`, `index.css`
+
+**联网搜索速度优化**
+- 免费搜索源（无 API Key 时）依次尝试 Bing HTML → DuckDuckGo HTML → DDG API → 新闻 RSS
+- 单次请求超时 8s → 4.5s；去掉 DuckDuckGo 首页预热请求（cookie 已预置，直接搜索）
+- 配置 Serper/Bing/Brave/Tavily API Key 时为单次请求，速度最快
+- 涉及：`tools/search.ts`
+
+**联网搜索不调用排查与修复**
+- 现象：调试版（`tauri.conf.dev.json` → 独立数据目录 `com.airp.app.dev`）设置表为空，`web_search_enabled` 未写入 → 启动时开关关闭 → 工具未下发给模型 → 不调用搜索
+- 修复：
+  1. `AppShell.tsx`：设置从未写入时默认开启联网搜索并写库
+  2. `useChat.ts`：发送/重新生成/编辑发送前与界面开关实时同步，避免模块状态丢失
+  3. 数据：把正式数据目录的搜索配置（开关/Serper/API Key）补齐到调试数据目录
+- 涉及：`AppShell.tsx`, `useChat.ts`
+
+**验证**
+- `npx tsc --noEmit` 零错误 ✅、`vite build` 通过 ✅

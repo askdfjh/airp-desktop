@@ -185,6 +185,8 @@ export function useChat() {
         }
       }
       for (const m of history) {
+        // 工具占位消息（空内容）不进入历史上下文
+        if (m.role === "assistant" && m.tools && !m.content.trim()) continue;
         result.push({ role: m.role, content: m.content });
       }
       if (images && images.length > 0) {
@@ -369,6 +371,8 @@ export function useChat() {
       messagesRef.current = newMessages;
       insertMessage(userMsg).catch((e) => console.error("[db] insertMessage(user) failed:", e));
 
+      // 发送前与界面开关同步，避免模块状态丢失后工具静默失效
+      _toolsEnabled = useUIStore.getState().webSearchOn;
       const apiMessages = buildApiMessages(messagesRef.current.slice(0, -1), finalContent, images, _toolsEnabled);
       console.log("[tools] sendMessage: _toolsEnabled =", _toolsEnabled);
       const tools = _toolsEnabled ? await collectTools() : [];
@@ -399,6 +403,7 @@ export function useChat() {
           content: "",
           createdAt: Date.now(),
           toolCalls: result.toolCalls,
+          tools: result.toolCalls.map((tc) => tc.function.name),
           toolStatus: "running",
         };
         flushSync(() => { setMessages((prev) => [...prev, asstMsg]); });
@@ -452,7 +457,7 @@ export function useChat() {
             newApiMessages.push({ role: "user", content: m.content });
           } else if (m.role === "assistant") {
             // Skip display-only tool call messages (content starts with "工具调用:")
-            if (!m.toolCalls) {
+            if (!m.toolCalls && !(m.tools && !m.content.trim())) {
               newApiMessages.push({ role: "assistant", content: m.content });
             }
           }
@@ -568,6 +573,8 @@ export function useChat() {
     setMessages(newList);
     messagesRef.current = newList;
 
+      // 发送前与界面开关同步，避免模块状态丢失后工具静默失效
+      _toolsEnabled = useUIStore.getState().webSearchOn;
     const apiMessages = buildApiMessages(
       newList.slice(0, -1),
       userMsg.content,
@@ -591,6 +598,7 @@ export function useChat() {
       const asstMsg: Message = {
         id: crypto.randomUUID(), sessionId, role: "assistant", content: "", createdAt: Date.now(),
         toolCalls: result.toolCalls, toolStatus: "running",
+        tools: result.toolCalls.map((tc) => tc.function.name),
       };
       flushSync(() => { setMessages((prev) => [...prev, asstMsg]); });
       messagesRef.current = [...messagesRef.current, asstMsg];
@@ -629,7 +637,7 @@ export function useChat() {
       for (const m of messagesRef.current) {
         if (m.role === "user") {
           newApiMessages.push({ role: "user", content: m.content });
-        } else if (m.role === "assistant" && !m.toolCalls) {
+        } else if (m.role === "assistant" && !m.toolCalls && !(m.tools && !m.content.trim())) {
           newApiMessages.push({ role: "assistant", content: m.content });
         }
       }
@@ -677,6 +685,8 @@ export function useChat() {
     setMessages(newList);
     messagesRef.current = newList;
 
+      // 发送前与界面开关同步，避免模块状态丢失后工具静默失效
+      _toolsEnabled = useUIStore.getState().webSearchOn;
     const apiMessages = buildApiMessages(
       newList.filter((m) => m.id !== userId),
       newContent,
@@ -700,6 +710,7 @@ export function useChat() {
       const asstMsg: Message = {
         id: crypto.randomUUID(), sessionId, role: "assistant", content: "", createdAt: Date.now(),
         toolCalls: result.toolCalls, toolStatus: "running",
+        tools: result.toolCalls.map((tc) => tc.function.name),
       };
       flushSync(() => { setMessages((prev) => [...prev, asstMsg]); });
       messagesRef.current = [...messagesRef.current, asstMsg];
@@ -738,7 +749,7 @@ export function useChat() {
       for (const m of messagesRef.current) {
         if (m.role === "user") {
           newApiMessages.push({ role: "user", content: m.content });
-        } else if (m.role === "assistant" && !m.toolCalls) {
+        } else if (m.role === "assistant" && !m.toolCalls && !(m.tools && !m.content.trim())) {
           newApiMessages.push({ role: "assistant", content: m.content });
         }
       }

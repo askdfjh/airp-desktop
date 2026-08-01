@@ -24,6 +24,7 @@ export function FunctionBar() {
   );
   const [showSessionPopup, setShowSessionPopup] = useState(false);
   const [showWorldInfo, setShowWorldInfo] = useState(false);
+  const worldBtnRef = useRef<HTMLButtonElement>(null);
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const eff = effectiveTheme();
@@ -327,7 +328,7 @@ export function FunctionBar() {
         </button>
 
         {/* World info */}
-        <button className="seed-func-btn" data-tooltip="世界信息" onClick={() => setShowWorldInfo(true)}>
+        <button ref={worldBtnRef} className={"seed-func-btn" + (showWorldInfo ? " seed-func-btn--active" : "")} data-tooltip="世界信息" onClick={() => { setOpenMenu(null); setShowWorldInfo((v) => !v); }}>
           <svg viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="10" />
             <line x1="2" y1="12" x2="22" y2="12" />
@@ -363,7 +364,7 @@ export function FunctionBar() {
       {/* World info panel (read-only) */}
       {showWorldInfo && createPortal(
         <div className={`theme-${eff}`}>
-          <WorldInfoPanel onClose={() => setShowWorldInfo(false)} />
+          <WorldInfoPanel anchorRef={worldBtnRef} onClose={() => setShowWorldInfo(false)} />
         </div>,
         document.body
       )}

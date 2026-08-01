@@ -1129,7 +1129,7 @@ button.ghost:hover { color:var(--seed-accent); }
   display: flex;
   gap: 4px;
   margin-top: 6px;
-  opacity: 0;
+  opacity: 0.35;
   transition: opacity 0.15s ease;
 }
 .seed-msg-wrapper:hover .seed-msg-actions {
@@ -1935,22 +1935,19 @@ button.ghost:hover { color:var(--seed-accent); }
   box-shadow: 0 4px 16px var(--seed-accent-glow);
 }
 
-/* === 宸ュ叿璋冪敤寰界珷 === */
+/* === 工具调用轻提示（不显眼） === */
 .seed-tool-badge {
-  margin: 12px 0;
-  border-radius: 8px;
-  overflow: hidden;
-  position: relative;
-  border: 1px solid color-mix(in srgb, var(--seed-fg) 10%, transparent);
-  background: color-mix(in srgb, var(--seed-fg) 4%, transparent);
+  display: inline-flex;
+  align-items: center;
+  margin: 8px 0 12px;
 }
 
 .seed-tool-badge-inner {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  font-size: 13px;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1;
   color: var(--seed-muted);
 }
 
@@ -1959,67 +1956,56 @@ button.ghost:hover { color:var(--seed-accent); }
   opacity: 0.7;
 }
 
+.seed-tool-spinner {
+  flex-shrink: 0;
+  color: var(--seed-accent);
+  opacity: 0.8;
+  animation: seed-tool-spin 1s linear infinite;
+}
+
+@keyframes seed-tool-spin {
+  to { transform: rotate(360deg); }
+}
+
 .seed-tool-label {
-  font-weight: 500;
   letter-spacing: 0.02em;
 }
 
 .seed-tool-timer {
-  margin-left: auto;
   font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  color: var(--seed-accent);
-  opacity: 0.8;
+  font-size: 11px;
+  color: var(--seed-muted);
+  opacity: 0.75;
 }
 
 .seed-tool-aborted-text {
-  margin-left: auto;
-  font-size: 12px;
+  font-size: 11px;
   color: #f87171;
-  font-weight: 500;
 }
 
-/* 搴曢儴鍛煎惛杩涘害鏉★紙running 鎬侊級 */
-.seed-tool-progress {
-  height: 2px;
-  background: var(--seed-accent);
-  animation: seed-tool-breath 1.6s ease-in-out infinite;
-}
-
-@keyframes seed-tool-breath {
-  0%, 100% { opacity: 0.3; transform: scaleX(0.3); transform-origin: left; }
-  50% { opacity: 1; transform: scaleX(1); transform-origin: left; }
-}
-
-/* running 鎬侊細绱壊鍛煎惛杈规 */
-.seed-tool-badge--running {
-  border-color: color-mix(in srgb, var(--seed-accent) 50%, transparent);
-  animation: seed-tool-border-breath 1.6s ease-in-out infinite;
-}
-
-@keyframes seed-tool-border-breath {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--seed-accent) 0%, transparent); }
-  50% { box-shadow: 0 0 12px 0 color-mix(in srgb, var(--seed-accent) 25%, transparent); }
-}
-
-/* done 鎬侊細闈欐€併€佷綆璋?*/
-.seed-tool-badge--done {
-  opacity: 0.55;
-}
-
-/* aborted 鎬侊細绾㈣壊搴?*/
-.seed-tool-badge--aborted {
-  border-color: color-mix(in srgb, #ef4444 50%, transparent);
-  background: color-mix(in srgb, #ef4444 12%, transparent);
-}
-
-.seed-tool-badge--aborted .seed-tool-badge-inner {
-  color: #fca5a5;
-}
-
+/* aborted 态：红色小字 */
 .seed-tool-badge--aborted .seed-tool-icon {
   color: #ef4444;
   opacity: 1;
+}
+
+
+/* 工具完成后轻量提示（不显眼） */
+.seed-tool-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 10px 0 14px;
+  padding: 3px 0;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--seed-muted);
+  opacity: 0.75;
+}
+
+.seed-tool-done-icon {
+  flex-shrink: 0;
+  opacity: 0.7;
 }
 
 /* === 璁剧疆闈㈡澘杩囨浮鍔ㄧ敾 === */

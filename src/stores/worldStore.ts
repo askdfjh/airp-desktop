@@ -44,13 +44,8 @@ export const useWorldStore = create<WorldState>((set, get) => ({
     try {
       await initBuiltinWorldBooks();
       const books = await loadWorldBooks(true);
-      let activeBook = await loadActiveWorldBook();
-      if (!activeBook && books.length > 0) {
-        const first = books.find(b => !b.isBuiltin) || books[0];
-        await deactivateAllWorldBooks();
-        await updateWorldBook(first.id, { isActive: true, updatedAt: Date.now() });
-        activeBook = await loadActiveWorldBook();
-      }
+      const activeBook = await loadActiveWorldBook();
+      // 没有主动选择世界时保持空状态，不自动默认第一本
       set({ books, activeBook, loaded: true });
     } catch (e) {
       console.error("[db] loadWorldBooks failed:", e);

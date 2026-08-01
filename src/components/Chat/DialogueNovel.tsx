@@ -4,14 +4,16 @@ import { useSessionStore } from "@/stores/sessionStore";
 import { useUIStore } from "@/stores/uiStore";
 import { StreamingText } from "./StreamingText";
 import { FunctionBar } from "./FunctionBar";
+import { ConfirmDialog } from "@/components/Layout/ConfirmDialog";
 import { MarkdownRender } from "./MarkdownRender";
 import { parseSceneReply, type SceneInfo } from "@/lib/sceneTemplate";
 
 export function DialogueNovel() {
-  const { messages, sendMessage, streaming, stopStreaming, regenerate, editAndSend, deleteMessage } = useChat();
+  const { messages, sendMessage, streaming, stopStreaming, regenerate, editAndSend, editMessage, deleteMessage } = useChat();
   const activeSession = useSessionStore((s) =>
     s.activeId ? s.sessions.find((ss) => ss.id === s.activeId) : null
   );
+  const branchFromMessage = useSessionStore((s) => s.branchFromMessage);
   const { selectedWorldName, selectedCharacterName, selectedMode, messageFontSize, notify } = useUIStore();
   const [inputValue, setInputValue] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -19,6 +21,7 @@ export function DialogueNovel() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [branchTarget, setBranchTarget] = useState<typeof messages[0] | null>(null);
   const [sceneBarOpen, setSceneBarOpen] = useState(true);
   const [suggestBarOpen, setSuggestBarOpen] = useState(false);
   const [sceneOverflow, setSceneOverflow] = useState(false);
@@ -78,12 +81,28 @@ export function DialogueNovel() {
     setEditValue(msg.content);
   };
 
-  // Save edit and resend
+  // 保存编辑内容（原地保存，不重新触发 AI 回复）
   const handleSaveEdit = () => {
+    if (!editingId || !editValue.trim()) return;
+    editMessage(editingId, editValue.trim());
+    setEditingId(null);
+    setEditValue("");
+  };
+
+  // 编辑并发送（保存修改后重新生成 AI 回复）
+  const handleEditAndSend = () => {
     if (!editingId || !editValue.trim()) return;
     editAndSend(editingId, editValue.trim());
     setEditingId(null);
     setEditValue("");
+  };
+
+  // 创建分支话题：以当前消息为分叉点另建新会话
+  const handleBranchConfirm = async () => {
+    if (!branchTarget || !activeSession) return;
+    const ok = await branchFromMessage(activeSession.id, branchTarget.id);
+    notify(ok ? "已创建分支话题，已切换到新话题" : "创建分支失败，请重试");
+    setBranchTarget(null);
   };
 
   // Cancel edit
@@ -281,8 +300,8 @@ export function DialogueNovel() {
             // 找到第一个 assistant 消息的 id，用于首字下沉
             const firstAssistantId = visibleMessages.find((m) => m.role === "assistant")?.id;
             return visibleMessages.map((msg, idx) => {
-              // 空内容的 assistant 消息（工具调用占位/未完成的流式占位）不渲染，避免空白条
-              if (msg.role === "assistant" && !msg.content) return null;
+              // 空内容的 assistant 消息（未完成的流式占位）不渲染，避免空白条；工具调用消息除外
+              if (msg.role === "assistant" && !msg.content && !(msg.tools && msg.tools.length > 0)) return null;
               if (msg.role === "user") {
                 if (editingId === msg.id) {
                   return (
@@ -297,7 +316,8 @@ export function DialogueNovel() {
                       />
                       <div className="seed-edit-actions">
                         <button className="seed-edit-btn seed-edit-btn--cancel" onClick={handleCancelEdit}>取消</button>
-                        <button className="seed-edit-btn seed-edit-btn--save" onClick={handleSaveEdit} disabled={!editValue.trim()}>发送</button>
+                        <button className="seed-edit-btn" onClick={handleEditAndSend} disabled={!editValue.trim()}>发送</button>
+                        <button className="seed-edit-btn seed-edit-btn--save" onClick={handleSaveEdit} disabled={!editValue.trim()}>保存</button>
                       </div>
                     </div>
                   );
@@ -320,26 +340,63 @@ export function DialogueNovel() {
                           <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
                         </svg>
                       </button>}
+                      {!streaming && <button className="seed-msg-action-btn" data-tooltip="创建分支" onClick={() => setBranchTarget(msg)}>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="6" y1="3" x2="6" y2="15" />
+                          <circle cx="18" cy="6" r="3" />
+                          <circle cx="6" cy="18" r="3" />
+                          <path d="M18 9a9 9 0 0 1-9 9" />
+                        </svg>
+                      </button>}
                     </div>
                     {copiedId === msg.id && <span className="seed-copied-toast">已复制</span>}
                   </div>
                 );
               }
-              // 工具调用消息：仅 running/aborted 时显示徽章，完成后直接隐藏（未持久化的状态视为已完成）
-              if (msg.toolCalls && msg.toolCalls.length > 0 && (msg.toolStatus === "running" || msg.toolStatus === "aborted")) {
+              // 工具调用消息：running/aborted 显示徽章；完成后显示轻量提示（tools 已持久化，刷新后仍可见）
+              if (msg.tools && msg.tools.length > 0) {
+                if (msg.toolStatus === "running" || msg.toolStatus === "aborted") {
+                  return (
+                    <ToolCallBadge
+                      key={msg.id}
+                      status={msg.toolStatus || "done"}
+                      startTime={msg.createdAt}
+                      toolNames={msg.toolCalls ? msg.toolCalls.map((tc) => tc.function.name) : msg.tools}
+                    />
+                  );
+                }
                 return (
-                  <ToolCallBadge
-                    key={msg.id}
-                    status={msg.toolStatus || "done"}
-                    startTime={msg.createdAt}
-                    toolNames={msg.toolCalls.map((tc) => tc.function.name)}
-                  />
+                  <div key={msg.id} className="seed-tool-done">
+                    <svg className="seed-tool-done-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="8" />
+                      <path d="m21 21-4.3-4.3" />
+                    </svg>
+                    <span>{toolDoneLabel(msg.tools)}</span>
+                  </div>
                 );
               }
               // Assistant message：首段加 drop-cap class
               const isStreaming = streaming && msg === lastMsg && msg.role === "assistant";
               const isDropCap = !isBlank && msg.id === firstAssistantId;
               const parsed = isBlank ? null : parseSceneReply(msg.content);
+              if (editingId === msg.id) {
+                return (
+                  <div key={msg.id} className="seed-edit-block" style={{ animationDelay: `${Math.min(idx * 0.05, 0.5)}s` }}>
+                    <textarea
+                      className="seed-edit-textarea"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      autoFocus
+                      rows={Math.max(2, editValue.split("\n").length)}
+                      style={{ fontSize: msgFontSize - 1 }}
+                    />
+                    <div className="seed-edit-actions">
+                      <button className="seed-edit-btn seed-edit-btn--cancel" onClick={handleCancelEdit}>取消</button>
+                      <button className="seed-edit-btn seed-edit-btn--save" onClick={handleSaveEdit} disabled={!editValue.trim()}>保存</button>
+                    </div>
+                  </div>
+                );
+              }
               return (
                 <div key={msg.id} className="seed-msg-wrapper" style={{ animationDelay: `${Math.min(idx * 0.05, 0.5)}s` }}>
                   <div
@@ -366,10 +423,24 @@ export function DialogueNovel() {
                           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                         </svg>
                       </button>
+                      {!streaming && <button className="seed-msg-action-btn" data-tooltip="编辑" onClick={() => handleStartEdit(msg)}>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 20h9" />
+                          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                        </svg>
+                      </button>}
                       {!streaming && <button className="seed-msg-action-btn" data-tooltip="重新回答" onClick={() => handleRegenerate(msg.id)}>
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M3 12a9 9 0 1 0 9-9" />
                           <path d="M3 4v5h5" />
+                        </svg>
+                      </button>}
+                      {!streaming && <button className="seed-msg-action-btn" data-tooltip="创建分支" onClick={() => setBranchTarget(msg)}>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="6" y1="3" x2="6" y2="15" />
+                          <circle cx="18" cy="6" r="3" />
+                          <circle cx="6" cy="18" r="3" />
+                          <path d="M18 9a9 9 0 0 1-9 9" />
                         </svg>
                       </button>}
                     </div>
@@ -450,6 +521,17 @@ export function DialogueNovel() {
           <FunctionBar />
         </div>
       </div>
+
+      {branchTarget && activeSession && (
+        <ConfirmDialog
+          title="创建分支话题"
+          message="将以本条消息为分叉点，把本条及以上所有内容复制到一个新话题并切换过去，两个话题之后各自独立。确定创建分支？"
+          confirmLabel="创建分支"
+          cancelLabel="取消"
+          onConfirm={handleBranchConfirm}
+          onCancel={() => setBranchTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -513,8 +595,20 @@ function SuggestBar({
   );
 }
 
+// === 工具完成后轻量提示文案 ===
+function toolDoneLabel(tools: string[]) {
+  if (tools.includes("web_search")) return "已联网搜索";
+  const others = tools.filter((t) => t !== "web_search");
+  if (others.length === 0) return "已联网搜索";
+  if (others.length === 1) {
+    const name = others[0].split(":").pop() || others[0];
+    return `已调用工具：${name}`;
+  }
+  return `已调用 ${others.length} 个工具`;
+}
+
 // === 工具调用标识组件 ===
-// 不显示调用内容/参数，只显示"工具调用"+ 呼吸动画（running）+ 计时 + 停止红色底（aborted）
+// 不显示调用内容/参数，只显示轻量提示（running 小转圈 + 计时，aborted 停止态）
 function ToolCallBadge({
   status,
   startTime,
@@ -540,20 +634,29 @@ function ToolCallBadge({
     return m > 0 ? `${m}m ${sec.toString().padStart(2, "0")}s` : `${sec}.${Math.floor((ms % 1000) / 100)}s`;
   };
 
-  const label = toolNames.length > 1
-    ? `工具调用 (${toolNames.length})`
-    : `工具调用`;
+  const label = (() => {
+    if (toolNames.includes("web_search")) return "正在联网搜索";
+    const others = toolNames.filter((t) => t !== "web_search");
+    if (others.length === 0) return "正在联网搜索";
+    if (others.length === 1) {
+      const name = others[0].split(":").pop() || others[0];
+      return `正在调用工具：${name}`;
+    }
+    return `正在调用 ${toolNames.length} 个工具`;
+  })();
 
   return (
     <div className={`seed-tool-badge seed-tool-badge--${status}`}>
       <div className="seed-tool-badge-inner">
-        <svg
-          className="seed-tool-icon"
-          width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-        >
-          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-        </svg>
+        {status === "running" ? (
+          <svg className="seed-tool-spinner" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+          </svg>
+        ) : (
+          <svg className="seed-tool-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+          </svg>
+        )}
         <span className="seed-tool-label">{label}</span>
         {status === "running" && (
           <span className="seed-tool-timer">{formatTime(elapsed)}</span>
@@ -562,7 +665,6 @@ function ToolCallBadge({
           <span className="seed-tool-aborted-text">已停止</span>
         )}
       </div>
-      {status === "running" && <div className="seed-tool-progress" />}
     </div>
   );
 }

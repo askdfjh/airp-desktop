@@ -4,6 +4,7 @@ import {
   loadSessions, insertSession, deleteSession, deleteAllSessions, updateSession,
   loadTrashedSessions, restoreSession as restoreSessionDb,
   purgeSession as purgeSessionDb, purgeExpiredTrash,
+  createBranchSession,
   loadFavorites, addFavorite as addFavoriteDb,
   removeFavorite as removeFavoriteDb, searchMessages as searchMessagesDb,
   type Favorite, type SearchResult,
@@ -43,6 +44,7 @@ interface SessionState {
   updateSystemPrompt: (id: string, systemPrompt: string) => void;
   toggleThinking: (id: string) => void;
   setThinkingEnabled: (id: string, enabled: boolean) => void;
+  branchFromMessage: (sourceId: string, messageId: string) => Promise<boolean>;
 }
 
 export const useSessionStore = create<SessionState>((set, get) => ({
@@ -185,6 +187,33 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     } catch (e) {
       console.error("[db] purgeExpiredTrash failed:", e);
     }
+  },
+
+  /** 创建分支话题：复制源会话中 messageId（含）及之前的所有内容到新会话并切换过去 */
+  branchFromMessage: async (sourceId: string, messageId: string): Promise<boolean> => {
+    const source = get().sessions.find((s) => s.id === sourceId);
+    if (!source) return false;
+    const now = Date.now();
+    const newId = "s_" + now + "_" + Math.random().toString(36).slice(2, 8);
+    const newSession: Session = {
+      id: newId,
+      title: source.title,
+      systemPrompt: source.systemPrompt,
+      providerId: source.providerId,
+      model: source.model,
+      thinkingEnabled: source.thinkingEnabled,
+      kind: source.kind,
+      createdAt: now,
+      updatedAt: now,
+    };
+    try {
+      await createBranchSession(sourceId, messageId, newSession);
+    } catch (e) {
+      console.error("[db] createBranchSession failed:", e);
+      return false;
+    }
+    set((st) => ({ sessions: [newSession, ...st.sessions], activeId: newId }));
+    return true;
   },
 
   setSearchQuery: (q) => set({ searchQuery: q }),

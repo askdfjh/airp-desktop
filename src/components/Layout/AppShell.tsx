@@ -80,10 +80,14 @@ export function AppShell() {
       .then(async () => {
         // Initialize tools enabled flag from DB
         try {
-          const { getAppSetting } = await import("@/lib/db");
+          const { getAppSetting, setAppSetting } = await import("@/lib/db");
           const { setToolsEnabled } = await import("@/hooks/useChat");
           const webSearchOn = await getAppSetting("web_search_enabled");
-          const isOn = webSearchOn === "1";
+          // 未设置过时默认开启联网搜索（并写库，避免空数据目录下功能静默失效）
+          const isOn = webSearchOn === null ? true : webSearchOn === "1";
+          if (webSearchOn === null) {
+            setAppSetting("web_search_enabled", "1").catch(() => {});
+          }
           setWebSearchOn(isOn);
           setToolsEnabled(isOn);
           const mcpIdsRaw = await getAppSetting("mcp_active_server_ids");

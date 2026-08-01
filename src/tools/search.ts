@@ -178,7 +178,7 @@ async function searchDuckDuckGo(query: string): Promise<string> {
     console.warn("[search] Cookie init failed:", e);
   }
 
-  const fetchUrlWithTimeout = async (url: string, timeoutMs = 8000): Promise<string> => {
+  const fetchUrlWithTimeout = async (url: string, timeoutMs = 4500): Promise<string> => {
     const { invoke } = await import("@tauri-apps/api/core");
     return await Promise.race([
       invoke<string>("http_fetch", { url, method: "GET", headers: {} }),
@@ -234,50 +234,43 @@ async function searchDuckDuckGo(query: string): Promise<string> {
     }
   }
 
-  // Strategy 2: DuckDuckGo with cookie (first visit homepage to get cookie)
+  // Strategy 2: DuckDuckGo HTML（cookie 已预置，直接搜索）
   {
     console.log("[search] Trying DuckDuckGo with cookie...");
     try {
-      // First, visit DuckDuckGo homepage to get cookies
-      const homepage = await fetchUrl("https://duckduckgo.com/");
-      // Check if we got a CAPTCHA or real page
-      if (homepage.includes("captcha") || homepage.includes("verify") || homepage.includes("Just a moment")) {
-        console.log("[search] DuckDuckGo returned CAPTCHA/verify page, skipping HTML search");
-      } else {
-        // Now try the search
-        const searchUrl = "https://duckduckgo.com/html/?q=" + encodeURIComponent(query);
-        const html = await fetchUrl(searchUrl);
-        // Quick check: does it look like a results page?
-        const hasResults = /result__a/i.test(html) || /result--url/i.test(html) || /class="result/i.test(html);
-        if (hasResults) {
-          const results: string[] = [];
-          const linkRe = /<a[^>]+class="[^"]*result__a[^"]*"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
-          const snippetRe = /<a[^>]+class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/gi;
-          const links: string[] = [], titles: string[] = [];
-          let m: RegExpExecArray | null;
-          while ((m = linkRe.exec(html)) !== null) {
-            // DuckDuckGo uses redirect URLs, extract the real URL
-            let url = m[1];
-            const uRe = /uddg=([^&]+)/.exec(url);
-            if (uRe) url = decodeURIComponent(uRe[1]);
-            links.push(url);
-            titles.push(m[2].replace(/<[^>]*>/g, "").trim());
-          }
-          const snippets: string[] = [];
-          while ((m = snippetRe.exec(html)) !== null) snippets.push(m[1].replace(/<[^>]*>/g, "").trim());
-
-          console.log("[search] DuckDuckGo HTML found links:", links.length);
-          if (links.length > 0) {
-            for (let i = 0; i < Math.min(links.length, 5); i++) {
-              results.push(`${i + 1}. ${titles[i] || ""}`);
-              if (snippets[i]) results.push(`   ${snippets[i]}`);
-              results.push(`   ${links[i] || ""}`);
-            }
-            return results.join("\n");
-          }
-        } else {
-          console.log("[search] DuckDuckGo HTML doesn't look like results page");
+      // cookie 已在上方预置，直接搜索
+      const searchUrl = "https://duckduckgo.com/html/?q=" + encodeURIComponent(query);
+      const html = await fetchUrl(searchUrl);
+      // Quick check: does it look like a results page?
+      const hasResults = /result__a/i.test(html) || /result--url/i.test(html) || /class="result/i.test(html);
+      if (hasResults) {
+        const results: string[] = [];
+        const linkRe = /<a[^>]+class="[^"]*result__a[^"]*"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
+        const snippetRe = /<a[^>]+class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/gi;
+        const links: string[] = [], titles: string[] = [];
+        let m: RegExpExecArray | null;
+        while ((m = linkRe.exec(html)) !== null) {
+          // DuckDuckGo uses redirect URLs, extract the real URL
+          let url = m[1];
+          const uRe = /uddg=([^&]+)/.exec(url);
+          if (uRe) url = decodeURIComponent(uRe[1]);
+          links.push(url);
+          titles.push(m[2].replace(/<[^>]*>/g, "").trim());
         }
+        const snippets: string[] = [];
+        while ((m = snippetRe.exec(html)) !== null) snippets.push(m[1].replace(/<[^>]*>/g, "").trim());
+
+        console.log("[search] DuckDuckGo HTML found links:", links.length);
+        if (links.length > 0) {
+          for (let i = 0; i < Math.min(links.length, 5); i++) {
+            results.push(`${i + 1}. ${titles[i] || ""}`);
+            if (snippets[i]) results.push(`   ${snippets[i]}`);
+            results.push(`   ${links[i] || ""}`);
+          }
+          return results.join("\n");
+        }
+      } else {
+        console.log("[search] DuckDuckGo HTML doesn't look like results page");
       }
     } catch (e) {
       console.log("[search] DuckDuckGo HTML failed:", e);
