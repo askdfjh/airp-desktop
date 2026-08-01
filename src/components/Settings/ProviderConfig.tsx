@@ -40,7 +40,7 @@ const NAV_SUBTITLES: Record<NavKey, string> = {
   generation: "调节 AI 的创意与输出风格",
 };
 
-const PRESETS: Record<string, { name: string; baseUrl: string; models: string[]; supportsImages: boolean; thinkingModels: string[]; color: string }> = {
+export const PRESETS: Record<string, { name: string; baseUrl: string; models: string[]; supportsImages: boolean; thinkingModels: string[]; color: string }> = {
   openai: { name: "OpenAI", baseUrl: "https://api.openai.com/v1", models: ["gpt-4o", "gpt-4o-mini"], supportsImages: true, thinkingModels: [], color: "#10a37f" },
   deepseek: { name: "DeepSeek", baseUrl: "https://api.deepseek.com/v1", models: ["deepseek-chat", "deepseek-reasoner"], supportsImages: false, thinkingModels: ["deepseek-reasoner"], color: "#4f46e5" },
   anthropic: { name: "Anthropic", baseUrl: "https://api.anthropic.com/v1", models: ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-opus-latest"], supportsImages: true, thinkingModels: [], color: "#e879f9" },
@@ -87,7 +87,7 @@ const PRESETS: Record<string, { name: string; baseUrl: string; models: string[];
   custom: { name: "自定义", baseUrl: "", models: [], supportsImages: false, thinkingModels: [], color: "#6b7280" },
 };
 
-const PRESET_ORDER: ProviderType[] = ["openai", "deepseek", "anthropic", "google", "moonshot", "dashscope", "zhipuai", "openrouter", "opencode"];
+export const PRESET_ORDER: ProviderType[] = ["openai", "deepseek", "anthropic", "google", "moonshot", "dashscope", "zhipuai", "openrouter", "opencode"];
 
 const PRESET_ICONS: Record<string, React.ComponentType<{ size?: number; style?: React.CSSProperties }>> = {
   openai: Bot,
@@ -102,7 +102,7 @@ const PRESET_ICONS: Record<string, React.ComponentType<{ size?: number; style?: 
   custom: Wrench,
 };
 
-function PresetIcon({ type, size = 28, selected = false }: { type: ProviderType; size?: number; selected?: boolean }) {
+export function PresetIcon({ type, size = 28, selected = false }: { type: ProviderType; size?: number; selected?: boolean }) {
   const Icon = PRESET_ICONS[type] || Server;
   const bg = selected ? 'var(--seed-accent-bg)' : 'var(--seed-surface)';
   const color = selected ? 'var(--seed-accent)' : 'var(--seed-muted)';

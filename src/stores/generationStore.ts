@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { GenerationPreset } from "@/types";
 
-const BUILTIN_PRESETS: GenerationPreset[] = [
+export const BUILTIN_PRESETS: GenerationPreset[] = [
   {
     id: "balanced",
     name: "平衡叙事",
@@ -14,7 +14,7 @@ const BUILTIN_PRESETS: GenerationPreset[] = [
     presencePenalty: 0,
     frequencyPenalty: 0.3,
     maxTokens: 0,
-    outputStyle: "每次回复约 100-200 字，以生动的场景描写与人物对话推进故事，保持角色设定一致。",
+    outputStyle: "以生动的场景描写与人物对话推进故事，保持角色设定一致。每次回复要有充足篇幅（通常500-1000字），场景、动作、对话、心理描写均衡展开，细节到位，严禁简略。",
     isBuiltin: true,
   },
   {
@@ -28,7 +28,7 @@ const BUILTIN_PRESETS: GenerationPreset[] = [
     presencePenalty: 0,
     frequencyPenalty: 0.5,
     maxTokens: 0,
-    outputStyle: "回答准确、结构清晰、直奔主题，避免冗余铺垫。",
+    outputStyle: "回答准确、结构清晰、直奔主题，避免冗余铺垫。涉及故事叙述时保持充足篇幅（通常400-800字），把事件与设定交代完整清楚。",
     isBuiltin: true,
   },
   {
@@ -42,7 +42,7 @@ const BUILTIN_PRESETS: GenerationPreset[] = [
     presencePenalty: 0.3,
     frequencyPenalty: 0.2,
     maxTokens: 0,
-    outputStyle: "大胆发挥想象力，制造意外转折与新颖设定，文风自由奔放，每次回复约 150-300 字。",
+    outputStyle: "大胆发挥想象力，制造意外转折与新颖设定，文风自由奔放。每次回复篇幅要足（通常800-1200字），尽情铺陈奇景、奇遇与人物张力，把脑洞展开彻底。",
     isBuiltin: true,
   },
   {
@@ -56,7 +56,7 @@ const BUILTIN_PRESETS: GenerationPreset[] = [
     presencePenalty: 0.1,
     frequencyPenalty: 0.25,
     maxTokens: 0,
-    outputStyle: "始终以角色身份回应，用行动、神态与内心活动代替干瘪叙述，对话自然口语化，每次回复约 80-200 字。",
+    outputStyle: "始终以角色身份回应，用行动、神态与内心活动代替干瘪叙述，对话自然口语化。每次回复充分展开（通常500-1000字），情绪张力与细节描写到位，让玩家沉浸其中。",
     isBuiltin: true,
   },
   {
@@ -70,53 +70,7 @@ const BUILTIN_PRESETS: GenerationPreset[] = [
     presencePenalty: 0,
     frequencyPenalty: 0.4,
     maxTokens: 0,
-    outputStyle: "以小说笔法分段续写，场景、动作、对话、心理层层递进，结尾留出钩子便于继续，每次回复 200-400 字。",
-    isBuiltin: true,
-  },
-  {
-    id: "dm-master",
-    name: "DM 跑团执行准则",
-    description: "客观白描式跑团主持人：信息隔离、群像化 NPC、强制页眉与行动红线",
-    temperature: 0.85,
-    topP: 0.93,
-    topK: 40,
-    minP: 0.05,
-    presencePenalty: 0.1,
-    frequencyPenalty: 0.35,
-    maxTokens: 0,
-    outputStyle: `专业DM执行准则 (V2.0 优化版)
-
-核心：作为DM，你只需客观呈现世界，严禁引导剧情或评价角色。
-
-一、视角与信息隔离 (Sense-Only)
-- 生理感知局限：NPC仅拥有视觉、听觉、嗅觉、触觉。严禁NPC感知玩家的心理活动、背包深处或未暴露的隐私。
-- 逻辑推论：NPC对未知事物的解读必须基于其性格产生的"偏见"或"误解"。
-- 信息差：不同场景的NPC信息不互通。
-
-二、NPC群像化逻辑 (NPC-Centric)
-- 生存首位：NPC优先满足自身需求（生理、审美、欲望）。
-- 对话配比：场景内NPC间的互动必须占总对话量的80%以上，玩家仅作为参与者，而非世界中心。
-- 魅力指数系统 (Score 1-5)：
-  男性评分：身高(≥180=5; 172-177=3; <165=1)；年收(≥100w=5; 平均=3; 负债=1)；颜值(明星=5; 平常=3; 畸形=1)。
-  女性评分：颜值(惊艳=5; 清秀=3; 有硬伤=1)；身材(匀称=3; 极端体型=1)；皮肤(无瑕=5; 正常=3; 严重痘疤=1)。
-  应用：取平均值。高魅力者更容易获得优待和关注，低魅力者常被无视。
-
-三、生理与行为逻辑 (Realism)
-- 韧性逻辑：角色生理耐受度随经验增加。性行为后的反应需符合现实，严禁夸张描写。
-- 自然规律：严格遵循现实怀孕概率、周期与生理期。
-
-四、写作手法 (White-box Style)
-- 客观白描：仅描述可观测的动作、神态、环境。严禁比喻、抒情、拟人或心理描写。
-- 价值中立：禁止道德评价或正面引导，即使行为荒诞也需冷酷呈现。
-- 显性表达：涉及器官、分泌物或行为时，必须使用直白的中性词汇，严禁诗意化或隐喻。
-
-五、流程控制 (Structure)
-- 强制页眉：每段开头必须标注：
-  [日期时间]：星期X，HH:MM
-  [地点]：具体位置
-  [出场角色]：角色名（魅力值；若是女性标注生理期阶段）
-- 行动红线：绝对禁止控制玩家角色（PC）的言行与心理。你仅负责环境反馈与NPC响应。
-- 因果律：剧情推进必须具备明确的因果关联，拒绝突变。`,
+    outputStyle: "以小说笔法分段续写，场景、动作、对话、心理层层递进，结尾留出钩子便于继续。篇幅充沛（通常1200-2000字），一段回复要像小说的一个完整章节般充实饱满。",
     isBuiltin: true,
   },
   {
@@ -150,7 +104,7 @@ const BUILTIN_PRESETS: GenerationPreset[] = [
 
 四、叙事技法 (Narration)
 - 客观白描：描述可观测的动作、神态、环境，禁止替玩家抒情或心理描写。
-- 简练推进：每回合聚焦一个主要反馈点，避免长篇铺陈挤压玩家的行动空间。
+- 生动反馈：每回合聚焦玩家行动的直接后果，但环境与 NPC 的反馈要描写充分、有画面感（篇幅适中，通常400-800字），让玩家看见、听见、闻到这个世界。
 - 保留选择权：NPC 可以提议、挑战、拒绝，但绝不代替玩家作选择。
 
 五、底线 (Red Line)
@@ -202,18 +156,23 @@ export const useGenerationStore = create<GenerationState>()(
           };
         }),
     }),
-    { name: "airp-generation-v1", version: 4, migrate: (persisted: unknown) => {
+    { name: "airp-generation-v1", version: 5, migrate: (persisted: unknown) => {
       const old = persisted as Partial<GenerationState> | undefined;
       const presets = Array.isArray(old?.presets) ? old.presets : [];
+      // 清除 dm-master + 旧 jailbreak 字段
       const cleaned = presets
         .filter((p: GenerationPreset & { jailbreak?: unknown }) => p?.id !== "dm-master")
         .map((p: GenerationPreset & { jailbreak?: unknown }) => {
           const { jailbreak: _drop, ...rest } = p;
           return rest;
         });
+      // 内置预设：缺失则补入，已存在则用最新定义覆盖（保证内置参数/文风同步更新）
       for (const builtin of BUILTIN_PRESETS) {
-        if (!cleaned.some((p: GenerationPreset) => p.id === builtin.id)) {
+        const idx = cleaned.findIndex((p: GenerationPreset) => p.id === builtin.id);
+        if (idx === -1) {
           cleaned.push(builtin);
+        } else if (builtin.isBuiltin) {
+          cleaned[idx] = builtin;
         }
       }
       return { ...old, presets: cleaned } as GenerationState;

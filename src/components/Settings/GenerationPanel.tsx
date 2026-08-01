@@ -1,78 +1,8 @@
 import { useState } from "react";
-import { useGenerationStore } from "@/stores/generationStore";
+import { useGenerationStore, BUILTIN_PRESETS } from "@/stores/generationStore";
 import { useUIStore } from "@/stores/uiStore";
 import { RotateCcw } from "lucide-react";
 import type { GenerationPreset } from "@/types";
-
-const BUILTIN_DEFAULTS: GenerationPreset[] = [
-  {
-    id: "balanced", name: "平衡叙事", description: "稳定与创意的均衡点，适合日常角色扮演与剧情推进",
-    temperature: 0.9, topP: 0.95, topK: 40, minP: 0.05,
-    presencePenalty: 0, frequencyPenalty: 0.3, maxTokens: 0,
-    outputStyle: "每次回复约 100-200 字，以生动的场景描写与人物对话推进故事，保持角色设定一致。",
-    isBuiltin: true,
-  },
-  {
-    id: "stable", name: "稳定输出", description: "低随机性，回答精准一致，适合问答、设定解释与逻辑推理",
-    temperature: 0.6, topP: 0.9, topK: 20, minP: 0.1,
-    presencePenalty: 0, frequencyPenalty: 0.5, maxTokens: 0,
-    outputStyle: "回答准确、结构清晰、直奔主题，避免冗余铺垫。",
-    isBuiltin: true,
-  },
-  {
-    id: "creative", name: "创意迸发", description: "高随机性，天马行空的展开，适合奇遇、脑洞与反套路剧情",
-    temperature: 1.3, topP: 0.98, topK: 80, minP: 0.02,
-    presencePenalty: 0.3, frequencyPenalty: 0.2, maxTokens: 0,
-    outputStyle: "大胆发挥想象力，制造意外转折与新颖设定，文风自由奔放，每次回复约 150-300 字。",
-    isBuiltin: true,
-  },
-  {
-    id: "roleplay", name: "沉浸扮演", description: "以角色为本的输出，强化代入感与情绪张力",
-    temperature: 1.0, topP: 0.95, topK: 50, minP: 0.05,
-    presencePenalty: 0.1, frequencyPenalty: 0.25, maxTokens: 0,
-    outputStyle: "始终以角色身份回应，用行动、神态与内心活动代替干瘪叙述，对话自然口语化，每次回复约 80-200 字。",
-    isBuiltin: true,
-  },
-  {
-    id: "longform", name: "长篇叙事", description: "低温度高连贯性，适合长篇小说式多段连载输出",
-    temperature: 0.85, topP: 0.92, topK: 30, minP: 0.05,
-    presencePenalty: 0, frequencyPenalty: 0.4, maxTokens: 0,
-    outputStyle: "以小说笔法分段续写，场景、动作、对话、心理层层递进，结尾留出钩子便于继续，每次回复 200-400 字。",
-    isBuiltin: true,
-  },
-  {
-    id: "player-control", name: "玩家视角 · 行动对话自主", description: "第一人称沉浸：行动与对话完全由玩家掌控，AI 只反馈世界与 NPC",
-    temperature: 0.9, topP: 0.95, topK: 40, minP: 0.05,
-    presencePenalty: 0.1, frequencyPenalty: 0.3, maxTokens: 0,
-    outputStyle: `玩家视角执行准则 (Player-Centric V1.0)
-
-核心：你是这个世界的导演与NPC，不是玩家的代言人。玩家的行动与对话完全由玩家自己决定，你绝对禁止代写玩家的言行。
-
-一、角色分工 (Division)
-- 你负责：环境、场景、NPC的行为与回应、事件后果、世界的因果反馈。
-- 玩家负责：玩家角色的行动、对话、心理与选择。你绝不替玩家做决定、说台词或描述玩家角色的内心。
-- 玩家的输入即玩家角色的行动或话语，你只回应世界给出的反馈。
-
-二、第一人称沉浸 (First-Person)
-- 叙述用「你」称呼玩家角色，NPC 之间用名字互相称呼。
-- 所见即所得：玩家只能通过感官获得信息（视觉、听觉、嗅觉、触觉），NPC 绝不读取玩家的心理活动或隐私。
-
-三、回应原则 (Feedback)
-- 每次回复聚焦玩家当前行动的直接后果：环境如何反应、NPC 如何回应、世界发生了什么变化。
-- 行动有代价：合理的行动有合理的后果，危险的行为有明确的风险反馈。
-- 玩家行动信息不足时，可提出询问补充，绝不替玩家补全行动。
-
-四、叙事技法 (Narration)
-- 客观白描：描述可观测的动作、神态、环境，禁止替玩家抒情或心理描写。
-- 简练推进：每回合聚焦一个主要反馈点，避免长篇铺陈挤压玩家的行动空间。
-- 保留选择权：NPC 可以提议、挑战、拒绝，但绝不代替玩家作选择。
-
-五、底线 (Red Line)
-- 绝对禁止控制玩家角色的言行与心理。
-- 玩家说「我转身离开」，就描述他离开的场景，而不是替他回头。`,
-    isBuiltin: true,
-  },
-];
 
 const SLIDER_STYLE: React.CSSProperties = {
   flex: 1,
@@ -137,7 +67,7 @@ export function GenerationPanel() {
   };
 
   const handleResetBuiltin = (p: GenerationPreset) => {
-    const def = BUILTIN_DEFAULTS.find((d) => d.id === p.id);
+    const def = BUILTIN_PRESETS.find((d) => d.id === p.id);
     if (!def) return;
     upsertPreset(def);
     setDraft(null);

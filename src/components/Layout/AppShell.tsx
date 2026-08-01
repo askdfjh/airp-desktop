@@ -4,6 +4,7 @@ import { useTemplateStore } from "@/stores/templateStore";
 import { useCharacterStore } from "@/stores/characterStore";
 import { useMcpStore } from "@/stores/mcpStore";
 import { useWorldStore } from "@/stores/worldStore";
+import { useProviderStore } from "@/stores/providerStore";
 import { initDb } from "@/lib/db";
 import { DialogueNovel } from "@/components/Chat/DialogueNovel";
 import { OnboardingFlow } from "@/components/Onboarding/OnboardingFlow";
@@ -13,6 +14,8 @@ import { useEffect, useState, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ConfirmDialog } from "@/components/Layout/ConfirmDialog";
 import { TitleBar } from "@/components/Layout/TitleBar";
+import { WelcomeScreen } from "@/components/Layout/WelcomeScreen";
+import { WelcomeApiSetup } from "@/components/Layout/WelcomeApiSetup";
 
 export function AppShell() {
   const {
@@ -46,7 +49,18 @@ export function AppShell() {
     } catch {}
     return "dark";
   });
+  const [welcomeSeen, setWelcomeSeen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("airp-welcome-v1") === "1";
+    } catch {
+      return true;
+    }
+  });
+  const providerCount = useProviderStore((s) => s.providers.length);
+  const setSettingsOpen = useUIStore((s) => s.setSettingsOpen);
+  const [welcomeView, setWelcomeView] = useState<"home" | "setup">("home");
   const [dbReady, setDbReady] = useState<boolean | null>(null);
+  const showWelcome = dbReady === true && !welcomeSeen && providerCount === 0 && !settingsOpen;
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const exitConfirmRef = useRef(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
@@ -147,6 +161,37 @@ export function AppShell() {
     setShowExitConfirm(false);
   };
 
+  // 欢迎页：跳过 → 直接进入对话；配置完成（关闭设置面板且已配置 provider）→ 进入正常流程
+  const handleWelcomeSkip = () => {
+    try {
+      localStorage.setItem("airp-welcome-v1", "1");
+    } catch {}
+    setWelcomeSeen(true);
+    setAppPhase("dialogue");
+  };
+
+  const handleWelcomeConfigure = () => {
+    setWelcomeView("setup");
+  };
+
+  // 独立 API 配置页保存完成：标记已见 → 进入世界选择页（开局流程）
+  const handleWelcomeApiSaved = () => {
+    try {
+      localStorage.setItem("airp-welcome-v1", "1");
+    } catch {}
+    setWelcomeSeen(true);
+    setAppPhase("onboarding");
+  };
+
+  useEffect(() => {
+    if (settingsOpen || welcomeSeen || providerCount === 0) return;
+    try {
+      localStorage.setItem("airp-welcome-v1", "1");
+    } catch {}
+    setWelcomeSeen(true);
+    setAppPhase(useSessionStore.getState().activeId ? "dialogue" : "onboarding");
+  }, [settingsOpen, welcomeSeen, providerCount, setAppPhase]);
+
   const handleDeleteConfirm = () => {
     if (!deleteTarget) return;
     const result = removeSession(deleteTarget.id);
@@ -174,6 +219,31 @@ export function AppShell() {
           <span style={{ fontSize: 13, color: "var(--seed-muted, #6b6880)", letterSpacing: "0.05em" }}>正在加载...</span>
         </div>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  // 欢迎页：首次启动且未配置模型服务时展示（配置或跳过后不再出现）
+  if (showWelcome) {
+    return (
+      <div className={`theme-${eff}`} style={{ height: "100vh", width: "100vw", overflow: "hidden", background: "var(--seed-bg)" }}>
+        <TitleBar />
+        {welcomeView === "home" ? (
+          <WelcomeScreen onSkip={handleWelcomeSkip} onConfigure={handleWelcomeConfigure} />
+        ) : (
+          <WelcomeApiSetup onBack={() => setWelcomeView("home")} onSaved={handleWelcomeApiSaved} />
+        )}
+        {settingsOpen && <ProviderConfigPanel />}
+        {showExitConfirm && (
+          <ConfirmDialog
+            title="退出 AIRP"
+            message="确定要退出吗？"
+            confirmLabel="退出"
+            cancelLabel="取消"
+            onConfirm={handleExitConfirm}
+            onCancel={handleExitCancel}
+          />
+        )}
       </div>
     );
   }

@@ -2,7 +2,14 @@ import { useState } from "react";
 import { useUIStore } from "@/stores/uiStore";
 import { useWorldStore } from "@/stores/worldStore";
 
-const PRESET_WORLDS = [
+// 预设世界 → 内置世界书 id 映射（没有内置书的世界不注入任何条目）
+export const WORLD_BOOK_MAP: Record<string, string> = {
+  cultivation: "wb-builtin-xianxia",
+  infinite: "wb-builtin-infinite",
+  palace: "wb-builtin-palace",
+};
+
+export const PRESET_WORLDS = [
   {
     id: "cultivation",
     name: "修仙 / 仙侠",
@@ -86,14 +93,23 @@ const PRESET_WORLDS = [
   },
 ];
 
-export function WorldSelect() {
+export function WorldSelect({ onRandomStart }: { onRandomStart?: () => void }) {
   const { setSelectedWorld, setOnboardingStep } = useUIStore();
   const [selected, setSelected] = useState<string | null>(null);
   const books = useWorldStore((s) => s.books);
+  const setActiveBook = useWorldStore((s) => s.setActiveBook);
+  const deactivateAllBooks = useWorldStore((s) => s.deactivateAllBooks);
 
-  const handleSelect = (id: string, name: string) => {
+  const handleSelect = async (id: string, name: string) => {
     setSelected(id);
     setSelectedWorld(id, name);
+    // 同步激活对应的世界书：仅激活当前选中的世界，避免上一本书的条目继续注入
+    const bookId = WORLD_BOOK_MAP[id] || books.find((b) => b.id === id || b.theme === id)?.id;
+    if (bookId) {
+      await setActiveBook(bookId);
+    } else {
+      await deactivateAllBooks();
+    }
     setTimeout(() => {
       setOnboardingStep(2);
     }, 800);
@@ -160,9 +176,38 @@ export function WorldSelect() {
         ))}
       </div>
 
-      {/* User's world books */}
-      {/* 自定义世界入口（贴合设计稿 bottom-row） */}
+      {/* 随机开局 + 自定义世界入口（贴合设计稿 bottom-row） */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 280px)", gap: 20, justifyContent: "center" }}>
+        <div
+          className="seed-card seed-card--custom"
+          onClick={onRandomStart}
+          style={{
+            border: "1px solid color-mix(in srgb, var(--seed-accent) 30%, transparent)",
+            background: "color-mix(in srgb, var(--seed-accent) 8%, transparent)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: 164,
+            textAlign: "center",
+            cursor: "pointer",
+          }}
+        >
+          <div style={{
+            width: 44, height: 44, borderRadius: "50%",
+            background: "color-mix(in srgb, var(--seed-accent) 15%, transparent)",
+            border: "1px solid color-mix(in srgb, var(--seed-accent) 25%, transparent)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            marginBottom: 12, color: "var(--seed-accent)",
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="4" />
+              <path d="M8 12l2 2 6-6" />
+            </svg>
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--seed-fg)" }}>随机开局</div>
+          <div style={{ fontSize: 12, color: "var(--seed-muted)", marginTop: 4 }}>世界 / 视角 / 角色 / 场景全部随机</div>
+        </div>
         <div
           className="seed-card seed-card--custom"
           onClick={() => useUIStore.getState().setSettingsOpen(true)}

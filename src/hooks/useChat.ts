@@ -338,7 +338,7 @@ export function useChat() {
   );
 
   const sendMessage = useCallback(
-    async (content: string, images?: string[], files?: AttachedFile[]) => {
+    async (content: string, images?: string[], files?: AttachedFile[], opts?: { opening?: boolean }) => {
       if (streaming) return;
       const blocker = getSendBlocker();
       if (blocker) {
@@ -361,6 +361,7 @@ export function useChat() {
         role: "user",
         content: finalContent,
         images: images && images.length > 0 ? images : undefined,
+        opening: opts?.opening ? true : undefined,
         createdAt: Date.now(),
       };
       const newMessages = [...messagesRef.current, userMsg];
@@ -484,12 +485,15 @@ export function useChat() {
     [activeProvider, activeModel, activeSession, streaming, buildApiMessages, startStream],
   );
 
-  // 开局自动发送：OnboardingFlow 设置 pendingOpeningMessage 后，等消息加载完成自动发出开场消息
+  // 开局自动发送：OnboardingFlow 设置 pendingOpeningMessage 后，等消息加载完成再发
+  // 必须等 everLoadedRef 置位（loadMessages 完成）——否则 loadMessages 的 setMessages([])
+  // 会清掉 streaming 的 placeholder，导致首条 AI 回复静默丢失（表现为"开始冒险后没反应"）
   const pendingOpeningMessage = useUIStore((s) => s.pendingOpeningMessage);
   useEffect(() => {
     if (!pendingOpeningMessage || !activeSession || loadingMessages) return;
+    if (!everLoadedRef.current) return;
     useUIStore.getState().setPendingOpeningMessage(null);
-    void sendMessage(pendingOpeningMessage);
+    void sendMessage(pendingOpeningMessage, undefined, undefined, { opening: true });
   }, [pendingOpeningMessage, activeSession?.id, loadingMessages, sendMessage]);
 
   const stopStreaming = useCallback(() => {

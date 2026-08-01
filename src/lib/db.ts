@@ -34,16 +34,18 @@ export async function initDb(): Promise<void> {
       content TEXT NOT NULL DEFAULT '',
       thinking TEXT,
       images TEXT,
+      opening INTEGER NOT NULL DEFAULT 0,
       createdAt INTEGER NOT NULL,
       FOREIGN KEY (sessionId) REFERENCES sessions(id) ON DELETE CASCADE
     );
   `);
   await db.execute(
-    `CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(sessionId, createdAt);`
+    `CREATE INDEX IF NOT EXISTS idx_messages_session ON sessions(sessionId, createdAt);`
   );
   // 迁移：旧表可能缺少新列
   await db.execute(`ALTER TABLE sessions ADD COLUMN thinkingEnabled INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
   await db.execute(`ALTER TABLE messages ADD COLUMN thinking TEXT;`).catch(() => {});
+  await db.execute(`ALTER TABLE messages ADD COLUMN opening INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
   // 回收站：软删除标记 + 删除时间
   await db.execute(`ALTER TABLE sessions ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
   await db.execute(`ALTER TABLE sessions ADD COLUMN deletedAt INTEGER;`).catch(() => {});
@@ -236,6 +238,7 @@ interface MessageRow {
   content: string;
   thinking: string | null;
   images: string | null;
+  opening: number | null;
   createdAt: number;
 }
 
@@ -262,6 +265,7 @@ function rowToMessage(r: MessageRow): Message {
     content: r.content,
     thinking: r.thinking ?? undefined,
     images: r.images ? (JSON.parse(r.images) as string[]) : undefined,
+    opening: r.opening === 1 ? true : undefined,
     createdAt: r.createdAt,
   };
 }
@@ -372,8 +376,8 @@ export async function loadMessages(sessionId: string): Promise<Message[]> {
 export async function insertMessage(m: Message): Promise<void> {
   console.log("[db] insertMessage", m.id, m.role, "len=", m.content.length);
   await getDb().execute(
-    "INSERT INTO messages (id, sessionId, role, content, thinking, images, createdAt) VALUES ($1, $2, $3, $4, $5, $6, $7);",
-    [m.id, m.sessionId, m.role, m.content, m.thinking ?? null, m.images ? JSON.stringify(m.images) : null, m.createdAt]
+    "INSERT INTO messages (id, sessionId, role, content, thinking, images, opening, createdAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);",
+    [m.id, m.sessionId, m.role, m.content, m.thinking ?? null, m.images ? JSON.stringify(m.images) : null, m.opening ? 1 : 0, m.createdAt]
   );
 }
 
@@ -726,7 +730,7 @@ export async function updateCharacter(id: string, fields: Partial<Omit<Character
   values.push(ts);
   values.push(id);
   await getDb().execute(
-    `UPDATE characters SET ${sets.join(", ")} WHERE id = ${values.length};`,
+    `UPDATE characters SET ${sets.join(", ")} WHERE id = $${values.length};`,
     values
   );
 }

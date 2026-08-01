@@ -8,7 +8,7 @@ import { MarkdownRender } from "./MarkdownRender";
 import { parseSceneReply, type SceneInfo } from "@/lib/sceneTemplate";
 
 export function DialogueNovel() {
-  const { messages, sendMessage, streaming, stopStreaming, regenerate, editAndSend } = useChat();
+  const { messages, sendMessage, streaming, stopStreaming, regenerate, editAndSend, deleteMessage } = useChat();
   const activeSession = useSessionStore((s) =>
     s.activeId ? s.sessions.find((ss) => ss.id === s.activeId) : null
   );
@@ -20,7 +20,7 @@ export function DialogueNovel() {
   const [editValue, setEditValue] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [sceneBarOpen, setSceneBarOpen] = useState(true);
-  const [suggestBarOpen, setSuggestBarOpen] = useState(true);
+  const [suggestBarOpen, setSuggestBarOpen] = useState(false);
   const [sceneOverflow, setSceneOverflow] = useState(false);
   const sceneMeasureRef = useRef<HTMLDivElement>(null);
   const sceneUserToggledRef = useRef(false);
@@ -110,7 +110,10 @@ export function DialogueNovel() {
   const msgFontSize = fontSizeMap[messageFontSize] || 15;
 
   // Filter visible messages (user + assistant only)
-  const visibleMessages = messages.filter((m) => m.role !== "system");
+  const allVisible = messages.filter((m) => m.role !== "system");
+  // 开局消息（自动发送的指令）不展示在对话流中
+  const openingMsg = allVisible.find((m) => m.opening);
+  const visibleMessages = allVisible.filter((m) => !m.opening);
   const lastMsg = visibleMessages[visibleMessages.length - 1];
 
   // 固定模板解析：取最新一条非空 assistant 回复（含流式中），实时解析版面数据
@@ -125,6 +128,21 @@ export function DialogueNovel() {
   const isParsingLive = streaming && lastMsg === lastAssistantMsg;
   const sceneInfo = parsedReply?.scene ?? null;
   const suggestions = parsedReply?.suggestions ?? [];
+
+  // 开局生成状态：已有开局消息且第一条 AI 回复尚未完成 → 显示「世界生成中...」/「完成规划」
+  const firstAssistantDone = allVisible.some((m) => m.role === "assistant" && m.content && !streaming);
+  const openingActive = !isBlank && !!openingMsg && !firstAssistantDone;
+  const assistantStarted = openingActive && !!lastAssistantMsg?.content;
+
+  // 停止生成时若开局流尚未产出任何内容 → 删除开局消息，避免状态条永久卡在「世界生成中...」（表现为界面挂起）
+  useEffect(() => {
+    if (streaming) return;
+    if (openingMsg && !allVisible.some((m) => m.role === "assistant" && m.content)) {
+      const msg = openingMsg;
+      deleteMessage(msg.id).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streaming, openingMsg?.id]);
 
   // 场景条一行自适应：用隐藏测量行检测单行是否放得下（测量与显示解耦，避免结构切换震荡）
   useEffect(() => {
@@ -191,6 +209,27 @@ export function DialogueNovel() {
         <div className="seed-info-badge">
           <span className="seed-info-dot" />
           <span>{infoParts.join(" · ")}</span>
+        </div>
+      )}
+
+      {/* 开局生成状态：世界生成中 → 完成规划（流内占位在顶部，不随正文滚动，不与场景栏重叠） */}
+      {openingActive && (
+        <div className="seed-opening">
+          {assistantStarted ? (
+            <>
+              <span className="seed-opening-check">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </span>
+              完成规划
+            </>
+          ) : (
+            <>
+              <span className="seed-opening-spinner" />
+              世界生成中...
+            </>
+          )}
         </div>
       )}
 
@@ -342,14 +381,14 @@ export function DialogueNovel() {
           })()}
 
           {/* Typing indicator when streaming but no content yet */}
-          {streaming && lastMsg?.role === "assistant" && !lastMsg.content && (
+          {streaming && lastMsg?.role === "assistant" && !lastMsg.content && !openingActive && (
             <div className="seed-typing">
               <span /><span /><span />
             </div>
           )}
 
           {/* Empty state */}
-          {visibleMessages.length === 0 && (
+          {!openingActive && visibleMessages.length === 0 && (
             <div style={{ textAlign: "center", padding: "80px 0", color: "var(--seed-muted)" }}>
               <p style={{ fontSize: 16, marginBottom: 8 }}>{isBlank ? "开始对话" : "故事即将开始"}</p>
               <p style={{ fontSize: 14, opacity: 0.7 }}>

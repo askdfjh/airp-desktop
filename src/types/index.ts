@@ -60,6 +60,8 @@ export interface Message {
   thinking?: string;
   images?: string[];
   createdAt: number;
+  // 开局消息标记：开局自动发送的指令消息，UI 不展示（已持久化）
+  opening?: boolean;
   // 工具调用相关（运行时内存字段，不持久化到 DB）
   toolCalls?: ToolCall[];
   toolStatus?: "running" | "done" | "aborted";

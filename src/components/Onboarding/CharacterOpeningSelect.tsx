@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useUIStore } from "@/stores/uiStore";
 import { useCharacterStore } from "@/stores/characterStore";
 import { useOnboardingStore } from "@/stores/onboardingStore";
 import { useGenerationStore } from "@/stores/generationStore";
-
 interface Props {
   onComplete: () => void;
 }
@@ -13,14 +13,21 @@ export function CharacterOpeningSelect({ onComplete }: Props) {
     selectedWorldName, selectedMode, selectedWorldId,
     setSelectedCharacter, setSelectedScenario: setStoreScenario, setOnboardingStep,
   } = useUIStore();
+  const effTheme = useUIStore((s) => s.effectiveTheme)();
   const characters = useCharacterStore((s) => s.characters);
+  const addCharacter = useCharacterStore((s) => s.addCharacter);
   const getScenariosByTheme = useOnboardingStore((s) => s.getScenariosByTheme);
+  const resolveTheme = useOnboardingStore((s) => s.resolveTheme);
   const { presets, activePresetId, setActivePreset } = useGenerationStore();
 
   const [selectedChar, setSelectedChar] = useState<string | null>(null);
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createForm, setCreateForm] = useState({ name: "", appearance: "", personality: "", background: "", tags: "" });
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState("");
 
-  const scenarios = getScenariosByTheme(selectedWorldId || "cultivation");
+  const scenarios = getScenariosByTheme(resolveTheme(selectedWorldId || "cultivation"));
 
   const modeLabel = selectedMode === "novel" ? "小说视角" : selectedMode === "player" ? "玩家视角" : "自定义模式";
 
@@ -47,6 +54,35 @@ export function CharacterOpeningSelect({ onComplete }: Props) {
   const handleScenarioSelect = (id: string, name: string) => {
     setSelectedScenario(id);
     setStoreScenario(id, name);
+  };
+
+  const handleCreateSubmit = async () => {
+    const name = createForm.name.trim();
+    if (!name) {
+      setCreateError("请输入角色名字");
+      return;
+    }
+    setCreateBusy(true);
+    setCreateError("");
+    try {
+      const id = crypto.randomUUID();
+      await addCharacter({
+        id,
+        name,
+        appearance: createForm.appearance.trim(),
+        personality: createForm.personality.trim(),
+        background: createForm.background.trim(),
+        tags: createForm.tags.split(/[,，]/).map((t) => t.trim()).filter(Boolean),
+        isBuiltin: false,
+      });
+      setShowCreate(false);
+      setCreateForm({ name: "", appearance: "", personality: "", background: "", tags: "" });
+      handleCharSelect(id, name);
+    } catch (e) {
+      setCreateError("创建失败，请重试");
+    } finally {
+      setCreateBusy(false);
+    }
   };
 
   // 允许无角色无场景直接开始：用户可以选择角色+场景，也可以跳过直接进入对话
@@ -140,10 +176,8 @@ export function CharacterOpeningSelect({ onComplete }: Props) {
           {/* Custom character */}
           <div
             className="seed-card seed-card--custom"
-            style={{ textAlign: "center", padding: "24px 16px 20px" }}
-            onClick={() => {
-              // Could open settings panel here
-            }}
+            style={{ textAlign: "center", padding: "24px 16px 20px", cursor: "pointer" }}
+            onClick={() => setShowCreate(true)}
           >
             <div style={{
               width: 64, height: 64, margin: "0 auto 14px", borderRadius: "50%",
@@ -178,6 +212,43 @@ export function CharacterOpeningSelect({ onComplete }: Props) {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+          {/* AI 随机开局：不选预设场景，由 AI 即兴创作开局 */}
+          <div
+            className={`seed-card ${selectedScenario === "ai-random" ? "seed-card--selected" : ""}`}
+            onClick={() => handleScenarioSelect("ai-random", "AI 随机开局")}
+            style={{
+              padding: "28px 22px 24px",
+              border: "1px dashed color-mix(in srgb, var(--seed-accent) 45%, transparent)",
+              background: "color-mix(in srgb, var(--seed-accent) 6%, transparent)",
+            }}
+          >
+            <div className="seed-card-check">
+              <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
+            </div>
+            <div className="seed-card-icon" style={{ marginBottom: 16, color: "var(--seed-accent)", background: "color-mix(in srgb, var(--seed-accent) 12%, transparent)" }}>
+              <svg viewBox="0 0 24 24">
+                <rect x="3" y="3" width="18" height="18" rx="4" />
+                <circle cx="8.5" cy="8.5" r="1.2" />
+                <circle cx="15.5" cy="8.5" r="1.2" />
+                <circle cx="8.5" cy="15.5" r="1.2" />
+                <circle cx="15.5" cy="15.5" r="1.2" />
+                <circle cx="12" cy="12" r="1.2" />
+              </svg>
+            </div>
+            <div className="seed-card-title" style={{ marginBottom: 8 }}>AI 随机开局</div>
+            <div className="seed-card-desc" style={{ marginBottom: 14 }}>由 AI 根据世界与角色即兴创作的开局</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {["惊喜", "未知", "即兴"].map((kw) => (
+                <span key={kw} style={{
+                  fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 999,
+                  background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-muted)",
+                }}>
+                  {kw}
+                </span>
+              ))}
+            </div>
+          </div>
+
           {scenarios.map((scenario) => (
             <div
               key={scenario.id}
@@ -296,6 +367,83 @@ export function CharacterOpeningSelect({ onComplete }: Props) {
       <div style={{ textAlign: "center", marginTop: 24, fontSize: 13, color: "var(--seed-muted)", letterSpacing: "0.08em", fontWeight: 500 }}>
         3 <span style={{ opacity: 0.4 }}>/ 3</span>
       </div>
+
+      {/* 创建自定义角色弹窗（portal 到 body，避免 onboarding-step 动画 transform 使 fixed 定位失效；补主题类防止 CSS 变量回落暗色默认值） */}
+      {showCreate &&
+        createPortal(
+          <div
+            className={effTheme === "light" ? "theme-light" : "theme-dark"}
+            style={{
+              position: "fixed", inset: 0, zIndex: 300, background: "var(--seed-overlay)",
+              display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+            }}
+            onClick={() => { if (!createBusy) setShowCreate(false); }}
+          >
+            <div
+              className="glass-modal"
+              style={{ width: "100%", maxWidth: 460, maxHeight: "86vh", overflowY: "auto", borderRadius: 20, padding: 26 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                <div style={{ fontSize: 19, fontWeight: 700, color: "var(--seed-fg)" }}>创建自定义角色</div>
+                <button
+                  onClick={() => setShowCreate(false)}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--seed-muted)", fontSize: 20, lineHeight: 1, padding: 4 }}
+                  aria-label="关闭"
+                >✕</button>
+              </div>
+
+              {([
+                { key: "name", label: "名字", required: true, placeholder: "如：林晚秋", lines: 1 },
+                { key: "appearance", label: "外观", required: false, placeholder: "外貌、衣着、气质（选填）", lines: 2 },
+                { key: "personality", label: "人设", required: false, placeholder: "性格、行为习惯（选填）", lines: 2 },
+                { key: "background", label: "背景", required: false, placeholder: "身世、经历（选填）", lines: 2 },
+                { key: "tags", label: "标签", required: false, placeholder: "如：修士, 冷静（逗号分隔）", lines: 1 },
+              ] as const).map((f) => (
+                <div key={f.key} style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--seed-muted)", marginBottom: 6 }}>
+                    {f.label}{f.required ? <span style={{ color: "var(--seed-accent)" }}> *</span> : null}
+                  </div>
+                  <textarea
+                    rows={f.lines}
+                    value={createForm[f.key]}
+                    onChange={(e) => setCreateForm((p) => ({ ...p, [f.key]: e.target.value }))}
+                    placeholder={f.placeholder}
+                    style={{
+                      width: "100%", boxSizing: "border-box", padding: "9px 12px", borderRadius: 10,
+                      background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)",
+                      color: "var(--seed-fg)", fontSize: 13, fontFamily: "inherit", outline: "none", resize: "vertical",
+                    }}
+                  />
+                </div>
+              ))}
+
+              {createError && (
+                <div style={{ fontSize: 12, color: "var(--seed-danger, #e5484d)", marginBottom: 10 }}>{createError}</div>
+              )}
+
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
+                <button
+                  className="seed-btn-ghost"
+                  onClick={() => setShowCreate(false)}
+                  disabled={createBusy}
+                  style={{ padding: "9px 18px", borderRadius: 10, border: "1px solid var(--seed-border)", background: "var(--seed-input-bg)", color: "var(--seed-fg)", fontSize: 13, cursor: "pointer" }}
+                >
+                  取消
+                </button>
+                <button
+                  className="seed-cta"
+                  onClick={handleCreateSubmit}
+                  disabled={createBusy}
+                  style={{ padding: "9px 22px", fontSize: 13 }}
+                >
+                  {createBusy ? "创建中..." : "创建并选中"}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

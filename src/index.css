@@ -226,6 +226,7 @@
   --seed-primary: #c084fc;
   --seed-border: rgba(255,255,255,0.06);
   --seed-glass: rgba(26,26,36,0.85);
+  --seed-overlay: rgba(0,0,0,0.5);
   --seed-accent-glow: color-mix(in srgb, var(--seed-accent) 35%, transparent);
   --seed-accent-bg: color-mix(in srgb, var(--seed-accent) 4%, transparent);
   --seed-accent-border: color-mix(in srgb, var(--seed-accent) 20%, transparent);
@@ -242,6 +243,7 @@
   --seed-primary: #8b5cf6;
   --seed-border: rgba(0,0,0,0.08);
   --seed-glass: rgba(255,255,255,0.97);
+  --seed-overlay: rgba(0,0,0,0.3);
   --seed-accent-glow: color-mix(in srgb, var(--seed-accent) 25%, transparent);
   --seed-accent-bg: color-mix(in srgb, var(--seed-accent) 4%, transparent);
   --seed-accent-border: color-mix(in srgb, var(--seed-accent) 20%, transparent);
@@ -1287,6 +1289,42 @@ button.ghost:hover { color:var(--seed-accent); }
 .seed-typing span:nth-child(2) { animation-delay: 0.2s; }
 .seed-typing span:nth-child(3) { animation-delay: 0.4s; }
 
+/* 开局生成状态条：世界生成中 → 完成规划（流内占位在顶部，不随正文滚动，不与场景栏重叠） */
+.seed-opening {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 52px 24px 12px;
+  color: var(--seed-muted);
+  font-size: 13.5px;
+  background: var(--seed-bg);
+  border-bottom: 1px solid var(--seed-border);
+  animation: seed-fade-in-up 0.35s ease both;
+}
+.seed-opening-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--seed-accent) 25%, transparent);
+  border-top-color: var(--seed-accent);
+  animation: seed-spin 0.8s linear infinite;
+}
+.seed-opening-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--seed-accent);
+  color: #fff;
+}
+@keyframes seed-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Custom titlebar for undecorated window (decorations: false) */
 .seed-titlebar {
   position: fixed;
@@ -1697,6 +1735,14 @@ button.ghost:hover { color:var(--seed-accent); }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.seed-func-chip--muted {
+  opacity: 0.75;
+}
+.seed-func-chip--active {
+  color: var(--seed-accent);
+  border-color: var(--seed-accent-border);
+  background: var(--seed-accent-bg);
 }
 
 /* 閫氱敤鎮诞鎻愮ず锛堜笌鍔熻兘鏍?娑堟伅鎿嶄綔鎸夐挳涓€鑷达級 */

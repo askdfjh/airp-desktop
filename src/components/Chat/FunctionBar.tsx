@@ -1,24 +1,29 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Brain, ChevronDown, Check } from "lucide-react";
+import { Brain, ChevronDown, Check, Feather } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { useProviderStore } from "@/stores/providerStore";
 import { useSessionStore } from "@/stores/sessionStore";
+import { useGenerationStore } from "@/stores/generationStore";
 import { setToolsEnabled } from "@/hooks/useChat";
 import { setAppSetting } from "@/lib/db";
 import { isThinkingModel } from "@/providers/openai";
 import { SessionPopup } from "./SessionPopup";
+import { WorldInfoPanel } from "./WorldInfoPanel";
 
-type OpenMenu = "provider" | "model" | null;
+type OpenMenu = "provider" | "model" | "style" | null;
 
 export function FunctionBar() {
   const { theme, setTheme, messageFontSize, setMessageFontSize, settingsOpen, setSettingsOpen, webSearchOn, setWebSearchOn, effectiveTheme, toast, toastAction, notify } = useUIStore();
   const { providers, activeProviderId, activeModel, setActiveProvider, setActiveModel, enabledProviders } = useProviderStore();
+  const { presets, activePresetId, setActivePreset } = useGenerationStore();
+  const activePreset = presets.find((p) => p.id === activePresetId) || null;
   const { activeId, updateSessionModel, toggleThinking } = useSessionStore();
   const activeSession = useSessionStore((s) =>
     s.activeId ? s.sessions.find((ss) => ss.id === s.activeId) : null,
   );
   const [showSessionPopup, setShowSessionPopup] = useState(false);
+  const [showWorldInfo, setShowWorldInfo] = useState(false);
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const eff = effectiveTheme();
@@ -98,6 +103,14 @@ export function FunctionBar() {
       return;
     }
     setOpenMenu((m) => (m === "model" ? null : "model"));
+  };
+
+  // 文风预设切换（与设置面板同源，实时生效）
+  const handleStyleSelect = (id: string) => {
+    setActivePreset(activePresetId === id ? "none" : id);
+    const next = presets.find((p) => p.id === id);
+    showToast(activePresetId === id ? "文风已关闭" : `已切换文风：${next?.name ?? ""}`);
+    setOpenMenu(null);
   };
 
   const menuStyle: React.CSSProperties = {
@@ -200,6 +213,57 @@ export function FunctionBar() {
           )}
         </div>
 
+        {/* 文风切换 */}
+        <div style={{ position: "relative" }}>
+          <button
+            className={"seed-func-chip" + (activePreset ? "" : " seed-func-chip--muted")}
+            data-tooltip="输出文风预设"
+            onClick={() => setOpenMenu((m) => (m === "style" ? null : "style"))}
+          >
+            <Feather size={13} style={{ flexShrink: 0 }} />
+            <span>{activePreset ? activePreset.name : "文风"}</span>
+            <ChevronDown size={12} style={{ flexShrink: 0 }} />
+          </button>
+          {openMenu === "style" && (
+            <div style={{ ...menuStyle, minWidth: 220, maxWidth: 260 }}>
+              {presets.map((p) => {
+                const act = p.id === activePresetId;
+                return (
+                  <div
+                    key={p.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "7px 10px",
+                      borderRadius: 8,
+                      fontSize: 12,
+                      cursor: "pointer",
+                      background: act ? "var(--seed-accent-bg)" : "transparent",
+                      color: act ? "var(--seed-accent)" : "var(--seed-muted)",
+                    }}
+                    onClick={() => handleStyleSelect(p.id)}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--seed-hover-bg)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = act ? "var(--seed-accent-bg)" : "transparent"; }}
+                  >
+                    <span style={{ flexShrink: 0, fontWeight: 600, whiteSpace: "nowrap" }}>{p.name}</span>
+                    <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: 0.7 }}>{p.description}</span>
+                    {act && <Check size={12} style={{ flexShrink: 0 }} />}
+                  </div>
+                );
+              })}
+              {activePresetId !== "none" && (
+                <div
+                  style={{ ...itemStyle(false), borderTop: "1px solid var(--seed-border)", marginTop: 4, borderRadius: 0 }}
+                  onClick={() => handleStyleSelect(activePresetId)}
+                >
+                  <span>关闭文风预设</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* 思考模式快捷开关 */}
         <button
           className={"seed-func-btn" + (thinkingEnabled ? " seed-func-btn--active" : "")}
@@ -263,7 +327,7 @@ export function FunctionBar() {
         </button>
 
         {/* World info */}
-        <button className="seed-func-btn" data-tooltip="世界信息" onClick={() => showToast("世界信息面板 — 开发中")}>
+        <button className="seed-func-btn" data-tooltip="世界信息" onClick={() => setShowWorldInfo(true)}>
           <svg viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="10" />
             <line x1="2" y1="12" x2="22" y2="12" />
@@ -292,6 +356,14 @@ export function FunctionBar() {
       {showSessionPopup && createPortal(
         <div className={`theme-${eff}`}>
           <SessionPopup onClose={() => setShowSessionPopup(false)} />
+        </div>,
+        document.body
+      )}
+
+      {/* World info panel (read-only) */}
+      {showWorldInfo && createPortal(
+        <div className={`theme-${eff}`}>
+          <WorldInfoPanel onClose={() => setShowWorldInfo(false)} />
         </div>,
         document.body
       )}

@@ -35,6 +35,7 @@ export function ConfirmDialog({
         backdropFilter: "blur(8px)",
         WebkitBackdropFilter: "blur(8px)",
         animation: "seed-fade-in-up 0.18s ease-out",
+        zIndex: 2000,
       }}
       onClick={onCancel}
     >
