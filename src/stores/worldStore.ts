@@ -12,6 +12,10 @@ import {
   loadActiveWorldBook,
   deactivateAllWorldBooks,
   initBuiltinWorldBooks,
+  loadWorldBookTrash,
+  restoreFromTrash,
+  deleteFromTrash,
+  cleanExpiredTrash,
 } from "@/lib/db";
 
 interface WorldState {
@@ -19,6 +23,7 @@ interface WorldState {
   loaded: boolean;
   activeBook: WorldBook | null;
   selectedBookId: string | null;
+  trashBooks: { id: string; data: string; deletedAt: number; expiredAt: number }[];
 
   loadFromDb: () => Promise<void>;
   selectBook: (id: string | null) => void;
@@ -28,6 +33,11 @@ interface WorldState {
   removeBook: (id: string) => Promise<void>;
   setActiveBook: (id: string) => Promise<void>;
   deactivateAllBooks: () => Promise<void>;
+
+  loadTrashFromDb: () => Promise<void>;
+  restoreBookFromTrash: (id: string) => Promise<void>;
+  purgeBookFromTrash: (id: string) => Promise<void>;
+  clearExpiredTrash: () => Promise<void>;
   
   addEntry: (bookId: string, entry: Omit<WorldBookEntry, "uid" | "createdAt" | "updatedAt">) => Promise<void>;
   updateEntry: (bookId: string, entryId: string, fields: Partial<Omit<WorldBookEntry, "uid" | "createdAt" | "updatedAt">>) => Promise<void>;
@@ -39,6 +49,7 @@ export const useWorldStore = create<WorldState>((set, get) => ({
   loaded: false,
   activeBook: null,
   selectedBookId: null,
+  trashBooks: [],
 
   loadFromDb: async () => {
     try {
@@ -92,6 +103,37 @@ export const useWorldStore = create<WorldState>((set, get) => ({
       const selectedBookId = st.selectedBookId === id ? null : st.selectedBookId;
       return { books, activeBook, selectedBookId };
     });
+  },
+
+  loadTrashFromDb: async () => {
+    try {
+      const trashBooks = await loadWorldBookTrash();
+      set({ trashBooks });
+    } catch (e) {
+      console.error("[db] loadWorldBookTrash failed:", e);
+    }
+  },
+
+  restoreBookFromTrash: async (id) => {
+    await restoreFromTrash(id);
+    const trashBooks = await loadWorldBookTrash();
+    const books = await loadWorldBooks(true);
+    set({ trashBooks, books });
+  },
+
+  purgeBookFromTrash: async (id) => {
+    await deleteFromTrash(id);
+    set((st) => ({ trashBooks: st.trashBooks.filter((b) => b.id !== id) }));
+  },
+
+  clearExpiredTrash: async () => {
+    try {
+      await cleanExpiredTrash();
+      const trashBooks = await loadWorldBookTrash();
+      set({ trashBooks });
+    } catch (e) {
+      console.error("[db] cleanExpiredTrash failed:", e);
+    }
   },
 
   setActiveBook: async (id) => {

@@ -38,6 +38,10 @@ export function AppShell() {
   const loadWorldRules = useWorldStore((s) => s.loadFromDb);
   const loadTrashFromDb = useSessionStore((s) => s.loadTrashFromDb);
   const clearExpiredTrash = useSessionStore((s) => s.clearExpiredTrash);
+  const loadCardTrash = useCharacterStore((s) => s.loadTrashFromDb);
+  const clearCardTrash = useCharacterStore((s) => s.clearExpiredTrash);
+  const loadWorldTrash = useWorldStore((s) => s.loadTrashFromDb);
+  const clearWorldTrash = useWorldStore((s) => s.clearExpiredTrash);
   const [eff, setEff] = useState<"dark" | "light">(() => {
     try {
       const raw = localStorage.getItem("airp-ui-v2");
@@ -77,6 +81,10 @@ export function AppShell() {
       .then(() => loadWorldRules())
       .then(() => clearExpiredTrash())
       .then(() => loadTrashFromDb())
+      .then(() => clearCardTrash())
+      .then(() => loadCardTrash())
+      .then(() => clearWorldTrash())
+      .then(() => loadWorldTrash())
       .then(async () => {
         // Initialize tools enabled flag from DB
         try {
@@ -124,7 +132,7 @@ export function AppShell() {
         console.error("[db] init failed:", e);
         setDbReady(false);
       });
-  }, [loadFromDb, loadTemplates, loadCharacters, loadMcps, loadWorldRules, loadTrashFromDb, clearExpiredTrash]);
+  }, [loadFromDb, loadTemplates, loadCharacters, loadMcps, loadWorldRules, loadTrashFromDb, clearExpiredTrash, loadCardTrash, clearCardTrash, loadWorldTrash, clearWorldTrash]);
 
   useEffect(() => {
     const currentTheme = effectiveTheme();

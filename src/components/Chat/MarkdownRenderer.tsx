@@ -58,12 +58,38 @@ function extractText(node: React.ReactNode): string {
   return "";
 }
 
-export default function MarkdownRenderer({ content }: { content: string }) {
+export default function MarkdownRenderer({ content, highlight }: { content: string; highlight?: string }) {
+  const highlightParts = highlight
+    ? (() => {
+        const escaped = highlight.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const lower = highlight.toLowerCase();
+        return { re: new RegExp(`(${escaped})`, "ig"), lower };
+      })()
+    : null;
+
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[rehypeRaw, rehypeHighlight]}
       components={{
+        text({ children }) {
+          // 搜索结果关键词高亮：对每个纯文本节点拆分匹配词，用 <mark> 标记
+          if (highlightParts) {
+            const parts = String(children).split(highlightParts.re);
+            return (
+              <>
+                {parts.map((part, i) =>
+                  part.toLowerCase() === highlightParts.lower ? (
+                    <mark key={i} className="seed-hl">{part}</mark>
+                  ) : (
+                    part
+                  ),
+                )}
+              </>
+            );
+          }
+          return <>{children}</>;
+        },
         code({ className, children, ...props }) {
           const match = /language-(\w+)/.exec(className ?? "");
           const textContent = extractText(children);

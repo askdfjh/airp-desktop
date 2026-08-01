@@ -15,6 +15,9 @@ import { useWorldStore } from "@/stores/worldStore";
 import { buildWorldContext } from "@/lib/worldBookEngine";
 import { useGenerationStore } from "@/stores/generationStore";
 import { usePromptInjectionStore } from "@/stores/promptInjectionStore";
+import { loadSessionCharacterCards } from "@/lib/db";
+import { buildCharacterContext, type LoadedExtractedCard } from "@/lib/characterExtract";
+import { maybePromptCompress, isPostCompress } from "@/lib/contextCompress";
 
 let _toolsEnabled = false;
 export function setToolsEnabled(v: boolean) {
@@ -98,6 +101,7 @@ export function useChat() {
   );
   const activeProvider = providers.find((p) => p.id === activeProviderId);
   const activeWorldBook = useWorldStore((s) => s.activeBook);
+  const [sessionCards, setSessionCards] = useState<LoadedExtractedCard[]>([]);
   const activeGenPreset = useGenerationStore((s) =>
     s.activePresetId === "none" ? undefined : s.presets.find((p) => p.id === s.activePresetId) || s.presets[0],
   );
@@ -141,12 +145,27 @@ export function useChat() {
           everLoadedRef.current = true;
         }
       });
+    // 加载当前会话绑定的提取角色卡（供关键词注入）
+    loadSessionCharacterCards(sid)
+      .then((rows) => {
+        if (!cancelled) {
+          setSessionCards(rows.map((r) => ({
+            characterCardId: r.characterCardId,
+            name: r.name,
+            triggerWords: r.triggerWords ?? "[]",
+            systemPrompt: r.systemPrompt,
+            description: r.description,
+          })));
+        }
+      })
+      .catch((e) => console.error("[db] loadSessionCharacterCards failed:", e));
     return () => { cancelled = true; };
   }, [activeSession?.id]);
 
   const buildApiMessages = useCallback(
-    (history: Message[], lastUserContent: string, images?: string[], toolHint?: boolean): ApiMessage[] => {
+    (history: Message[], lastUserContent: string, images?: string[], toolHint?: boolean, forceCharacterCards?: boolean): ApiMessage[] => {
       const result: ApiMessage[] = [];
+      let hist = history;
       const basePrompt = activeSession?.systemPrompt || "";
       // 固定回复模板（仅冒险会话）：要求 AI 按【场景信息】【正文】【对话推荐】输出，驱动版面更新
       const sceneTemplate = activeSession?.kind !== "blank"
@@ -174,9 +193,21 @@ export function useChat() {
         } else if (styleInstr) {
           result.push({ role: "system", content: styleInstr.trim() + sceneTemplate });
         }
+      // 长对话压缩：故事脉络摘要注入 + 历史截断（摘要点之后的消息才进入上下文）
+      if (activeSession?.contextSummary) {
+        result.push({
+          role: "system",
+          content: `【故事脉络摘要】以下为早前对话的自动摘要（摘要之前的细节已省略，角色设定以角色卡为准，剧情以摘要为最新依据）：\n${activeSession.contextSummary}`,
+        });
+        const lastSummarizedId = activeSession.lastSummarizedMessageId;
+        if (lastSummarizedId) {
+          const cutIdx = hist.findIndex((m) => m.id === lastSummarizedId);
+          if (cutIdx >= 0) hist = hist.slice(cutIdx + 1);
+        }
+      }
       if (activeWorldBook) {
         const recentContext = [
-          ...history.slice(-2).map((m) => m.content),
+          ...hist.slice(-2).map((m) => m.content),
           lastUserContent,
         ].join("\n");
         const world = buildWorldContext(activeWorldBook, recentContext);
@@ -184,7 +215,18 @@ export function useChat() {
           result.push({ role: "system", content: world.text });
         }
       }
-      for (const m of history) {
+      // 提取角色卡注入（世界书同机制）：角色出场触发词命中 → 注入；压缩后首条 forceAll 全量
+      if (sessionCards.length > 0) {
+        const charRecent = [
+          ...hist.slice(-2).map((m) => m.content),
+          lastUserContent,
+        ].join("\n");
+        const charCtx = buildCharacterContext(sessionCards, charRecent, { forceAll: forceCharacterCards });
+        if (charCtx) {
+          result.push({ role: "system", content: charCtx });
+        }
+      }
+      for (const m of hist) {
         // 工具占位消息（空内容）不进入历史上下文
         if (m.role === "assistant" && m.tools && !m.content.trim()) continue;
         result.push({ role: m.role, content: m.content });
@@ -202,7 +244,7 @@ export function useChat() {
       }
       return result;
     },
-    [activeSession, activeWorldBook, activeGenPreset, activeInjections],
+    [activeSession, activeWorldBook, activeGenPreset, activeInjections, sessionCards],
   );
 
   const startStream = useCallback(
@@ -351,6 +393,10 @@ export function useChat() {
       const sessionId = activeSession.id;
       activeSessionIdRef.current = sessionId;
 
+      // 自动压缩触发检查：历史超阈值时弹确认框并拦截本次发送（确认后压缩，用户可再发送）
+      if (maybePromptCompress(sessionId, messagesRef.current)) return;
+      if (useUIStore.getState().compressing) return;
+
       let finalContent = content;
       if (files && files.length > 0) {
         const fileBlocks = files.map((f) => `[文件: ${f.name}]\n\`\`\`\n${f.content}\n\`\`\``).join("\n\n");
@@ -373,7 +419,7 @@ export function useChat() {
 
       // 发送前与界面开关同步，避免模块状态丢失后工具静默失效
       _toolsEnabled = useUIStore.getState().webSearchOn;
-      const apiMessages = buildApiMessages(messagesRef.current.slice(0, -1), finalContent, images, _toolsEnabled);
+      const apiMessages = buildApiMessages(messagesRef.current.slice(0, -1), finalContent, images, _toolsEnabled, isPostCompress(sessionId));
       console.log("[tools] sendMessage: _toolsEnabled =", _toolsEnabled);
       const tools = _toolsEnabled ? await collectTools() : [];
       console.log("[tools] sendMessage: tools.length =", tools.length);

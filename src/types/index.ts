@@ -50,6 +50,11 @@ export interface Session {
   updatedAt: number;
   deletedAt?: number;
   kind?: "adventure" | "blank";
+  // 长对话压缩：故事脉络摘要（增量追加）+ 压缩状态
+  contextSummary?: string;
+  summaryUpdatedAt?: number;
+  summaryCount?: number;
+  lastSummarizedMessageId?: string;
 }
 
 export interface Message {
@@ -100,8 +105,22 @@ export interface CharacterCard {
   mesExample?: string;
   worldBookId?: string | null;
   characterBookEntries?: WorldBookEntry[];
+  // 长对话压缩提取来源标记 + 出场触发词（角色名/别称）
+  isExtracted?: boolean;
+  triggerWords?: string[];
+  // 回收站：软删除时间（仅回收站列表可见）
+  deletedAt?: number;
   createdAt: number;
   updatedAt: number;
+}
+
+/** 提取角色卡与会话的绑定（压缩时生成，注入时按会话查） */
+export interface SessionCharacterCard {
+  id: string;
+  sessionId: string;
+  characterCardId: string;
+  worldBookId?: string | null;
+  createdAt: number;
 }
 
 

@@ -12,6 +12,7 @@ export function CharacterOpeningSelect({ onComplete }: Props) {
   const {
     selectedWorldName, selectedMode, selectedWorldId,
     setSelectedCharacter, setSelectedScenario: setStoreScenario, setOnboardingStep,
+    playerName, setPlayerName,
   } = useUIStore();
   const effTheme = useUIStore((s) => s.effectiveTheme)();
   const characters = useCharacterStore((s) => s.characters);
@@ -49,6 +50,8 @@ export function CharacterOpeningSelect({ onComplete }: Props) {
   const handleCharSelect = (id: string, name: string) => {
     setSelectedChar(id);
     setSelectedCharacter(id, name);
+    // 选角色卡时自动带入主角名（用户可再改）
+    setPlayerName(name);
   };
 
   const handleScenarioSelect = (id: string, name: string) => {
@@ -77,8 +80,7 @@ export function CharacterOpeningSelect({ onComplete }: Props) {
       });
       setShowCreate(false);
       setCreateForm({ name: "", appearance: "", personality: "", background: "", tags: "" });
-      handleCharSelect(id, name);
-    } catch (e) {
+      handleCharSelect(id, name);    } catch (e) {
       setCreateError("创建失败，请重试");
     } finally {
       setCreateBusy(false);
@@ -132,6 +134,37 @@ export function CharacterOpeningSelect({ onComplete }: Props) {
           </svg>
           角色
           <div style={{ flex: 1, height: 1, background: "var(--seed-border)", marginLeft: 8 }} />
+        </div>
+
+        {/* 主角名：玩家扮演的角色，至少起个名字 */}
+        <div style={{ marginBottom: 22, display: "flex", alignItems: "center", gap: 12 }}>
+          <input
+            value={playerName}
+            onChange={(e) => setPlayerName(e.target.value.slice(0, 12))}
+            placeholder="给你的主角起个名字（如：林晚秋）"
+            style={{
+              flex: 1,
+              maxWidth: 320,
+              padding: "11px 16px",
+              borderRadius: 12,
+              background: "var(--seed-input-bg)",
+              border: "1px solid " + (playerName.trim() ? "color-mix(in srgb, var(--seed-accent) 35%, transparent)" : "var(--seed-border)"),
+              color: "var(--seed-fg)",
+              fontSize: 14,
+              fontFamily: "inherit",
+              outline: "none",
+              transition: "border-color 0.2s",
+            }}
+          />
+          <span style={{ fontSize: 12.5, color: "var(--seed-muted)", lineHeight: 1.5 }}>
+            这是你扮演的主角，AI 将以这个名字称呼你
+            <br />
+            {playerName.trim() ? (
+              <span style={{ color: "var(--seed-accent)" }}>✓ 名字已就绪</span>
+            ) : (
+              <span>未填写时将使用「主角」</span>
+            )}
+          </span>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 16 }}>

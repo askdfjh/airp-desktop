@@ -7,6 +7,7 @@ import { FunctionBar } from "./FunctionBar";
 import { ConfirmDialog } from "@/components/Layout/ConfirmDialog";
 import { MarkdownRender } from "./MarkdownRender";
 import { parseSceneReply, type SceneInfo } from "@/lib/sceneTemplate";
+import { stopCompress } from "@/lib/contextCompress";
 
 export function DialogueNovel() {
   const { messages, sendMessage, streaming, stopStreaming, regenerate, editAndSend, editMessage, deleteMessage } = useChat();
@@ -14,13 +15,21 @@ export function DialogueNovel() {
     s.activeId ? s.sessions.find((ss) => ss.id === s.activeId) : null
   );
   const branchFromMessage = useSessionStore((s) => s.branchFromMessage);
-  const { selectedWorldName, selectedCharacterName, selectedMode, messageFontSize, notify } = useUIStore();
+  const targetMessageId = useSessionStore((s) => s.targetMessageId);
+  const targetKeyword = useSessionStore((s) => s.targetKeyword);
+  const clearTargetMessage = useSessionStore((s) => s.clearTargetMessage);
+  const { selectedWorldName, selectedCharacterName, selectedScenarioName, selectedMode, messageFontSize, notify } = useUIStore();
+  const compressing = useUIStore((s) => s.compressing);
+  const compressStage = useUIStore((s) => s.compressStage);
+  const compressPrompt = useUIStore((s) => s.compressPrompt);
+  const compressPromptCallbacks = useUIStore((s) => s.compressPromptCallbacks);
   const [inputValue, setInputValue] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const [branchTarget, setBranchTarget] = useState<typeof messages[0] | null>(null);
   const [sceneBarOpen, setSceneBarOpen] = useState(true);
   const [suggestBarOpen, setSuggestBarOpen] = useState(false);
@@ -28,6 +37,13 @@ export function DialogueNovel() {
   const sceneMeasureRef = useRef<HTMLDivElement>(null);
   const sceneUserToggledRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // 动态章节名：从 AI 回复【章节名】字段解析，变化时章节号 +1
+  const [chapterName, setChapterName] = useState<string | null>(null);
+  const [chapterNo, setChapterNo] = useState(1);
+  const chapterInitRef = useRef(false);
+  // 流式完成过渡动画：正文从模板全文切换到解析 body 时淡入，避免「突然截断」的突兀感
+  const [settlingId, setSettlingId] = useState<string | null>(null);
+  const lastStreamingRef = useRef(false);
 
   // 空白会话（kind=blank，无角色设定）使用普通对话排版，冒险会话使用小说排版
   const isBlank = (activeSession?.kind ?? "adventure") === "blank";
@@ -47,6 +63,38 @@ export function DialogueNovel() {
       });
     }
   }, [messages, isAtBottom]);
+
+  // 搜索结果跳转：切换到目标会话后，等消息加载完成再滚动到目标消息并高亮
+  useEffect(() => {
+    if (!targetMessageId) return;
+    const el = document.querySelector(`[data-msg-id="${targetMessageId}"]`) as HTMLElement | null;
+    const content = document.querySelector(".seed-dialogue-content") as HTMLElement | null;
+    const done = () => {
+      if (el) {
+        setIsAtBottom(false);
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        setHighlightId(targetMessageId);
+      } else if (content) {
+        setIsAtBottom(false);
+        content.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    };
+    // 双 rAF：等待消息渲染与布局稳定后再滚动，避免与自动滚底冲突
+    const raf = requestAnimationFrame(() => requestAnimationFrame(done));
+    const timer = setTimeout(() => clearTargetMessage(), 2500);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetMessageId, messages]);
+
+  // 高亮 2.2s 后自动清除
+  useEffect(() => {
+    if (!highlightId) return;
+    const t = setTimeout(() => setHighlightId(null), 2200);
+    return () => clearTimeout(t);
+  }, [highlightId]);
 
   const handleSend = () => {
     const text = inputValue.trim();
@@ -187,6 +235,34 @@ export function DialogueNovel() {
     sceneUserToggledRef.current = false;
   }, [lastAssistantMsg?.content]);
 
+  // 动态章节名：解析最新 AI 回复的【章节名】；首次设置不跳号，之后变化章节号 +1
+  useEffect(() => {
+    if (isBlank) return;
+    const title = parsedReply?.chapterTitle?.trim();
+    if (!title) return;
+    if (!chapterInitRef.current) {
+      chapterInitRef.current = true;
+      setChapterName(title);
+      return;
+    }
+    setChapterName((prev) => {
+      if (prev !== title) {
+        setChapterNo((n) => n + 1);
+        return title;
+      }
+      return prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastAssistantMsg?.content, isBlank]);
+
+  // 流式完成过渡：streaming 由 true → false 时，对刚完成的 assistant 消息做淡入（掩盖模板区块被裁剪的突兀）
+  useEffect(() => {
+    if (lastStreamingRef.current && !streaming && lastAssistantMsg?.content) {
+      setSettlingId(lastAssistantMsg.id);
+    }
+    lastStreamingRef.current = streaming;
+  }, [streaming, lastAssistantMsg?.id, lastAssistantMsg?.content]);
+
   const handleSuggest = (text: string) => {
     if (!text.trim() || streaming) return;
     const blocker = getSendBlocker();
@@ -252,6 +328,18 @@ export function DialogueNovel() {
         </div>
       )}
 
+      {/* 长对话压缩状态条：整理中（提取角色 → 生成摘要），可停止 */}
+      {compressing && (
+        <div className="seed-compress-bar">
+          <span className="seed-opening-spinner" />
+          <span>
+            正在整理故事脉络…
+            {compressStage === "extracting" ? "（提取角色中）" : compressStage === "summarizing" ? "（生成摘要中）" : ""}
+          </span>
+          <button className="seed-compress-stop" onClick={stopCompress} data-tooltip="停止整理（不保存任何变更）">停止</button>
+        </div>
+      )}
+
       {/* 场景信息条（顶部，一行自适应：放得下直接显示，放不下折叠） */}
       {!isBlank && visibleMessages.length > 0 && (
         <div className="seed-scene-bar">
@@ -287,10 +375,10 @@ export function DialogueNovel() {
       {/* Scrollable content */}
       <div className="seed-dialogue-scroll" ref={scrollRef} onScroll={handleScroll}>
         <div className="seed-dialogue-content">
-          {/* Chapter divider：第一章 · 会话标题（仅冒险会话） */}
+          {/* Chapter divider：第 N 章 · 章节名（AI 动态更新，仅冒险会话） */}
           {visibleMessages.length > 0 && !isBlank && (
-            <div className="seed-chapter-divider">
-              <span>第一章 · {activeSession?.title || "冒险开始"}</span>
+            <div key={chapterNo + ":" + (chapterName || "")} className="seed-chapter-divider seed-chapter-divider--transition">
+              <span>第 {chapterNo} 章 · {chapterName || selectedScenarioName || selectedWorldName || "冒险开始"}</span>
               <span className="seed-chapter-line" />
             </div>
           )}
@@ -300,6 +388,8 @@ export function DialogueNovel() {
             // 找到第一个 assistant 消息的 id，用于首字下沉
             const firstAssistantId = visibleMessages.find((m) => m.role === "assistant")?.id;
             return visibleMessages.map((msg, idx) => {
+              // 搜索结果跳转：目标消息正文内高亮匹配关键词
+              const hl = highlightId === msg.id && targetKeyword ? targetKeyword : "";
               // 空内容的 assistant 消息（未完成的流式占位）不渲染，避免空白条；工具调用消息除外
               if (msg.role === "assistant" && !msg.content && !(msg.tools && msg.tools.length > 0)) return null;
               if (msg.role === "user") {
@@ -323,9 +413,9 @@ export function DialogueNovel() {
                   );
                 }
                 return (
-                  <div key={msg.id} className="seed-msg-wrapper" style={{ animationDelay: `${Math.min(idx * 0.05, 0.5)}s` }}>
+                  <div key={msg.id} data-msg-id={msg.id} className={"seed-msg-wrapper" + (highlightId === msg.id ? " seed-msg-highlight" : "")} style={{ animationDelay: `${Math.min(idx * 0.05, 0.5)}s` }}>
                     <p className="seed-user-input" style={{ fontSize: msgFontSize - 1 }}>
-                      {msg.content}
+                      {hl ? <HighlightText text={msg.content} keyword={hl} /> : msg.content}
                     </p>
                     <div className="seed-msg-actions">
                       <button className="seed-msg-action-btn" data-tooltip="复制" onClick={() => handleCopy(msg)}>
@@ -398,21 +488,27 @@ export function DialogueNovel() {
                 );
               }
               return (
-                <div key={msg.id} className="seed-msg-wrapper" style={{ animationDelay: `${Math.min(idx * 0.05, 0.5)}s` }}>
+                <div key={msg.id} data-msg-id={msg.id} className={"seed-msg-wrapper" + (highlightId === msg.id ? " seed-msg-highlight" : "")} style={{ animationDelay: `${Math.min(idx * 0.05, 0.5)}s` }}>
                   <div
-                    className={isBlank
-                      ? "seed-chat-assistant"
-                      : `seed-narration${isDropCap ? " seed-narration--drop-cap" : ""}`}
+                    className={
+                      (isBlank
+                        ? "seed-chat-assistant"
+                        : `seed-narration${isDropCap ? " seed-narration--drop-cap" : ""}`) +
+                      (settlingId === msg.id ? " seed-narration--settle" : "")
+                    }
                     style={{ fontSize: msgFontSize }}
+                    onAnimationEnd={(e) => {
+                      if (e.animationName === "seed-settle-in" && settlingId === msg.id) setSettlingId(null);
+                    }}
                   >
                     {isStreaming ? (
                       <StreamingText content={msg.content} active={isStreaming} />
                     ) : isBlank ? (
-                      <MarkdownRender content={msg.content} />
+                      <MarkdownRender content={msg.content} highlight={hl || undefined} />
                     ) : parsed && parsed.body !== msg.content.trim() ? (
-                      parsed.body
+                      hl ? <HighlightText text={parsed.body} keyword={hl} /> : parsed.body
                     ) : (
-                      msg.content
+                      hl ? <HighlightText text={msg.content} keyword={hl} /> : msg.content
                     )}
                   </div>
                   {!isStreaming && msg.content && (
@@ -532,7 +628,38 @@ export function DialogueNovel() {
           onCancel={() => setBranchTarget(null)}
         />
       )}
+
+      {/* 自动压缩确认：对话过长时提示（含 token 估算与保留说明） */}
+      {compressPrompt && compressPromptCallbacks && (
+        <ConfirmDialog
+          title="对话较长，建议整理故事脉络"
+          message={`当前会话已有 ${compressPrompt.count} 条消息。整理将摘要其中的 ${compressPrompt.windowCount} 条为故事脉络，保留最近 ${compressPrompt.keptCount} 条原文，并提取出场的重要角色存入角色卡（后续出场自动注入）。预计消耗约 ${compressPrompt.estimatedTokens} token，整理期间无法操作。是否整理？`}
+          confirmLabel="整理"
+          cancelLabel="暂不"
+          onConfirm={compressPromptCallbacks.onConfirm}
+          onCancel={compressPromptCallbacks.onCancel}
+        />
+      )}
     </div>
+  );
+}
+
+// === 文本关键词高亮（搜索结果跳转后，正文内匹配词以紫色标记） ===
+function HighlightText({ text, keyword }: { text: string; keyword: string }) {
+  if (!keyword) return <>{text}</>;
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const lower = keyword.toLowerCase();
+  const parts = text.split(new RegExp(`(${escaped})`, "ig"));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === lower ? (
+          <span key={i} className="seed-hl">{part}</span>
+        ) : (
+          part
+        ),
+      )}
+    </>
   );
 }
 

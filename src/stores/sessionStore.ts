@@ -1,5 +1,6 @@
 ﻿import { create } from "zustand";
 import type { Session } from "@/types";
+import { useUIStore } from "./uiStore";
 import {
   loadSessions, insertSession, deleteSession, deleteAllSessions, updateSession,
   loadTrashedSessions, restoreSession as restoreSessionDb,
@@ -20,6 +21,7 @@ interface SessionState {
   searchResults: SearchResult[];
   searching: boolean;
   targetMessageId: string | null;
+  targetKeyword: string | null;
   add: (s: Session) => void;
   remove: (id: string) => { ok: boolean; reason?: string };
   removeAll: () => void;
@@ -38,13 +40,14 @@ interface SessionState {
   setSearchQuery: (q: string) => void;
   doSearch: (q: string) => Promise<void>;
   clearSearch: () => void;
-  jumpToMessage: (sessionId: string, messageId: string) => void;
+  jumpToMessage: (sessionId: string, messageId: string, keyword?: string) => void;
   clearTargetMessage: () => void;
   createBlankSession: () => string;
   updateSystemPrompt: (id: string, systemPrompt: string) => void;
   toggleThinking: (id: string) => void;
   setThinkingEnabled: (id: string, enabled: boolean) => void;
   branchFromMessage: (sourceId: string, messageId: string) => Promise<boolean>;
+  applyCompression: (id: string, contextSummary: string, summaryCount: number, lastSummarizedMessageId: string | null) => void;
 }
 
 export const useSessionStore = create<SessionState>((set, get) => ({
@@ -57,6 +60,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   searchResults: [],
   searching: false,
   targetMessageId: null,
+  targetKeyword: null,
 
   add: (s) => {
     set((st) => ({ sessions: [s, ...st.sessions], activeId: s.id }));
@@ -103,7 +107,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     );
   },
 
-  setActive: (id) => set({ activeId: id }),
+  setActive: (id) => {
+    // 压缩期间禁止切换会话，防止状态混乱
+    if (useUIStore.getState().compressing) return;
+    set({ activeId: id });
+  },
 
   updateTimestamp: (id) => {
     const now = Date.now();
@@ -203,6 +211,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       model: source.model,
       thinkingEnabled: source.thinkingEnabled,
       kind: source.kind,
+      contextSummary: source.contextSummary,
+      summaryUpdatedAt: source.summaryUpdatedAt,
+      summaryCount: source.summaryCount,
+      lastSummarizedMessageId: source.lastSummarizedMessageId,
       createdAt: now,
       updatedAt: now,
     };
@@ -236,11 +248,27 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   clearSearch: () => set({ searchQuery: "", searchResults: [], searching: false }),
 
-  jumpToMessage: (sessionId, messageId) => {
-    set({ activeId: sessionId, targetMessageId: messageId });
+  jumpToMessage: (sessionId, messageId, keyword) => {
+    set({ activeId: sessionId, targetMessageId: messageId, targetKeyword: keyword || null });
   },
 
-  clearTargetMessage: () => set({ targetMessageId: null }),
+  clearTargetMessage: () => set({ targetMessageId: null, targetKeyword: null }),
+
+  applyCompression: (id, contextSummary, summaryCount, lastSummarizedMessageId) => {
+    set((st) => ({
+      sessions: st.sessions.map((s) =>
+        s.id === id
+          ? {
+              ...s,
+              contextSummary,
+              summaryCount,
+              lastSummarizedMessageId: lastSummarizedMessageId ?? undefined,
+              summaryUpdatedAt: Date.now(),
+            }
+          : s
+      ),
+    }));
+  },
 
 
   createBlankSession: () => {

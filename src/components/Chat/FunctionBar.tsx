@@ -1,14 +1,16 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Brain, ChevronDown, Check, Feather } from "lucide-react";
+import { Brain, ChevronDown, Check, Feather, Search, WrapText, Square } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { useProviderStore } from "@/stores/providerStore";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useGenerationStore } from "@/stores/generationStore";
 import { setToolsEnabled } from "@/hooks/useChat";
 import { setAppSetting } from "@/lib/db";
+import { runCompression, stopCompress } from "@/lib/contextCompress";
 import { isThinkingModel } from "@/providers/openai";
 import { SessionPopup } from "./SessionPopup";
+import { SearchPanel } from "./SearchPanel";
 import { WorldInfoPanel } from "./WorldInfoPanel";
 
 type OpenMenu = "provider" | "model" | "style" | null;
@@ -23,7 +25,9 @@ export function FunctionBar() {
     s.activeId ? s.sessions.find((ss) => ss.id === s.activeId) : null,
   );
   const [showSessionPopup, setShowSessionPopup] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   const [showWorldInfo, setShowWorldInfo] = useState(false);
+  const compressing = useUIStore((s) => s.compressing);
   const worldBtnRef = useRef<HTMLButtonElement>(null);
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const barRef = useRef<HTMLDivElement>(null);
@@ -151,7 +155,7 @@ export function FunctionBar() {
         {/* Provider 切换 */}
         <div style={{ position: "relative" }}>
           <button
-            className="seed-func-chip"
+            className="seed-func-chip" disabled={compressing}
             data-tooltip={activeProvider ? activeProvider.name : "未配置服务"}
             onClick={() => setOpenMenu((m) => (m === "provider" ? null : "provider"))}
           >
@@ -184,7 +188,7 @@ export function FunctionBar() {
         {/* 模型切换 */}
         <div style={{ position: "relative" }}>
           <button
-            className="seed-func-chip"
+            className="seed-func-chip" disabled={compressing}
             data-tooltip={activeModel || "选择模型"}
             onClick={handleModelChip}
           >
@@ -218,6 +222,7 @@ export function FunctionBar() {
         <div style={{ position: "relative" }}>
           <button
             className={"seed-func-chip" + (activePreset ? "" : " seed-func-chip--muted")}
+            disabled={compressing}
             data-tooltip="输出文风预设"
             onClick={() => setOpenMenu((m) => (m === "style" ? null : "style"))}
           >
@@ -268,6 +273,7 @@ export function FunctionBar() {
         {/* 思考模式快捷开关 */}
         <button
           className={"seed-func-btn" + (thinkingEnabled ? " seed-func-btn--active" : "")}
+          disabled={compressing}
           data-tooltip={thinkingEnabled ? "思考模式已开启" : "思考模式已关闭"}
           onClick={() => { if (activeId) toggleThinking(activeId); }}
         >
@@ -275,7 +281,7 @@ export function FunctionBar() {
         </button>
 
         {/* Web search toggle */}
-        <button className={"seed-func-btn" + (webSearchOn ? " seed-func-btn--active" : "")} data-tooltip={webSearchOn ? "联网搜索已开启" : "联网搜索已关闭"} onClick={toggleWebSearch}>
+        <button className={"seed-func-btn" + (webSearchOn ? " seed-func-btn--active" : "")} disabled={compressing} data-tooltip={webSearchOn ? "联网搜索已开启" : "联网搜索已关闭"} onClick={toggleWebSearch}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 12.55a11 11 0 0 1 14.08 0" />
             <path d="M1.42 9a16 16 0 0 1 21.16 0" />
@@ -287,7 +293,7 @@ export function FunctionBar() {
         <div style={{ width: 1, height: 20, background: "var(--seed-border)", margin: "0 6px" }} />
 
         {/* Settings */}
-        <button className={"seed-func-btn" + (settingsOpen ? " seed-func-btn--active" : "")} data-tooltip="设置" onClick={() => { const s = useUIStore.getState(); s.setSettingsOpen(!s.settingsOpen); }}>
+        <button className={"seed-func-btn" + (settingsOpen ? " seed-func-btn--active" : "")} disabled={compressing} data-tooltip="设置" onClick={() => { const s = useUIStore.getState(); s.setSettingsOpen(!s.settingsOpen); }}>
           <svg viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="3" />
             <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
@@ -295,7 +301,7 @@ export function FunctionBar() {
         </button>
 
         {/* Theme */}
-        <button className="seed-func-btn" data-tooltip="深/浅主题" onClick={cycleTheme}>
+        <button className="seed-func-btn" disabled={compressing} data-tooltip="深/浅主题" onClick={cycleTheme}>
           <svg viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="5" />
             <line x1="12" y1="1" x2="12" y2="3" />
@@ -310,7 +316,7 @@ export function FunctionBar() {
         </button>
 
         {/* Font size */}
-        <button className="seed-func-btn" data-tooltip="字体大小" onClick={cycleFontSize}>
+        <button className="seed-func-btn" disabled={compressing} data-tooltip="字体大小" onClick={cycleFontSize}>
           <svg viewBox="0 0 24 24">
             <polyline points="4 7 4 4 20 4 20 7" />
             <line x1="9" y1="20" x2="15" y2="20" />
@@ -319,7 +325,7 @@ export function FunctionBar() {
         </button>
 
         {/* Session management */}
-        <button className="seed-func-btn" data-tooltip="会话管理" onClick={() => setShowSessionPopup(true)}>
+        <button className="seed-func-btn" disabled={compressing} data-tooltip="会话管理" onClick={() => setShowSessionPopup(true)}>
           <svg viewBox="0 0 24 24">
             <polygon points="12 2 2 7 12 12 22 7 12 2" />
             <polyline points="2 17 12 22 22 17" />
@@ -327,8 +333,22 @@ export function FunctionBar() {
           </svg>
         </button>
 
+        {/* Search messages */}
+        <button className={"seed-func-btn" + (showSearch ? " seed-func-btn--active" : "")} disabled={compressing} data-tooltip="搜索消息" onClick={() => { setOpenMenu(null); setShowSearch((v) => !v); }}>
+          <Search size={16} />
+        </button>
+
+        {/* Compress story: 手动整理（压缩中变停止） */}
+        <button
+          className={"seed-func-btn" + (compressing ? " seed-compress-btn" : "")}
+          data-tooltip={compressing ? "停止整理（不保存任何变更）" : "整理故事（压缩上下文，提取角色）"}
+          onClick={compressing ? stopCompress : () => void runCompression()}
+        >
+          {compressing ? <Square size={16} fill="currentColor" /> : <WrapText size={16} />}
+        </button>
+
         {/* World info */}
-        <button ref={worldBtnRef} className={"seed-func-btn" + (showWorldInfo ? " seed-func-btn--active" : "")} data-tooltip="世界信息" onClick={() => { setOpenMenu(null); setShowWorldInfo((v) => !v); }}>
+        <button ref={worldBtnRef} className={"seed-func-btn" + (showWorldInfo ? " seed-func-btn--active" : "")} disabled={compressing} data-tooltip="世界信息" onClick={() => { setOpenMenu(null); setShowWorldInfo((v) => !v); }}>
           <svg viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="10" />
             <line x1="2" y1="12" x2="22" y2="12" />
@@ -357,6 +377,14 @@ export function FunctionBar() {
       {showSessionPopup && createPortal(
         <div className={`theme-${eff}`}>
           <SessionPopup onClose={() => setShowSessionPopup(false)} />
+        </div>,
+        document.body
+      )}
+
+      {/* Search panel */}
+      {showSearch && createPortal(
+        <div className={`theme-${eff}`}>
+          <SearchPanel onClose={() => setShowSearch(false)} />
         </div>,
         document.body
       )}

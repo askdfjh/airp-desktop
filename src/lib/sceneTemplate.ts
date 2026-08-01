@@ -1,8 +1,10 @@
-// 固定回复模板：AI 每次回复按【场景信息】【正文】【对话推荐】三区块输出，
-// 前端解析后在版面上渲染：左侧场景信息栏、右侧对话推荐栏。
+// 固定回复模板：AI 每次回复按【章节名】【场景信息】【正文】【对话推荐】区块输出，
+// 前端解析后在版面上渲染：章节名（动态章节标题）、场景信息栏、对话推荐栏。
 
 export const SCENE_TEMPLATE_PROMPT = `【回复模板·必须严格遵守】
 每次回复都按以下固定模板输出（用于版面渲染）：
+【章节名】
+<当前章节标题，4-10 字，古典章回体风格（如：初入宗门、山门惊变）。仅当剧情推进到新阶段（场景切换/重大事件/时间跳跃）时才更新章节名，否则与上一条回复完全一致；开局首条可给出章节名>
 【场景信息】
 地点：<当前具体地点>
 时间：<当前时间，如：辰时·上午，或具体时刻>
@@ -15,7 +17,7 @@ export const SCENE_TEMPLATE_PROMPT = `【回复模板·必须严格遵守】
 2. <下一步可选的行动或对话>
 3. <下一步可选的行动或对话>
 注意：对话推荐必须是玩家可直接执行的剧情行动或对话（如探索、交谈、战斗、观察、思考），严禁推荐"查看世界设定/图鉴/背景资料/角色设定"等元操作类选项，也严禁把注入的世界设定内容（如【XX设定·XX】条目）原样抄入推荐列表。
-注意：若本条回复是纯工具调用、简短回应或无叙事推进，可省略【场景信息】与【对话推荐】区块，直接输出正文。`;
+注意：若本条回复是纯工具调用、简短回应或无叙事推进，可省略【章节名】【场景信息】与【对话推荐】区块，直接输出正文。`;
 
 export interface SceneInfo {
   location: string;
@@ -25,12 +27,13 @@ export interface SceneInfo {
 }
 
 export interface ParsedReply {
+  chapterTitle?: string;
   scene: SceneInfo | null;
   body: string;
   suggestions: string[];
 }
 
-const SECTION_RE = /【场景信息】([\s\S]*?)【正文】([\s\S]*?)(?:【对话推荐】([\s\S]*?))?\s*$/;
+const SECTION_RE = /(?:【章节名】\s*([^\n【]*)\s*)?【场景信息】([\s\S]*?)【正文】([\s\S]*?)(?:【对话推荐】([\s\S]*?))?\s*$/;
 
 // 元操作类推荐（查看设定/图鉴/背景资料等）不属于剧情行动，一律过滤
 const META_DIRECT_RE = /(世界设定|世界观|背景设定|剧情背景|故事背景|图鉴|角色设定|人物设定|设定(?:介绍|详情|说明|列表|页面|面板|文档))/;
@@ -52,9 +55,10 @@ export function parseSceneReply(content: string): ParsedReply {
   if (!m) {
     return { scene: null, body: content.trim(), suggestions: [] };
   }
-  const sceneText = m[1].trim();
-  const body = (m[2] || "").trim();
-  const sugText = (m[3] || "").trim();
+  const chapterTitle = (m[1] || "").trim() || undefined;
+  const sceneText = m[2].trim();
+  const body = (m[3] || "").trim();
+  const sugText = (m[4] || "").trim();
 
   const field = (label: string) => {
     const fm = sceneText.match(new RegExp(label + "[:：]\\s*([^\\n]+)"));
@@ -75,5 +79,5 @@ export function parseSceneReply(content: string): ParsedReply {
     .map((l) => l.replace(/^\s*(?:\d+[.、．)）]\s*|[-*•·]\s*)/, "").trim())
     .filter((l) => Boolean(l) && !isMetaSuggestion(l));
 
-  return { scene, body: body || content.trim(), suggestions };
+  return { chapterTitle, scene, body: body || content.trim(), suggestions };
 }

@@ -9,6 +9,7 @@ export function WorldPanel() {
     selectedBookId, selectBook, 
     activeBook, setActiveBook, deactivateAllBooks,
     addBook, updateBook, removeBook,
+    trashBooks, loadTrashFromDb, restoreBookFromTrash, purgeBookFromTrash,
     addEntry, updateEntry, removeEntry
   } = useWorldStore();
   
@@ -31,6 +32,18 @@ export function WorldPanel() {
   const [newEntryPosition, setNewEntryPosition] = useState<"system" | "situation" | "last">("situation");
 
   useEffect(() => { if (!loaded) loadFromDb(); }, []);
+  useEffect(() => { loadTrashFromDb(); }, []);
+
+  const formatTime = (ts: number): string => {
+    const d = new Date(ts);
+    const now = new Date();
+    const diff = now.getTime() - ts;
+    if (diff < 60000) return "刚刚";
+    if (diff < 3600000) return Math.floor(diff / 60000) + " 分钟前";
+    if (diff < 86400000) return Math.floor(diff / 3600000) + " 小时前";
+    if (diff < 604800000) return Math.floor(diff / 86400000) + " 天前";
+    return d.getMonth() + 1 + "月" + d.getDate() + "日";
+  };
 
   const resetBookForm = () => {
     setNewBookName(""); setNewBookTheme(""); setNewBookDesc(""); setNewBookTags("");
@@ -370,6 +383,58 @@ export function WorldPanel() {
               </div>
             </div>
           </>
+        )}
+      </div>
+
+      {/* 世界回收站：删除的世界书保留 30 天，可恢复 */}
+      <div style={{ marginTop: 20, padding: 18, borderRadius: 18, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+          <Trash2 size={14} style={{ color: "var(--seed-accent)" }} />
+          <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--seed-fg)" }}>世界回收站</span>
+          <span style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)" }}>({trashBooks.length})</span>
+          <span style={{ fontSize: "var(--fs-10)", color: "var(--seed-muted)", marginLeft: 4 }}>删除的世界书保留 30 天，到期自动清理</span>
+        </div>
+
+        {trashBooks.length === 0 ? (
+          <div style={{ padding: "24px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>
+            回收站为空。删除世界书后将在这里保留 30 天。
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {trashBooks.map((t) => {
+              let name = "已删除世界";
+              try {
+                const parsed = JSON.parse(t.data);
+                name = parsed.book?.name || name;
+              } catch { /* ignore */ }
+              const daysLeft = Math.max(0, Math.ceil((t.expiredAt - Date.now()) / 86400000));
+              return (
+                <div key={t.id} style={{ padding: 12, borderRadius: 10, background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                    <Globe size={12} style={{ color: "var(--seed-muted)", flexShrink: 0 }} />
+                    <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                    <span style={{ fontSize: "var(--fs-10)", color: "var(--seed-muted)", flexShrink: 0 }}>
+                      {formatTime(t.deletedAt)} · 剩余 {daysLeft} 天
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <button
+                      onClick={() => restoreBookFromTrash(t.id)}
+                      style={{ padding: "5px 10px", borderRadius: 8, fontSize: "var(--fs-11)", color: "var(--seed-accent)", background: "var(--seed-accent-bg)", border: "1px solid color-mix(in srgb, var(--seed-accent) 40%, transparent)", cursor: "pointer" }}
+                    >
+                      恢复
+                    </button>
+                    <button
+                      onClick={() => { if (confirm(`彻底删除「${name}」？此操作不可恢复。`)) purgeBookFromTrash(t.id); }}
+                      style={{ padding: "5px 10px", borderRadius: 8, fontSize: "var(--fs-11)", color: "var(--danger)", background: "transparent", border: "1px solid var(--seed-border)", cursor: "pointer" }}
+                    >
+                      彻底删除
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>

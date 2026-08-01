@@ -62,7 +62,7 @@ export const BACKUP_GROUP_LABELS: Record<BackupGroupKey, string> = {
   characters: "角色设定",
   worldRules: "世界规则",
   worldBooks: "世界书与词条",
-  conversations: "会话与消息（含收藏 / 回收站 / 角色弧光）",
+  conversations: "会话与消息（含收藏 / 回收站 / 角色弧光 / 提取角色卡）",
 };
 
 /** 每个数据项对应的 localStorage 键 */
@@ -196,8 +196,10 @@ export function summarizeImportedGroups(data: SettingsBackup): string[] {
       const sessions = data.conversations?.sessions?.length ?? 0;
       const messages = data.conversations?.messages?.length ?? 0;
       const trash = data.conversations?.sessions?.filter((s) => Number(s.deleted) === 1).length ?? 0;
+      const cards = data.conversations?.sessionCharacterCards?.length ?? 0;
       const trashText = trash > 0 ? `，含回收站 ${trash} 个` : "";
-      return `会话与消息（${sessions} 个会话 / ${messages} 条消息${trashText}）`;
+      const cardsText = cards > 0 ? `，提取角色卡 ${cards} 张` : "";
+      return `会话与消息（${sessions} 个会话 / ${messages} 条消息${trashText}${cardsText}）`;
     }
     return `${BACKUP_GROUP_LABELS[key]}（${countGroupItems(data, key)} 项）`;
   });

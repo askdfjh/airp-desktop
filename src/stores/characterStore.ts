@@ -5,6 +5,10 @@ import {
   insertCharacterCard,
   updateCharacterCard,
   deleteCharacterCard,
+  loadTrashedCharacterCards,
+  restoreCharacterCard,
+  purgeCharacterCard,
+  purgeExpiredCharacterCards,
   initBuiltinCharacterCards,
   loadCharacters,
   insertCharacter,
@@ -26,12 +30,17 @@ interface CharacterState {
   characters: Character[];
   arcs: CharacterArc[];
   sessionCharacters: SessionCharacter[];
+  trashCards: CharacterCard[];
   loaded: boolean;
 
   loadFromDb: () => Promise<void>;
   addCard: (c: Omit<CharacterCard, "createdAt" | "updatedAt">) => Promise<void>;
-  updateCard: (id: string, fields: { name?: string; description?: string; systemPrompt?: string; emoji?: string; tags?: string[] }) => Promise<void>;
+  updateCard: (id: string, fields: { name?: string; description?: string; systemPrompt?: string; emoji?: string; tags?: string[]; isExtracted?: boolean }) => Promise<void>;
   removeCard: (id: string) => Promise<void>;
+  loadTrashFromDb: () => Promise<void>;
+  restoreCardFromTrash: (id: string) => Promise<void>;
+  purgeCardFromTrash: (id: string) => Promise<void>;
+  clearExpiredTrash: () => Promise<void>;
 
   loadCharactersFromDb: () => Promise<void>;
   restoreDefaultCharacters: () => Promise<void>;
@@ -55,6 +64,7 @@ export const useCharacterStore = create<CharacterState>((set, get) => ({
   characters: [],
   arcs: [],
   sessionCharacters: [],
+  trashCards: [],
   loaded: false,
 
   loadFromDb: async () => {
@@ -87,6 +97,39 @@ export const useCharacterStore = create<CharacterState>((set, get) => ({
   removeCard: async (id) => {
     await deleteCharacterCard(id);
     set((st) => ({ cards: st.cards.filter((c) => c.id !== id) }));
+  },
+
+  loadTrashFromDb: async () => {
+    try {
+      const trashCards = await loadTrashedCharacterCards();
+      set({ trashCards });
+    } catch (e) {
+      console.error("[db] loadTrashedCharacterCards failed:", e);
+    }
+  },
+
+  restoreCardFromTrash: async (id) => {
+    await restoreCharacterCard(id);
+    const trashCards = await loadTrashedCharacterCards();
+    const cards = await loadCharacterCards();
+    set({ trashCards, cards });
+  },
+
+  purgeCardFromTrash: async (id) => {
+    await purgeCharacterCard(id);
+    set((st) => ({ trashCards: st.trashCards.filter((c) => c.id !== id) }));
+  },
+
+  clearExpiredTrash: async () => {
+    try {
+      const removed = await purgeExpiredCharacterCards();
+      if (removed > 0) {
+        const trashCards = await loadTrashedCharacterCards();
+        set({ trashCards });
+      }
+    } catch (e) {
+      console.error("[db] purgeExpiredCharacterCards failed:", e);
+    }
   },
 
   loadCharactersFromDb: async () => {

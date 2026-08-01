@@ -60,6 +60,11 @@ export async function initDb(): Promise<void> {
     // 旧数据修正：标题为"空白会话"的归为 blank
     await db.execute(`UPDATE sessions SET kind = 'blank' WHERE title = '空白会话';`);
   }
+  // 长对话压缩：故事脉络摘要（增量追加）+ 压缩状态
+  await db.execute(`ALTER TABLE sessions ADD COLUMN contextSummary TEXT DEFAULT '';`).catch(() => {});
+  await db.execute(`ALTER TABLE sessions ADD COLUMN summaryUpdatedAt INTEGER;`).catch(() => {});
+  await db.execute(`ALTER TABLE sessions ADD COLUMN summaryCount INTEGER DEFAULT 0;`).catch(() => {});
+  await db.execute(`ALTER TABLE sessions ADD COLUMN lastSummarizedMessageId TEXT;`).catch(() => {});
   await db.execute(`
     CREATE TABLE IF NOT EXISTS favorites (
       id TEXT PRIMARY KEY,
@@ -210,6 +215,22 @@ export async function initDb(): Promise<void> {
   await db.execute(`ALTER TABLE character_cards ADD COLUMN mesExample TEXT DEFAULT '';`).catch(() => {});
   await db.execute(`ALTER TABLE character_cards ADD COLUMN worldBookId TEXT DEFAULT NULL;`).catch(() => {});
   await db.execute(`ALTER TABLE character_cards ADD COLUMN characterBookEntries TEXT DEFAULT '[]';`).catch(() => {});
+  // 长对话压缩：提取来源标记 + 出场触发词
+  await db.execute(`ALTER TABLE character_cards ADD COLUMN isExtracted INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
+  await db.execute(`ALTER TABLE character_cards ADD COLUMN triggerWords TEXT DEFAULT '[]';`).catch(() => {});
+  // 角色卡回收站：软删除标记（保留行与绑定，恢复时 id 不变）
+  await db.execute(`ALTER TABLE character_cards ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
+  await db.execute(`ALTER TABLE character_cards ADD COLUMN deletedAt INTEGER;`).catch(() => {});
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS session_character_cards (
+      id TEXT PRIMARY KEY,
+      sessionId TEXT NOT NULL,
+      characterCardId TEXT NOT NULL,
+      worldBookId TEXT,
+      createdAt INTEGER NOT NULL,
+      FOREIGN KEY (characterCardId) REFERENCES character_cards(id) ON DELETE CASCADE
+    );
+  `);
 }
 
 function getDb(): Database {
@@ -231,6 +252,10 @@ interface SessionRow {
   deleted?: number;
   deletedAt?: number | null;
   kind?: string | null;
+  contextSummary?: string | null;
+  summaryUpdatedAt?: number | null;
+  summaryCount?: number | null;
+  lastSummarizedMessageId?: string | null;
 }
 
 interface MessageRow {
@@ -257,6 +282,10 @@ function rowToSession(r: SessionRow): Session {
     updatedAt: r.updatedAt,
     deletedAt: r.deletedAt ?? undefined,
     kind: r.kind === "blank" ? "blank" : "adventure",
+    contextSummary: r.contextSummary ?? undefined,
+    summaryUpdatedAt: r.summaryUpdatedAt ?? undefined,
+    summaryCount: r.summaryCount ?? undefined,
+    lastSummarizedMessageId: r.lastSummarizedMessageId ?? undefined,
   };
 }
 
@@ -289,8 +318,8 @@ export async function loadSessions(): Promise<Session[]> {
 export async function insertSession(s: Session): Promise<void> {
   console.log("[db] insertSession", s.id, s.title);
   await getDb().execute(
-    "INSERT INTO sessions (id, title, systemPrompt, providerId, model, thinkingEnabled, createdAt, updatedAt, kind) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);",
-    [s.id, s.title, s.systemPrompt, s.providerId, s.model, s.thinkingEnabled ? 1 : 0, s.createdAt, s.updatedAt, s.kind === "blank" ? "blank" : "adventure"]
+    "INSERT INTO sessions (id, title, systemPrompt, providerId, model, thinkingEnabled, createdAt, updatedAt, kind, contextSummary, summaryUpdatedAt, summaryCount, lastSummarizedMessageId) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13);",
+    [s.id, s.title, s.systemPrompt, s.providerId, s.model, s.thinkingEnabled ? 1 : 0, s.createdAt, s.updatedAt, s.kind === "blank" ? "blank" : "adventure", s.contextSummary ?? "", s.summaryUpdatedAt ?? null, s.summaryCount ?? 0, s.lastSummarizedMessageId ?? null]
   );
 }
 
@@ -347,7 +376,7 @@ export async function purgeExpiredTrash(): Promise<number> {
   return rows.length;
 }
 
-const SESSION_FIELDS = ["title", "systemPrompt", "providerId", "model", "thinkingEnabled", "updatedAt"] as const;
+const SESSION_FIELDS = ["title", "systemPrompt", "providerId", "model", "thinkingEnabled", "updatedAt", "contextSummary", "summaryUpdatedAt", "summaryCount", "lastSummarizedMessageId"] as const;
 type SessionUpdateField = (typeof SESSION_FIELDS)[number];
 
 /** 更新会话字段（白名单过滤，安全）。 */
@@ -603,13 +632,26 @@ export interface CharacterCardRow {
   isBuiltin: number;
   createdAt: number;
   updatedAt: number;
+  personality?: string | null;
+  scenario?: string | null;
+  firstMes?: string | null;
+  mesExample?: string | null;
+  worldBookId?: string | null;
+  characterBookEntries?: string | null;
+  isExtracted?: number | null;
+  triggerWords?: string | null;
+  deletedAt?: number | null;
 }
 
 export async function loadCharacterCards(): Promise<CharacterCard[]> {
   const rows = await getDb().select<CharacterCardRow[]>(
-    "SELECT * FROM character_cards ORDER BY isBuiltin DESC, name ASC;"
+    "SELECT * FROM character_cards WHERE deleted = 0 ORDER BY isBuiltin DESC, name ASC;"
   );
-  return rows.map((r) => ({
+  return rows.map(rowToCharacterCard);
+}
+
+function rowToCharacterCard(r: CharacterCardRow): CharacterCard {
+  return {
     id: r.id,
     name: r.name,
     description: r.description,
@@ -617,26 +659,46 @@ export async function loadCharacterCards(): Promise<CharacterCard[]> {
     emoji: r.emoji,
     tags: JSON.parse(r.tags || "[]"),
     isBuiltin: r.isBuiltin === 1,
+    personality: r.personality ?? undefined,
+    scenario: r.scenario ?? undefined,
+    firstMes: r.firstMes ?? undefined,
+    mesExample: r.mesExample ?? undefined,
+    worldBookId: r.worldBookId ?? undefined,
+    characterBookEntries: r.characterBookEntries ? (JSON.parse(r.characterBookEntries) as WorldBookEntry[]) : undefined,
+    isExtracted: r.isExtracted === 1 ? true : undefined,
+    triggerWords: r.triggerWords ? (JSON.parse(r.triggerWords) as string[]) : undefined,
+    deletedAt: r.deletedAt ?? undefined,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
-  }));
+  };
 }
 
 export async function insertCharacterCard(c: CharacterCard): Promise<void> {
   await getDb().execute(
-    "INSERT INTO character_cards (id, name, description, systemPrompt, emoji, tags, isBuiltin, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);",
-    [c.id, c.name, c.description, c.systemPrompt, c.emoji, JSON.stringify(c.tags), c.isBuiltin ? 1 : 0, c.createdAt, c.updatedAt]
+    "INSERT INTO character_cards (id, name, description, systemPrompt, emoji, tags, isBuiltin, createdAt, updatedAt, personality, scenario, firstMes, mesExample, worldBookId, characterBookEntries, isExtracted, triggerWords) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17);",
+    [
+      c.id, c.name, c.description, c.systemPrompt, c.emoji, JSON.stringify(c.tags), c.isBuiltin ? 1 : 0,
+      c.createdAt, c.updatedAt, c.personality ?? "", c.scenario ?? "", c.firstMes ?? "", c.mesExample ?? "",
+      c.worldBookId ?? null, c.characterBookEntries ? JSON.stringify(c.characterBookEntries) : "[]",
+      c.isExtracted ? 1 : 0, JSON.stringify(c.triggerWords ?? []),
+    ]
   );
 }
 
-export async function updateCharacterCard(id: string, fields: { name?: string; description?: string; systemPrompt?: string; emoji?: string; tags?: string[]; updatedAt?: number }): Promise<void> {
+export async function updateCharacterCard(id: string, fields: { name?: string; description?: string; systemPrompt?: string; emoji?: string; tags?: string[]; updatedAt?: number; personality?: string; scenario?: string; worldBookId?: string | null; characterBookEntries?: WorldBookEntry[]; isExtracted?: boolean; triggerWords?: string[] }): Promise<void> {
   const sets: string[] = [];
-  const values: (string | number)[] = [];
+  const values: (string | number | null)[] = [];
   if (fields.name !== undefined) { sets.push("name = $" + (sets.length + 1)); values.push(fields.name); }
   if (fields.description !== undefined) { sets.push("description = $" + (sets.length + 1)); values.push(fields.description); }
   if (fields.systemPrompt !== undefined) { sets.push("systemPrompt = $" + (sets.length + 1)); values.push(fields.systemPrompt); }
   if (fields.emoji !== undefined) { sets.push("emoji = $" + (sets.length + 1)); values.push(fields.emoji); }
   if (fields.tags !== undefined) { sets.push("tags = $" + (sets.length + 1)); values.push(JSON.stringify(fields.tags)); }
+  if (fields.personality !== undefined) { sets.push("personality = $" + (sets.length + 1)); values.push(fields.personality); }
+  if (fields.scenario !== undefined) { sets.push("scenario = $" + (sets.length + 1)); values.push(fields.scenario); }
+  if (fields.worldBookId !== undefined) { sets.push("worldBookId = $" + (sets.length + 1)); values.push(fields.worldBookId ?? null); }
+  if (fields.characterBookEntries !== undefined) { sets.push("characterBookEntries = $" + (sets.length + 1)); values.push(JSON.stringify(fields.characterBookEntries)); }
+  if (fields.isExtracted !== undefined) { sets.push("isExtracted = $" + (sets.length + 1)); values.push(fields.isExtracted ? 1 : 0); }
+  if (fields.triggerWords !== undefined) { sets.push("triggerWords = $" + (sets.length + 1)); values.push(JSON.stringify(fields.triggerWords)); }
   const ts = fields.updatedAt ?? Date.now();
   sets.push("updatedAt = $" + (sets.length + 1));
   values.push(ts);
@@ -647,8 +709,54 @@ export async function updateCharacterCard(id: string, fields: { name?: string; d
   );
 }
 
+/** 查找同名提取角色卡（isExtracted = 1），用于压缩时幂等更新。 */
+export async function findExtractedCharacterCardByName(name: string): Promise<CharacterCard | null> {
+  const rows = await getDb().select<CharacterCardRow[]>(
+    "SELECT * FROM character_cards WHERE isExtracted = 1 AND deleted = 0 AND name = $1 LIMIT 1;",
+    [name]
+  );
+  return rows.length > 0 ? rowToCharacterCard(rows[0]) : null;
+}
+
+/** 删除角色卡（软删除进回收站，保留行与绑定，30 天后自动彻底清理）。 */
 export async function deleteCharacterCard(id: string): Promise<void> {
+  await getDb().execute(
+    "UPDATE character_cards SET deleted = 1, deletedAt = $2 WHERE id = $1;",
+    [id, Date.now()]
+  );
+}
+
+/** 加载回收站中的角色卡（软删除），按删除时间倒序。 */
+export async function loadTrashedCharacterCards(): Promise<CharacterCard[]> {
+  const rows = await getDb().select<CharacterCardRow[]>(
+    "SELECT * FROM character_cards WHERE deleted = 1 ORDER BY deletedAt DESC;"
+  );
+  return rows.map(rowToCharacterCard);
+}
+
+/** 从回收站恢复角色卡。 */
+export async function restoreCharacterCard(id: string): Promise<void> {
+  await getDb().execute(
+    "UPDATE character_cards SET deleted = 0, deletedAt = NULL WHERE id = $1;",
+    [id]
+  );
+}
+
+/** 彻底删除角色卡（级联删除会话绑定）。 */
+export async function purgeCharacterCard(id: string): Promise<void> {
+  await getDb().execute("DELETE FROM session_character_cards WHERE characterCardId = $1;", [id]);
   await getDb().execute("DELETE FROM character_cards WHERE id = $1;", [id]);
+}
+
+/** 清理回收站中过期的角色卡，返回清除数量。 */
+export async function purgeExpiredCharacterCards(): Promise<number> {
+  const cutoff = Date.now() - TRASH_RETENTION_MS;
+  const rows = await getDb().select<{ id: string }[]>(
+    "SELECT id FROM character_cards WHERE deleted = 1 AND deletedAt IS NOT NULL AND deletedAt < $1;",
+    [cutoff]
+  );
+  for (const r of rows) await purgeCharacterCard(r.id);
+  return rows.length;
 }
 
 export async function initBuiltinCharacterCards(): Promise<void> {
@@ -918,6 +1026,48 @@ export async function clearSessionCharacterArcs(sessionId: string, characterId: 
   await getDb().execute(
     "UPDATE session_characters SET arcClearedAt = $1 WHERE sessionId = $2 AND characterId = $3;",
     [Date.now(), sessionId, characterId]
+  );
+}
+
+/* ---------- 提取角色卡绑定（长对话压缩生成） ---------- */
+
+export interface SessionCharacterCardRow {
+  id: string;
+  sessionId: string;
+  characterCardId: string;
+  worldBookId: string | null;
+  createdAt: number;
+}
+
+/** 加载某会话绑定的全部提取角色卡绑定（含角色卡信息，供注入用）。 */
+export async function loadSessionCharacterCards(
+  sessionId: string
+): Promise<(SessionCharacterCardRow & { name: string; triggerWords: string; systemPrompt: string; description: string })[]> {
+  return await getDb().select(
+    `SELECT scc.*, cc.name, cc.triggerWords, cc.systemPrompt, cc.description
+     FROM session_character_cards scc
+     JOIN character_cards cc ON cc.id = scc.characterCardId
+     WHERE scc.sessionId = $1 AND cc.deleted = 0
+     ORDER BY scc.createdAt ASC;`,
+    [sessionId]
+  );
+}
+
+export async function insertSessionCharacterCard(b: {
+  sessionId: string;
+  characterCardId: string;
+  worldBookId?: string | null;
+}): Promise<void> {
+  await getDb().execute(
+    "INSERT INTO session_character_cards (id, sessionId, characterCardId, worldBookId, createdAt) VALUES ($1, $2, $3, $4, $5);",
+    [crypto.randomUUID(), b.sessionId, b.characterCardId, b.worldBookId ?? null, Date.now()]
+  );
+}
+
+export async function deleteSessionCharacterCardByCard(sessionId: string, characterCardId: string): Promise<void> {
+  await getDb().execute(
+    "DELETE FROM session_character_cards WHERE sessionId = $1 AND characterCardId = $2;",
+    [sessionId, characterCardId]
   );
 }
 
@@ -1380,6 +1530,7 @@ const NUMERIC_SETTING_COLUMNS = new Set([
   "uid", "order", "insertion_depth", "createdAt", "updatedAt",
   "isBuiltin", "isActive", "constant", "selective", "disable",
   "deleted", "thinkingEnabled", "opening", "turnCount", "arcClearedAt",
+  "isExtracted", "summaryUpdatedAt", "summaryCount",
 ]);
 
 function normalizeSettingValue(col: string, v: unknown): string | number | null {
@@ -1442,9 +1593,19 @@ export async function restoreSettingsTables(snap: Partial<SettingsDbSnapshot>): 
   }
   if (snap.characterCards !== undefined) {
     for (const row of snap.characterCards) {
+      // 旧备份可能缺 isExtracted / triggerWords 列：缺失时给默认值
+      const ccVal = (c: string, fallback: string | number | null) =>
+        row[c] === undefined || row[c] === null ? fallback : normalizeSettingValue(c, row[c]);
       await db.execute(
-        'INSERT INTO character_cards (id, name, description, systemPrompt, emoji, tags, isBuiltin, createdAt, updatedAt, personality, scenario, firstMes, mesExample, worldBookId, characterBookEntries) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15);',
-        ["id", "name", "description", "systemPrompt", "emoji", "tags", "isBuiltin", "createdAt", "updatedAt", "personality", "scenario", "firstMes", "mesExample", "worldBookId", "characterBookEntries"].map((c) => normalizeSettingValue(c, row[c]))
+        'INSERT INTO character_cards (id, name, description, systemPrompt, emoji, tags, isBuiltin, createdAt, updatedAt, personality, scenario, firstMes, mesExample, worldBookId, characterBookEntries, isExtracted, triggerWords, deleted, deletedAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19);',
+        [
+          ccVal("id", ""), ccVal("name", ""), ccVal("description", ""), ccVal("systemPrompt", ""),
+          ccVal("emoji", "🎭"), ccVal("tags", "[]"), ccVal("isBuiltin", 0), ccVal("createdAt", 0),
+          ccVal("updatedAt", 0), ccVal("personality", ""), ccVal("scenario", ""), ccVal("firstMes", ""),
+          ccVal("mesExample", ""), ccVal("worldBookId", null), ccVal("characterBookEntries", "[]"),
+          ccVal("isExtracted", 0), ccVal("triggerWords", "[]"),
+          ccVal("deleted", 0), ccVal("deletedAt", null),
+        ]
       );
     }
   }
@@ -1489,6 +1650,7 @@ export interface ConversationsSnapshot {
   messages: Record<string, unknown>[];
   favorites: Record<string, unknown>[];
   sessionCharacters: Record<string, unknown>[];
+  sessionCharacterCards: Record<string, unknown>[];
   characterArcs: Record<string, unknown>[];
 }
 
@@ -1500,6 +1662,7 @@ export async function snapshotConversations(): Promise<ConversationsSnapshot> {
     messages: await q("SELECT * FROM messages ORDER BY sessionId ASC, createdAt ASC;"),
     favorites: await q("SELECT * FROM favorites;"),
     sessionCharacters: await q("SELECT * FROM session_characters;"),
+    sessionCharacterCards: await q("SELECT * FROM session_character_cards;"),
     characterArcs: await q("SELECT * FROM character_arcs;"),
   };
 }
@@ -1509,8 +1672,8 @@ export async function restoreConversations(snap: ConversationsSnapshot): Promise
   const db = getDb();
   for (const row of snap.sessions) {
     await db.execute(
-      "INSERT OR IGNORE INTO sessions (id, title, systemPrompt, providerId, model, thinkingEnabled, createdAt, updatedAt, deleted, deletedAt, kind) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);",
-      ["id", "title", "systemPrompt", "providerId", "model", "thinkingEnabled", "createdAt", "updatedAt", "deleted", "deletedAt", "kind"].map((c) => normalizeSettingValue(c, row[c]))
+      "INSERT OR IGNORE INTO sessions (id, title, systemPrompt, providerId, model, thinkingEnabled, createdAt, updatedAt, deleted, deletedAt, kind, contextSummary, summaryUpdatedAt, summaryCount, lastSummarizedMessageId) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15);",
+      ["id", "title", "systemPrompt", "providerId", "model", "thinkingEnabled", "createdAt", "updatedAt", "deleted", "deletedAt", "kind", "contextSummary", "summaryUpdatedAt", "summaryCount", "lastSummarizedMessageId"].map((c) => normalizeSettingValue(c, row[c]))
     );
   }
   for (const row of snap.messages) {
@@ -1529,6 +1692,12 @@ export async function restoreConversations(snap: ConversationsSnapshot): Promise
     await db.execute(
       "INSERT OR IGNORE INTO session_characters (id, sessionId, characterId, worldContext, arcClearedAt, createdAt) VALUES ($1, $2, $3, $4, $5, $6);",
       ["id", "sessionId", "characterId", "worldContext", "arcClearedAt", "createdAt"].map((c) => normalizeSettingValue(c, row[c]))
+    );
+  }
+  for (const row of snap.sessionCharacterCards ?? []) {
+    await db.execute(
+      "INSERT OR IGNORE INTO session_character_cards (id, sessionId, characterCardId, worldBookId, createdAt) VALUES ($1, $2, $3, $4, $5);",
+      ["id", "sessionId", "characterCardId", "worldBookId", "createdAt"].map((c) => normalizeSettingValue(c, row[c]))
     );
   }
   for (const row of snap.characterArcs) {
@@ -1566,6 +1735,17 @@ export async function createBranchSession(
     await getDb().execute(
       "INSERT OR IGNORE INTO session_characters (id, sessionId, characterId, worldContext, arcClearedAt, createdAt) VALUES ($1, $2, $3, $4, $5, $6);",
       [crypto.randomUUID(), newSession.id, b.characterId, b.worldContext, b.arcClearedAt, b.createdAt]
+    );
+  }
+  // 复制提取角色卡绑定
+  const cardBinds = await getDb().select<{ characterCardId: string; worldBookId: string | null; createdAt: number }[]>(
+    "SELECT characterCardId, worldBookId, createdAt FROM session_character_cards WHERE sessionId = $1;",
+    [sourceId]
+  );
+  for (const b of cardBinds) {
+    await getDb().execute(
+      "INSERT OR IGNORE INTO session_character_cards (id, sessionId, characterCardId, worldBookId, createdAt) VALUES ($1, $2, $3, $4, $5);",
+      [crypto.randomUUID(), newSession.id, b.characterCardId, b.worldBookId, b.createdAt]
     );
   }
   return newSession.id;

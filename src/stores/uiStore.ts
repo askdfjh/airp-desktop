@@ -27,6 +27,8 @@ interface UIState {
   selectedCharacterName: string | null;
   selectedScenarioId: string | null;
   selectedScenarioName: string | null;
+  // 玩家主角名（开局第 3 步输入，未填时兜底「主角」；选角色卡时自动带入可改）
+  playerName: string;
   // 开局自动发送标记：开始冒险后由 OnboardingFlow 写入，useChat 加载完成后消费
   pendingOpeningMessage: string | null;
   // Existing methods
@@ -44,8 +46,26 @@ interface UIState {
   setSelectedMode: (mode: "novel" | "player" | "custom" | null) => void;
   setSelectedCharacter: (id: string | null, name: string | null) => void;
   setSelectedScenario: (id: string | null, name: string | null) => void;
+  setPlayerName: (name: string) => void;
   setPendingOpeningMessage: (msg: string | null) => void;
   resetOnboarding: () => void;
+  // 长对话压缩：全局锁 + 阶段 + 自动确认框
+  compressing: boolean;
+  compressStage: "extracting" | "summarizing" | "";
+  compressPrompt: {
+    sessionId: string;
+    count: number;
+    estimatedTokens: number;
+    windowCount: number;
+    keptCount: number;
+  } | null;
+  compressPromptCallbacks: { onConfirm: () => void; onCancel: () => void } | null;
+  lastCompressDeclineAt: number;
+  setCompressing: (v: boolean) => void;
+  setCompressStage: (s: "extracting" | "summarizing" | "") => void;
+  setCompressPrompt: (p: UIState["compressPrompt"]) => void;
+  setCompressPromptCallbacks: (c: UIState["compressPromptCallbacks"]) => void;
+  markCompressDeclined: () => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -74,6 +94,7 @@ export const useUIStore = create<UIState>()(
       selectedCharacterName: null,
       selectedScenarioId: null,
       selectedScenarioName: null,
+      playerName: "",
       pendingOpeningMessage: null,
       // Existing methods
       setSidebarOpen: (v) => set({ sidebarOpen: v }),
@@ -97,6 +118,7 @@ export const useUIStore = create<UIState>()(
       setSelectedMode: (mode) => set({ selectedMode: mode }),
       setSelectedCharacter: (id, name) => set({ selectedCharacterId: id, selectedCharacterName: name }),
       setSelectedScenario: (id, name) => set({ selectedScenarioId: id, selectedScenarioName: name }),
+      setPlayerName: (name) => set({ playerName: name }),
       setPendingOpeningMessage: (msg) => set({ pendingOpeningMessage: msg }),
       resetOnboarding: () =>
         set({
@@ -108,8 +130,20 @@ export const useUIStore = create<UIState>()(
           selectedCharacterName: null,
           selectedScenarioId: null,
           selectedScenarioName: null,
+          playerName: "",
           pendingOpeningMessage: null,
         }),
+      // 长对话压缩状态（不持久化）
+      compressing: false,
+      compressStage: "",
+      compressPrompt: null,
+      compressPromptCallbacks: null,
+      lastCompressDeclineAt: 0,
+      setCompressing: (v) => set({ compressing: v }),
+      setCompressStage: (s) => set({ compressStage: s }),
+      setCompressPrompt: (p) => set({ compressPrompt: p }),
+      setCompressPromptCallbacks: (c) => set({ compressPromptCallbacks: c }),
+      markCompressDeclined: () => set({ lastCompressDeclineAt: Date.now() }),
     }),
     {
       name: "airp-ui-v3",

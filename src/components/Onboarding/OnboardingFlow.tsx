@@ -29,6 +29,8 @@ export function OnboardingFlow() {
     const selectedScenarioId = ui.selectedScenarioId;
     const selectedMode = ui.selectedMode;
     const selectedWorldName = ui.selectedWorldName;
+    // 主角名：第 3 步输入 > 所选角色名 > 兜底「主角」
+    const playerName = (ui.playerName || "").trim() || selectedCharacterName || "主角";
     // 允许无角色/无场景/无模式直接开始：未选时用空 systemPrompt
     const isAIOpening = selectedScenarioId === "ai-random";
     const hasFullSetup = selectedCharacterId && selectedScenarioId && selectedMode;
@@ -38,23 +40,21 @@ export function OnboardingFlow() {
       : hasFullSetup
         ? buildSystemPrompt(
             selectedScenarioId,
-            selectedCharacterName || "主角",
+            playerName,
             selectedMode
           )
         : "";
     // 开局开场消息：选中开局场景时，按场景设定自动发送给 AI 作为第一条消息
     const openingMessage = isAIOpening
-      ? buildAIOpeningMessage(selectedWorldName || "未知世界", selectedCharacterName || "主角", selectedMode || "novel")
+      ? buildAIOpeningMessage(selectedWorldName || "未知世界", playerName, selectedMode || "novel")
       : selectedScenarioId
-        ? buildOpeningMessage(selectedScenarioId, selectedCharacterName || "主角")
+        ? buildOpeningMessage(selectedScenarioId, playerName)
         : "";
 
     const now = Date.now();
     const session = {
       id: crypto.randomUUID(),
-      title: selectedCharacterName
-        ? selectedCharacterName + "的冒险"
-        : "新冒险",
+      title: playerName ? playerName + "的冒险" : "新冒险",
       systemPrompt,
       providerId: activeProviderId || "",
       model: activeModel || "",

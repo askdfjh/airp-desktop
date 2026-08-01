@@ -1125,6 +1125,30 @@ button.ghost:hover { color:var(--seed-accent); }
   position: relative;
   animation: seed-fade-in-up 0.5s ease-out both;
 }
+/* 搜索结果跳转高亮：紫色背景 2.2s 渐隐（不改布局，仅背景 + 圆角） */
+.seed-msg-highlight {
+  animation: seed-msg-highlight-pulse 2.2s ease-out both;
+  border-radius: 12px;
+}
+@keyframes seed-msg-highlight-pulse {
+  0% { background: var(--seed-accent-bg); box-shadow: 0 0 0 1px color-mix(in srgb, var(--seed-accent) 35%, transparent); }
+  60% { background: var(--seed-accent-bg); box-shadow: 0 0 0 1px color-mix(in srgb, var(--seed-accent) 35%, transparent); }
+  100% { background: transparent; box-shadow: 0 0 0 1px transparent; }
+}
+/* 搜索结果跳转后正文内关键词高亮（与搜索预览一致） */
+.seed-hl {
+  background: var(--seed-accent-bg);
+  color: var(--seed-accent);
+  border-radius: 3px;
+  padding: 0 2px;
+  font-weight: 600;
+}
+mark.seed-hl {
+  background: var(--seed-accent-bg);
+  color: var(--seed-accent);
+  padding: 0 2px;
+  border-radius: 3px;
+}
 .seed-msg-actions {
   display: flex;
   gap: 4px;
@@ -1268,8 +1292,7 @@ button.ghost:hover { color:var(--seed-accent); }
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--seed-accent), transparent);
   margin: 10px auto 0;
-  opacity: 0.4;
-}
+  opacity: 0.4;}
 
 /* Typing indicator */
 .seed-typing {
@@ -1288,6 +1311,67 @@ button.ghost:hover { color:var(--seed-accent); }
 }
 .seed-typing span:nth-child(2) { animation-delay: 0.2s; }
 .seed-typing span:nth-child(3) { animation-delay: 0.4s; }
+
+/* 长对话压缩状态条：整理中（提取角色 → 生成摘要），可停止 */
+.seed-compress-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 46px 24px 12px;
+  color: var(--seed-muted);
+  font-size: 13.5px;
+  background: var(--seed-bg);
+  border-bottom: 1px solid var(--seed-border);
+  animation: seed-fade-in-up 0.35s ease both;
+}
+.seed-compress-stop {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid color-mix(in srgb, var(--danger, #ef4444) 45%, transparent);
+  background: transparent;
+  color: var(--danger, #ef4444);
+  border-radius: 999px;
+  padding: 3px 14px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.seed-compress-stop:hover {
+  background: var(--danger-bg, rgba(239, 68, 68, 0.12));
+}
+/* 压缩中 FunctionBar 其他按钮禁用态 */
+.seed-func-btn:disabled,
+.seed-func-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+/* 整理按钮压缩中：红色危险态 */
+.seed-func-btn.seed-compress-btn {
+  color: var(--danger, #ef4444);
+  background: var(--danger-bg, rgba(239, 68, 68, 0.12));
+}
+
+/* Chapter divider：章节变化时淡入（key 变化重新挂载触发） */
+.seed-chapter-divider--transition {
+  animation: seed-chapter-in 0.5s ease-out both;
+}
+@keyframes seed-chapter-in {
+  from { opacity: 0; transform: translateY(4px); letter-spacing: 0.2em; }
+  to { opacity: 1; transform: translateY(0); letter-spacing: 0.12em; }
+}
+/* 流式完成过渡：正文从模板全文切换到解析正文时的淡入，缓冲「突然截断」的突兀 */
+.seed-narration--settle,
+.seed-chat-assistant.seed-narration--settle {
+  animation: seed-settle-in 0.4s ease-out both;
+}
+@keyframes seed-settle-in {
+  from { opacity: 0.3; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 /* 开局生成状态条：世界生成中 → 完成规划（流内占位在顶部，不随正文滚动，不与场景栏重叠） */
 .seed-opening {

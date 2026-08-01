@@ -17,7 +17,7 @@ function formatTime(ts: number): string {
 }
 
 export function CharacterPanel() {
-  const { characters, loadCharactersFromDb, addCharacter, updateCharacter, removeCharacter, loadArcs, arcs, clearWorldArcs, restoreDefaultCharacters } = useCharacterStore();
+  const { characters, loadCharactersFromDb, addCharacter, updateCharacter, removeCharacter, loadArcs, arcs, clearWorldArcs, restoreDefaultCharacters, cards, loadFromDb, updateCard, removeCard, trashCards, loadTrashFromDb, restoreCardFromTrash, purgeCardFromTrash, clearExpiredTrash } = useCharacterStore();
   const { sessions, activeId, updateSystemPrompt } = useSessionStore();
   const [selectedChars, setSelectedChars] = useState<Set<string>>(new Set());
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -39,6 +39,19 @@ export function CharacterPanel() {
   const [editTags, setEditTags] = useState("");
 
   useEffect(() => { loadCharactersFromDb(); }, []);
+  useEffect(() => { loadFromDb(); }, []);
+  useEffect(() => { loadTrashFromDb(); }, []);
+
+  const extractedCards = cards.filter((c) => c.isExtracted);
+
+  const promoteExtractedCard = async (id: string) => {
+    await updateCard(id, { isExtracted: false });
+  };
+
+  const removeExtractedCard = async (id: string) => {
+    if (!confirm("删除该提取角色卡？将移入回收站（保留30天），其绑定的会话将不再自动注入此角色，可随时恢复。")) return;
+    await removeCard(id);
+  };
 
   const selected = detailId ? characters.find(c => c.id === detailId) ?? null : null;
 
@@ -342,6 +355,101 @@ export function CharacterPanel() {
               </div>
             </div>
           </>
+        )}
+      </div>
+
+      {/* 会话提取角色卡：长对话压缩时自动提取，角色出场时自动注入 */}
+      <div style={{ marginTop: 20, padding: 18, borderRadius: 18, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+          <Sparkles size={14} style={{ color: "var(--seed-accent)" }} />
+          <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--seed-fg)" }}>会话提取角色卡</span>
+          <span style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)" }}>({extractedCards.length})</span>
+          <span style={{ fontSize: "var(--fs-10)", color: "var(--seed-muted)", marginLeft: 4 }}>
+            长对话整理时自动提取，角色出场时自动注入；「转为普通卡」可移入角色卡库
+          </span>
+        </div>
+
+        {extractedCards.length === 0 ? (
+          <div style={{ padding: "24px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>
+            暂无提取角色卡。对话足够长时点击底栏「整理故事」，将自动提取出场的重要角色。
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {extractedCards.map((c) => (
+              <div key={c.id} style={{ padding: 12, borderRadius: 10, background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</span>
+                    {(c.triggerWords ?? []).slice(0, 4).map((w) => (
+                      <span key={w} style={{ fontSize: "var(--fs-10)", padding: "2px 8px", borderRadius: 999, background: "var(--seed-accent-bg)", color: "var(--seed-accent)" }}>{w}</span>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <button
+                      onClick={() => promoteExtractedCard(c.id)}
+                      style={{ padding: "5px 10px", borderRadius: 8, fontSize: "var(--fs-11)", color: "var(--seed-accent)", background: "var(--seed-accent-bg)", border: "1px solid color-mix(in srgb, var(--seed-accent) 40%, transparent)", cursor: "pointer" }}
+                    >
+                      转为普通卡
+                    </button>
+                    <button
+                      onClick={() => removeExtractedCard(c.id)}
+                      style={{ padding: "5px 10px", borderRadius: 8, fontSize: "var(--fs-11)", color: "var(--danger)", background: "transparent", border: "1px solid var(--seed-border)", cursor: "pointer" }}
+                    >
+                      删除
+                    </button>
+                  </div>
+                </div>
+                <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.5, marginTop: 6, whiteSpace: "pre-line" }}>{c.systemPrompt}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 角色卡回收站：删除的角色卡保留 30 天，可恢复 */}
+      <div style={{ marginTop: 20, padding: 18, borderRadius: 18, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+          <Trash2 size={14} style={{ color: "var(--seed-accent)" }} />
+          <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--seed-fg)" }}>角色卡回收站</span>
+          <span style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)" }}>({trashCards.length})</span>
+          <span style={{ fontSize: "var(--fs-10)", color: "var(--seed-muted)", marginLeft: 4 }}>删除的角色卡（含提取卡）保留 30 天，到期自动清理</span>
+        </div>
+
+        {trashCards.length === 0 ? (
+          <div style={{ padding: "24px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>
+            回收站为空。删除角色卡后将在这里保留 30 天。
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {trashCards.map((c) => (
+              <div key={c.id} style={{ padding: 12, borderRadius: 10, background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  <span style={{ fontSize: 14, flexShrink: 0 }}>{c.emoji || "🎭"}</span>
+                  <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                  {c.isExtracted && (
+                    <span style={{ fontSize: "var(--fs-9)", padding: "1px 7px", borderRadius: 999, background: "var(--seed-accent-bg)", color: "var(--seed-accent)", flexShrink: 0 }}>提取</span>
+                  )}
+                  <span style={{ fontSize: "var(--fs-10)", color: "var(--seed-muted)", flexShrink: 0 }}>
+                    {formatTime(c.deletedAt || Date.now())} 前删除
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                  <button
+                    onClick={() => restoreCardFromTrash(c.id)}
+                    style={{ padding: "5px 10px", borderRadius: 8, fontSize: "var(--fs-11)", color: "var(--seed-accent)", background: "var(--seed-accent-bg)", border: "1px solid color-mix(in srgb, var(--seed-accent) 40%, transparent)", cursor: "pointer" }}
+                  >
+                    恢复
+                  </button>
+                  <button
+                    onClick={() => { if (confirm(`彻底删除角色卡「${c.name}」？此操作不可恢复，其会话绑定将一并清除。`)) purgeCardFromTrash(c.id); }}
+                    style={{ padding: "5px 10px", borderRadius: 8, fontSize: "var(--fs-11)", color: "var(--danger)", background: "transparent", border: "1px solid var(--seed-border)", cursor: "pointer" }}
+                  >
+                    彻底删除
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
