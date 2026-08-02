@@ -1,4 +1,4 @@
-﻿import { create } from "zustand";
+import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 export type ThemeMode = "dark" | "light" | "system";
@@ -73,7 +73,7 @@ export const useUIStore = create<UIState>()(
     (set, get) => ({
       sidebarOpen: false,
       settingsOpen: false,
-      theme: "dark",
+      theme: "system",
       messageFontSize: "sm",
       webSearchOn: false,
       mcpActive: false,

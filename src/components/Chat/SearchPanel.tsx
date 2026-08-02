@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useSessionStore } from "@/stores/sessionStore";
+import { useKeyboardShift } from "@/hooks/useKeyboardShift";
 
 interface Props {
   onClose: () => void;
@@ -10,6 +11,7 @@ interface Props {
  * 样式与 SessionPopup 一致（seed-* 设计 token + 全屏遮罩 + 居中面板）。
  */
 export function SearchPanel({ onClose }: Props) {
+  const kbdShift = useKeyboardShift();
   const results = useSessionStore((s) => s.searchResults);
   const searching = useSessionStore((s) => s.searching);
   const doSearch = useSessionStore((s) => s.doSearch);
@@ -105,6 +107,7 @@ export function SearchPanel({ onClose }: Props) {
   return (
     <div
       ref={overlayRef}
+      data-popover-overlay
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
       style={{
         position: "fixed",
@@ -116,14 +119,16 @@ export function SearchPanel({ onClose }: Props) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        paddingTop: 0,
+        paddingBottom: kbdShift > 0 ? kbdShift + 16 : 0,
         animation: "seed-fade-in-up 0.2s ease-out",
       }}
     >
       <div
         style={{
-          width: "560px",
-          minWidth: "560px",
-          maxWidth: "90vw",
+          width: "min(560px, 94vw)",
+          minWidth: 0,
+          maxWidth: "94vw",
           minHeight: "280px",
           maxHeight: "70vh",
           background: seed.bg,

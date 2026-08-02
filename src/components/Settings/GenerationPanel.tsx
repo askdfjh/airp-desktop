@@ -23,7 +23,7 @@ function ParamSlider({
 }) {
   const fillPct = max > min ? ((value - min) / (max - min)) * 100 : 0;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+    <div className="seed-param-row" style={{ display: "flex", alignItems: "center", gap: 12 }}>
       <span style={{ width: 96, flexShrink: 0, fontSize: 12, color: "var(--seed-muted)" }}>{label}</span>
       <input
         type="range"

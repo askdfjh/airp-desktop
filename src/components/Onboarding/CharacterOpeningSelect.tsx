@@ -167,7 +167,7 @@ export function CharacterOpeningSelect({ onComplete }: Props) {
           </span>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 16 }}>
+        <div data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 16 }}>
           {characters.map((char) => (
             <div
               key={char.id}
@@ -244,7 +244,7 @@ export function CharacterOpeningSelect({ onComplete }: Props) {
           <div style={{ flex: 1, height: 1, background: "var(--seed-border)", marginLeft: 8 }} />
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+        <div data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
           {/* AI 随机开局：不选预设场景，由 AI 即兴创作开局 */}
           <div
             className={`seed-card ${selectedScenario === "ai-random" ? "seed-card--selected" : ""}`}
@@ -349,7 +349,7 @@ export function CharacterOpeningSelect({ onComplete }: Props) {
             </div>
           </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 12 }}>
+          <div data-onboarding-grid data-grid-compact style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 12 }}>
             {presets.map((p) => (
               <div
                 key={p.id}

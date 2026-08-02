@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Users, Plus, Trash2, Edit3, Sparkles, User, RefreshCw } from "lucide-react";
+import { Users, Plus, Trash2, Edit3, Sparkles, User, RefreshCw, Search, Send } from "lucide-react";
 import { useCharacterStore } from "@/stores/characterStore";
 import { useSessionStore } from "@/stores/sessionStore";
 import type { Character, CharacterArc } from "@/types";
@@ -16,9 +16,28 @@ function formatTime(ts: number): string {
   return d.getMonth() + 1 + "/" + d.getDate();
 }
 
+function buildCharacterPrompt(c: Character, arcs: CharacterArc[]): string {
+  let p = `角色：${c.name}\n外貌：${c.appearance || "未知"}\n性格：${c.personality || "未知"}`;
+  if (c.background) p += `\n背景：${c.background}`;
+  if (arcs.length > 0) {
+    p += "\n经历：" + arcs.map(a => `${a.event}${a.description ? "（" + a.description + "）" : ""}`).join("，");
+  }
+  return p;
+}
+
 export function CharacterPanel() {
   const { characters, loadCharactersFromDb, addCharacter, updateCharacter, removeCharacter, loadArcs, arcs, clearWorldArcs, restoreDefaultCharacters, cards, loadFromDb, updateCard, removeCard, trashCards, loadTrashFromDb, restoreCardFromTrash, purgeCardFromTrash, clearExpiredTrash } = useCharacterStore();
   const { sessions, activeId, updateSystemPrompt } = useSessionStore();
+  const [viewTab, setViewTab] = useState<"char" | "extracted" | "trash">("char");
+  // 窄屏（手机）：左右分栏改为上下堆叠
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 820px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 820px)');
+    const handler = (e: MediaQueryListEvent) => setIsNarrow(e.matches);
+    mq.addEventListener('change', handler);
+    setIsNarrow(mq.matches);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
   const [selectedChars, setSelectedChars] = useState<Set<string>>(new Set());
   const [detailId, setDetailId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -43,16 +62,6 @@ export function CharacterPanel() {
   useEffect(() => { loadTrashFromDb(); }, []);
 
   const extractedCards = cards.filter((c) => c.isExtracted);
-
-  const promoteExtractedCard = async (id: string) => {
-    await updateCard(id, { isExtracted: false });
-  };
-
-  const removeExtractedCard = async (id: string) => {
-    if (!confirm("删除该提取角色卡？将移入回收站（保留30天），其绑定的会话将不再自动注入此角色，可随时恢复。")) return;
-    await removeCard(id);
-  };
-
   const selected = detailId ? characters.find(c => c.id === detailId) ?? null : null;
 
   useEffect(() => {
@@ -61,14 +70,17 @@ export function CharacterPanel() {
     }
   }, [selected, worldContext]);
 
-  const filtered = searchQuery.trim()
+  const q = searchQuery.trim().toLowerCase();
+  const filtered = q
     ? characters.filter(c =>
-        c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.appearance.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.personality.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))
+        c.name.toLowerCase().includes(q) ||
+        c.appearance.toLowerCase().includes(q) ||
+        c.personality.toLowerCase().includes(q) ||
+        c.tags.some(t => t.toLowerCase().includes(q))
       )
     : characters;
+  const builtinChars = filtered.filter(c => c.isBuiltin);
+  const myChars = filtered.filter(c => !c.isBuiltin);
 
   const resetForm = () => {
     setNewName(""); setNewAppearance(""); setNewPersonality("");
@@ -110,34 +122,14 @@ export function CharacterPanel() {
   const handleDelete = async (id: string) => {
     const c = characters.find(x => x.id === id);
     if (!c) return;
+    if (!confirm(`确定删除角色「${c.name}」？`)) return;
     await removeCharacter(id);
-    setSelectedChars(prev => { const n = new Set(prev); n.delete(id); return n; });
     if (detailId === id) setDetailId(null);
-  };
-
-  const buildCharacterPrompt = (c: Character, charArcs: CharacterArc[]): string => {
-    const parts: string[] = [];
-    parts.push("【角色：" + c.name + "】");
-    if (c.appearance) parts.push("外貌：" + c.appearance);
-    if (c.personality) parts.push("性格：" + c.personality);
-    if (c.background) parts.push("背景：" + c.background);
-    if (c.tags.length > 0) parts.push("标签：" + c.tags.join("、"));
-    if (charArcs.length > 0) {
-      parts.push("【经历时间线】");
-      charArcs.forEach(a => { parts.push("- " + a.event + "：" + a.description); });
-    }
-    return parts.join("\\n");
-  };
-
-  const applySelectedToSession = async () => {
-    if (!activeId || selectedChars.size === 0) return;
-    const parts: string[] = [];
-    for (const id of selectedChars) {
-      const c = characters.find(x => x.id === id);
-      if (c) parts.push(buildCharacterPrompt(c, []));
-    }
-    parts.push("请以上述角色身份进行对话，保持性格一致性。");
-    updateSystemPrompt(activeId, parts.join("\\n\\n"));
+    setSelectedChars(prev => {
+      const n = new Set(prev);
+      n.delete(id);
+      return n;
+    });
   };
 
   const toggleChar = (id: string) => {
@@ -149,117 +141,291 @@ export function CharacterPanel() {
     setDetailId(id);
   };
 
-  return (
-    <div style={{ display: "flex", gap: 20, flex: 1, minHeight: 0 }}>
-      {/* Left: Character list */}
-      <div style={{ width: 300, display: "flex", flexDirection: "column", gap: 12, flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Users size={16} style={{ color: "var(--seed-accent)" }} />
-              <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--seed-fg)" }}>角色列表</span>
-              <span style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)" }}>({characters.length})</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <button onClick={() => restoreDefaultCharacters()}
-                style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 8, fontSize: "var(--fs-11)", color: "var(--seed-muted)", background: "transparent", border: "1px solid var(--seed-border)", cursor: "pointer" }}>
-                <RefreshCw size={11} /> 还原默认
-              </button>
-              <button onClick={() => { setShowForm(!showForm); }}
-                style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 8, fontSize: "var(--fs-11)", fontWeight: 500, background: showForm ? "var(--seed-accent-bg)" : "transparent", color: showForm ? "var(--seed-accent)" : "var(--seed-muted)", border: showForm ? "1px solid var(--seed-accent-border)" : "1px solid var(--seed-border)", cursor: "pointer" }}>
-                <Plus size={11} /> 新建
-              </button>
-            </div>
-          </div>
+  const applySelectedToSession = () => {
+    if (!activeId || selectedChars.size === 0) return;
+    const parts: string[] = [];
+    for (const id of selectedChars) {
+      const c = characters.find(x => x.id === id);
+      if (c) parts.push(buildCharacterPrompt(c, []));
+    }
+    parts.push("请以上述角色身份进行对话，保持性格一致性。");
+    updateSystemPrompt(activeId, parts.join("\n\n"));
+  };
 
-        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)" }}>
-          <User size={12} style={{ color: "var(--seed-muted)", flexShrink: 0 }} />
-          <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="搜索角色..."
-            style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--seed-fg)", fontSize: "var(--fs-12)", fontFamily: "inherit", minWidth: 0 }}
-          />
+  const promoteExtractedCard = async (id: string) => {
+    await updateCard(id, { isExtracted: false });
+  };
+
+  const removeExtractedCard = async (id: string) => {
+    if (!confirm("删除该提取角色卡？将移入回收站（保留30天），其绑定的会话将不再自动注入此角色，可随时恢复。")) return;
+    await removeCard(id);
+  };
+
+  const tabStyle = (active: boolean): React.CSSProperties => ({
+    display: "flex", alignItems: "center", gap: 6, flex: 1, justifyContent: "center",
+    padding: "8px 0", borderRadius: 8, fontSize: 12.5, fontWeight: 500, fontFamily: "inherit",
+    cursor: "pointer", border: "none",
+    background: active ? "var(--seed-accent)" : "transparent",
+    color: active ? "#fff" : "var(--seed-muted)",
+    transition: "all 0.15s",
+  });
+
+  const inputStyle: React.CSSProperties = {
+    padding: "7px 10px", borderRadius: 8, background: "var(--seed-input-bg)",
+    border: "1px solid var(--seed-border)", color: "var(--seed-fg)",
+    fontSize: "var(--fs-12)", fontFamily: "inherit", outline: "none", boxSizing: "border-box", width: "100%",
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 20, flex: 1, minHeight: 0, flexDirection: isNarrow ? "column" : "row" }}>
+      {/* Left column */}
+      <div style={{ width: isNarrow ? "100%" : 290, display: "flex", flexDirection: "column", gap: 12, flexShrink: 0, minHeight: 0, maxHeight: isNarrow ? 260 : "none", overflow: "hidden" }}>
+        {/* View tabs */}
+        <div style={{ display: "flex", gap: 4, padding: 4, background: "var(--seed-input-bg)", borderRadius: 12, border: "1px solid var(--seed-border)" }}>
+          <button style={tabStyle(viewTab === "char")} onClick={() => setViewTab("char")}>
+            <Users size={13} /> 角色
+            <span style={{ opacity: 0.7, fontSize: 11 }}>{characters.length}</span>
+          </button>
+          <button style={tabStyle(viewTab === "extracted")} onClick={() => setViewTab("extracted")}>
+            <Sparkles size={13} /> 提取卡
+            <span style={{ opacity: 0.7, fontSize: 11 }}>{extractedCards.length}</span>
+          </button>
+          <button style={tabStyle(viewTab === "trash")} onClick={() => setViewTab("trash")}>
+            <Trash2 size={13} /> 回收站
+            <span style={{ opacity: 0.7, fontSize: 11 }}>{trashCards.length}</span>
+          </button>
         </div>
 
-        {showForm && (
-          <div style={{ padding: 12, borderRadius: 10, background: "var(--seed-surface)", border: "1px solid var(--seed-border)", display: "flex", flexDirection: "column", gap: 8 }}>
-            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="角色名称 *"
-              style={{ padding: "7px 10px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-12)", fontFamily: "inherit", outline: "none" }}
-            />
-            <textarea value={newAppearance} onChange={(e) => setNewAppearance(e.target.value)} placeholder="外貌描述"
-              style={{ padding: "7px 10px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-11)", fontFamily: "inherit", minHeight: 35, resize: "vertical", outline: "none" }}
-            />
-            <textarea value={newPersonality} onChange={(e) => setNewPersonality(e.target.value)} placeholder="性格特征"
-              style={{ padding: "7px 10px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-11)", fontFamily: "inherit", minHeight: 35, resize: "vertical", outline: "none" }}
-            />
-            <textarea value={newBackground} onChange={(e) => setNewBackground(e.target.value)} placeholder="背景故事"
-              style={{ padding: "7px 10px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-11)", fontFamily: "inherit", minHeight: 45, resize: "vertical", outline: "none" }}
-            />
-            <input value={newTags} onChange={(e) => setNewTags(e.target.value)} placeholder="标签（逗号分隔）"
-              style={{ padding: "6px 10px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-11)", fontFamily: "inherit", outline: "none" }}
-            />
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
-              <button onClick={() => { setShowForm(false); resetForm(); }}
-                style={{ padding: "5px 12px", borderRadius: 6, fontSize: "var(--fs-11)", color: "var(--seed-muted)", background: "transparent", border: "1px solid var(--seed-border)", cursor: "pointer" }}>取消</button>
-              <button onClick={handleCreate} disabled={!newName.trim()}
-                style={{ padding: "5px 14px", borderRadius: 6, fontSize: "var(--fs-11)", fontWeight: 500, background: "var(--seed-accent)", color: "#fff", border: "none", opacity: !newName.trim() ? 0.5 : 1, cursor: !newName.trim() ? "not-allowed" : "pointer" }}>创建</button>
+        {viewTab === "char" && (
+          <>
+            {/* Search + create */}
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderRadius: 10, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)" }}>
+                <Search size={12} style={{ color: "var(--seed-muted)", flexShrink: 0 }} />
+                <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="搜索角色..."
+                  style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--seed-fg)", fontSize: "var(--fs-12)", fontFamily: "inherit", minWidth: 0 }}
+                />
+              </div>
+              <button
+                onClick={() => { setShowForm(!showForm); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 4, padding: "8px 12px", borderRadius: 10,
+                  fontSize: "var(--fs-11)", fontWeight: 500, fontFamily: "inherit", cursor: "pointer", flexShrink: 0,
+                  background: showForm ? "var(--seed-accent)" : "var(--seed-accent-bg)",
+                  color: showForm ? "#fff" : "var(--seed-accent)",
+                  border: "none",
+                }}
+              >
+                <Plus size={12} /> 新建
+              </button>
             </div>
-          </div>
+
+            {showForm && (
+              <div style={{ padding: 12, borderRadius: 12, background: "var(--seed-surface)", border: "1px solid var(--seed-border)", display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)", marginBottom: 2 }}>创建新角色</div>
+                <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="角色名称 *" style={inputStyle} />
+                <textarea value={newAppearance} onChange={(e) => setNewAppearance(e.target.value)} placeholder="外貌描述" style={{ ...inputStyle, fontSize: "var(--fs-11)", minHeight: 40, resize: "vertical" }} />
+                <textarea value={newPersonality} onChange={(e) => setNewPersonality(e.target.value)} placeholder="性格特征" style={{ ...inputStyle, fontSize: "var(--fs-11)", minHeight: 40, resize: "vertical" }} />
+                <textarea value={newBackground} onChange={(e) => setNewBackground(e.target.value)} placeholder="背景故事" style={{ ...inputStyle, fontSize: "var(--fs-11)", minHeight: 50, resize: "vertical" }} />
+                <input value={newTags} onChange={(e) => setNewTags(e.target.value)} placeholder="标签（逗号分隔）" style={{ ...inputStyle, fontSize: "var(--fs-11)" }} />
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+                  <button onClick={() => { setShowForm(false); resetForm(); }}
+                    style={{ padding: "5px 12px", borderRadius: 8, fontSize: "var(--fs-11)", fontFamily: "inherit", color: "var(--seed-muted)", background: "transparent", border: "1px solid var(--seed-border)", cursor: "pointer" }}>取消</button>
+                  <button onClick={handleCreate} disabled={!newName.trim()}
+                    style={{ padding: "5px 14px", borderRadius: 8, fontSize: "var(--fs-11)", fontWeight: 500, fontFamily: "inherit", background: "var(--seed-accent)", color: "#fff", border: "none", opacity: !newName.trim() ? 0.5 : 1, cursor: !newName.trim() ? "not-allowed" : "pointer" }}>创建</button>
+                </div>
+              </div>
+            )}
+
+            {/* Grouped list */}
+            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+              {builtinChars.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--seed-muted)", textTransform: "uppercase", letterSpacing: "0.06em", padding: "2px 2px 0" }}>
+                    预设角色 · {builtinChars.length}
+                  </div>
+                  {builtinChars.map((c) => {
+                    const isSelected = selectedChars.has(c.id);
+                    return (
+                      <div key={c.id}
+                        onClick={() => { toggleChar(c.id); }}
+                        style={{ padding: 12, borderRadius: 16, cursor: "pointer", background: isSelected ? "var(--seed-accent-bg)" : "var(--seed-surface)", border: "1px solid " + (isSelected ? "var(--seed-accent-border)" : "var(--seed-border)"), boxShadow: isSelected ? "inset 3px 0 0 0 var(--seed-accent)" : "none", transition: "all 0.12s ease", display: "flex", flexDirection: "column", gap: 6 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                            <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--seed-surface)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              <User size={13} style={{ color: "var(--seed-accent)" }} />
+                            </div>
+                            <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                          </div>
+                        </div>
+                        {c.personality && (
+                          <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical" }}>{c.personality}</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {myChars.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--seed-muted)", textTransform: "uppercase", letterSpacing: "0.06em", padding: "2px 2px 0" }}>
+                    我的角色 · {myChars.length}
+                  </div>
+                  {myChars.map((c) => {
+                    const isSelected = selectedChars.has(c.id);
+                    return (
+                      <div key={c.id}
+                        onClick={() => { toggleChar(c.id); }}
+                        style={{ padding: 12, borderRadius: 16, cursor: "pointer", background: isSelected ? "var(--seed-accent-bg)" : "var(--seed-surface)", border: "1px solid " + (isSelected ? "var(--seed-accent-border)" : "var(--seed-border)"), boxShadow: isSelected ? "inset 3px 0 0 0 var(--seed-accent)" : "none", transition: "all 0.12s ease", display: "flex", flexDirection: "column", gap: 6 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                            <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--seed-surface)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              <User size={13} style={{ color: "var(--seed-accent)" }} />
+                            </div>
+                            <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                            <button onClick={(e) => { e.stopPropagation(); startEdit(c); }} title="编辑"
+                              style={{ width: 22, height: 22, borderRadius: 5, background: "transparent", color: "var(--seed-muted)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                              <Edit3 size={10} />
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }} title="删除"
+                              style={{ width: 22, height: 22, borderRadius: 5, background: "transparent", color: "var(--seed-muted)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                              <Trash2 size={10} />
+                            </button>
+                          </div>
+                        </div>
+                        {c.personality && (
+                          <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical" }}>{c.personality}</div>
+                        )}
+                        {c.tags.length > 0 && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                            {c.tags.slice(0, 3).map((tag) => (
+                              <span key={tag} className="seed-tag-pill" style={{ fontSize: "var(--fs-9)", padding: "1px 7px", background: "var(--seed-accent-bg)", color: "var(--seed-accent)", fontWeight: 500 }}>{tag}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {filtered.length === 0 && (
+                <div style={{ padding: "30px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>
+                  {searchQuery ? "未找到匹配的角色" : "暂无角色，点击右上角新建"}
+                </div>
+              )}
+            </div>
+          </>
         )}
 
-        {/* Character list */}
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-          {filtered.length === 0 && (
-            <div style={{ padding: "30px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>
-              {searchQuery ? "未找到匹配的角色" : "暂无角色，点击右上角新建"}
-            </div>
-          )}
-          {filtered.map((c) => {
-            const isSelected = selectedChars.has(c.id);
-            return (
-            <div key={c.id}
-              onClick={() => { toggleChar(c.id); }}
-              style={{ padding: 12, borderRadius: 16, cursor: "pointer", background: isSelected ? "var(--seed-accent-bg)" : "var(--seed-surface)", border: "1px solid " + (isSelected ? "var(--seed-accent-border)" : "var(--seed-border)"), boxShadow: isSelected ? "inset 3px 0 0 0 var(--seed-accent)" : "none", transition: "all 0.12s ease", display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        {viewTab === "extracted" && (
+          <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+            {extractedCards.length === 0 && (
+              <div style={{ padding: "30px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>
+                暂无提取角色卡。对话足够长时点击底栏「整理故事」，将自动提取出场的重要角色。
+              </div>
+            )}
+            {extractedCards.map((c) => (
+              <div key={c.id} style={{ padding: 12, borderRadius: 14, background: "var(--seed-surface)", border: "1px solid var(--seed-border)", display: "flex", flexDirection: "column", gap: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  <div style={{ width: 28, height: 28, borderRadius: 8, background: "var(--seed-surface)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <User size={13} style={{ color: "var(--seed-accent)" }} />
-                  </div>
-                  <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                  <span style={{ fontSize: 13, flexShrink: 0 }}>{c.emoji || "🎭"}</span>
+                  <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</span>
+                  <span style={{ fontSize: "var(--fs-9)", padding: "1px 7px", borderRadius: 999, background: "var(--seed-accent-bg)", color: "var(--seed-accent)", flexShrink: 0 }}>提取</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
-                  <button onClick={(e) => { e.stopPropagation(); startEdit(c); }} title="编辑"
-                    style={{ width: 20, height: 20, borderRadius: 4, background: "transparent", color: "var(--seed-muted)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-                    <Edit3 size={9} />
+                {(c.triggerWords ?? []).length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    {(c.triggerWords ?? []).slice(0, 5).map((w) => (
+                      <span key={w} style={{ fontSize: "var(--fs-10)", padding: "1px 6px", borderRadius: 4, background: "var(--seed-accent-bg)", color: "var(--seed-accent)" }}>#{w}</span>
+                    ))}
+                  </div>
+                )}
+                <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.5, whiteSpace: "pre-line", maxHeight: 60, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{c.systemPrompt}</div>
+                <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                  <button
+                    onClick={() => promoteExtractedCard(c.id)}
+                    style={{ padding: "5px 12px", borderRadius: 8, fontSize: "var(--fs-11)", fontFamily: "inherit", color: "var(--seed-accent)", background: "var(--seed-accent-bg)", border: "1px solid color-mix(in srgb, var(--seed-accent) 40%, transparent)", cursor: "pointer" }}
+                  >
+                    转为普通卡
                   </button>
-                  <button onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }} title="删除"
-                    style={{ width: 20, height: 20, borderRadius: 4, background: "transparent", color: "var(--seed-muted)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-                    <Trash2 size={9} />
+                  <button
+                    onClick={() => removeExtractedCard(c.id)}
+                    style={{ padding: "5px 12px", borderRadius: 8, fontSize: "var(--fs-11)", fontFamily: "inherit", color: "var(--danger)", background: "transparent", border: "1px solid var(--seed-border)", cursor: "pointer" }}
+                  >
+                    删除
                   </button>
                 </div>
               </div>
-              {c.personality && (
-                <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical" }}>{c.personality}</div>
-              )}
-              {c.tags.length > 0 && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-                  {c.tags.slice(0, 3).map((tag) => (
-                    <span key={tag} className="seed-tag-pill" style={{ fontSize: "var(--fs-9)", padding: "1px 7px", background: "var(--seed-accent-bg)", color: "var(--seed-accent)", fontWeight: 500 }}>{tag}</span>
-                  ))}
+            ))}
+          </div>
+        )}
+
+        {viewTab === "trash" && (
+          <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+            {trashCards.length === 0 && (
+              <div style={{ padding: "30px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>
+                回收站为空。删除角色卡后将在这里保留 30 天。
+              </div>
+            )}
+            {trashCards.map((c) => (
+              <div key={c.id} style={{ padding: 12, borderRadius: 14, background: "var(--seed-surface)", border: "1px solid var(--seed-border)", display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  <span style={{ fontSize: 14, flexShrink: 0 }}>{c.emoji || "🎭"}</span>
+                  <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{c.name}</span>
+                  {c.isExtracted && (
+                    <span style={{ fontSize: "var(--fs-9)", padding: "1px 7px", borderRadius: 999, background: "var(--seed-accent-bg)", color: "var(--seed-accent)", flexShrink: 0 }}>提取</span>
+                  )}
+                  <span style={{ fontSize: "var(--fs-10)", color: "var(--seed-muted)", flexShrink: 0 }}>
+                    {formatTime(c.deletedAt || Date.now())} 前
+                  </span>
                 </div>
-              )}
-            </div>
-            );
-          })}
-        </div>
+                <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                  <button
+                    onClick={() => restoreCardFromTrash(c.id)}
+                    style={{ padding: "5px 12px", borderRadius: 8, fontSize: "var(--fs-11)", fontFamily: "inherit", color: "var(--seed-accent)", background: "var(--seed-accent-bg)", border: "1px solid color-mix(in srgb, var(--seed-accent) 40%, transparent)", cursor: "pointer" }}
+                  >
+                    恢复
+                  </button>
+                  <button
+                    onClick={() => { if (confirm(`彻底删除角色卡「${c.name}」？此操作不可恢复，其会话绑定将一并清除。`)) purgeCardFromTrash(c.id); }}
+                    style={{ padding: "5px 12px", borderRadius: 8, fontSize: "var(--fs-11)", fontFamily: "inherit", color: "var(--danger)", background: "transparent", border: "1px solid var(--seed-border)", cursor: "pointer" }}
+                  >
+                    彻底删除
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Right: Character detail */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
-        {!selected ? (
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16, minWidth: 0, minHeight: isNarrow ? 300 : 0, overflowY: "auto" }}>
+        {viewTab === "extracted" ? (
+          <div className="seed-empty-state" style={{ flex: 1, background: "var(--seed-surface)", borderRadius: 18, border: "1px solid var(--seed-border)" }}>
+            <div className="seed-empty-icon">
+              <Sparkles size={28} style={{ color: "var(--seed-accent)" }} />
+            </div>
+            <div className="seed-empty-title">会话提取角色卡</div>
+            <div className="seed-empty-sub">长对话整理时自动提取的 NPC 角色，出场时自动注入；「转为普通卡」移入角色库</div>
+          </div>
+        ) : viewTab === "trash" ? (
+          <div className="seed-empty-state" style={{ flex: 1, background: "var(--seed-surface)", borderRadius: 18, border: "1px solid var(--seed-border)" }}>
+            <div className="seed-empty-icon">
+              <Trash2 size={28} style={{ color: "var(--seed-accent)" }} />
+            </div>
+            <div className="seed-empty-title">角色卡回收站</div>
+            <div className="seed-empty-sub">从左侧选择已删除的角色卡进行恢复，或彻底删除（30 天后自动清理）</div>
+          </div>
+        ) : !selected ? (
           <div className="seed-empty-state" style={{ flex: 1, background: "var(--seed-surface)", borderRadius: 18, border: "1px solid var(--seed-border)" }}>
             <div className="seed-empty-icon">
               <Users size={28} style={{ color: "var(--seed-accent)" }} />
             </div>
             <div className="seed-empty-title">选择一个角色</div>
-            <div className="seed-empty-sub">从左侧选择角色查看设定与经历，或点击右上角新建</div>
+            <div className="seed-empty-sub">从左侧选择角色查看设定与经历，勾选多个可一并应用到当前会话</div>
           </div>
         ) : (
           <>
@@ -267,17 +433,27 @@ export function CharacterPanel() {
             <div style={{ padding: 18, borderRadius: 18, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: "var(--seed-accent-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ width: 44, height: 44, borderRadius: "50%", background: "var(--seed-accent-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <User size={20} style={{ color: "var(--seed-accent)" }} />
                   </div>
                   <div>
-                    <div style={{ fontSize: "var(--fs-15)", fontWeight: 600, color: "var(--seed-fg)" }}>{selected.name}</div>
+                    <div style={{ fontSize: "var(--fs-15)", fontWeight: 600, color: "var(--seed-fg)", display: "flex", alignItems: "center", gap: 6 }}>
+                      {selected.name}
+                      {selected.isBuiltin && <span className="seed-tag-pill" style={{ fontSize: "var(--fs-9)", padding: "1px 7px" }}>预设</span>}
+                    </div>
+                    {selected.tags.length > 0 && (
+                      <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                        {selected.tags.slice(0, 4).map((tag) => (
+                          <span key={tag} style={{ fontSize: "var(--fs-10)", padding: "2px 8px", borderRadius: 999, background: "var(--seed-accent-bg)", color: "var(--seed-accent)", fontWeight: 500 }}>{tag}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <button onClick={() => applySelectedToSession()} disabled={selectedChars.size === 0}
-                    style={{ padding: "7px 16px", borderRadius: 8, fontSize: "var(--fs-12)", fontWeight: 500, background: selectedChars.size > 0 ? "var(--seed-accent)" : "var(--seed-hover-bg)", color: selectedChars.size > 0 ? "#fff" : "var(--seed-muted)", border: "none", cursor: selectedChars.size > 0 ? "pointer" : "not-allowed" }}>
-                    应用选中角色（{selectedChars.size}）
+                  <button onClick={applySelectedToSession} disabled={selectedChars.size === 0}
+                    style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 16px", borderRadius: 10, fontSize: "var(--fs-12)", fontWeight: 500, fontFamily: "inherit", background: selectedChars.size > 0 ? "var(--seed-accent)" : "var(--seed-hover-bg)", color: selectedChars.size > 0 ? "#fff" : "var(--seed-muted)", border: "none", cursor: selectedChars.size > 0 ? "pointer" : "not-allowed" }}>
+                    <Send size={12} /> 应用到会话（{selectedChars.size}）
                   </button>
                 </div>
               </div>
@@ -300,12 +476,8 @@ export function CharacterPanel() {
                   <div style={{ fontSize: "var(--fs-12)", color: "var(--seed-muted)", lineHeight: 1.5 }}>{selected.background}</div>
                 </div>
               )}
-              {selected.tags.length > 0 && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
-                  {selected.tags.map((tag) => (
-                    <span key={tag} style={{ fontSize: "var(--fs-10)", padding: "2px 8px", borderRadius: 4, background: "var(--seed-accent-bg)", color: "var(--seed-accent)", fontWeight: 500 }}>{tag}</span>
-                  ))}
-                </div>
+              {!selected.appearance && !selected.personality && !selected.background && (
+                <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)" }}>该角色暂无详细设定</div>
               )}
             </div>
 
@@ -319,11 +491,11 @@ export function CharacterPanel() {
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <input value={worldContext} onChange={(e) => setWorldContext(e.target.value)} placeholder="世界/会话上下文"
-                    style={{ padding: "5px 10px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-11)", fontFamily: "inherit", outline: "none", width: 140 }}
+                    style={{ padding: "6px 10px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-11)", fontFamily: "inherit", outline: "none", width: 140 }}
                   />
                   {arcs.length > 0 && (
                     <button onClick={() => { if (confirm("确定清空该世界上下文的所有经历？")) clearWorldArcs(selected.id, worldContext); }}
-                      style={{ padding: "5px 10px", borderRadius: 8, fontSize: "var(--fs-11)", color: "var(--danger)", background: "transparent", border: "1px solid var(--seed-border)", cursor: "pointer" }}>
+                      style={{ padding: "6px 10px", borderRadius: 8, fontSize: "var(--fs-11)", fontFamily: "inherit", color: "var(--danger)", background: "transparent", border: "1px solid var(--seed-border)", cursor: "pointer" }}>
                       清空
                     </button>
                   )}
@@ -338,7 +510,7 @@ export function CharacterPanel() {
                 )}
                 {arcs.map((arc) => (
                   <div key={arc.id}
-                    style={{ padding: 10, borderRadius: 8, background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)" }}>
+                    style={{ padding: 10, borderRadius: 10, background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                       <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)" }}>{arc.event}</span>
                       <span style={{ fontSize: "var(--fs-10)", color: "var(--seed-muted)" }}>{formatTime(arc.createdAt)}</span>
@@ -347,109 +519,14 @@ export function CharacterPanel() {
                       <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.4 }}>{arc.description}</div>
                     )}
                     <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
-                      <span style={{ fontSize: "var(--fs-9)", padding: "1px 5px", borderRadius: 3, background: "var(--seed-accent-bg)", color: "var(--seed-accent)" }}>{arc.worldContext || "默认"}</span>
-                      <span style={{ fontSize: "var(--fs-9)", padding: "1px 5px", borderRadius: 3, background: "var(--seed-surface)", color: "var(--seed-muted)" }}>{arc.turnCount} 回合</span>
+                      <span style={{ fontSize: "var(--fs-9)", padding: "1px 5px", borderRadius: 4, background: "var(--seed-accent-bg)", color: "var(--seed-accent)" }}>{arc.worldContext || "默认"}</span>
+                      <span style={{ fontSize: "var(--fs-9)", padding: "1px 5px", borderRadius: 4, background: "var(--seed-surface)", color: "var(--seed-muted)" }}>{arc.turnCount} 回合</span>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
           </>
-        )}
-      </div>
-
-      {/* 会话提取角色卡：长对话压缩时自动提取，角色出场时自动注入 */}
-      <div style={{ marginTop: 20, padding: 18, borderRadius: 18, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <Sparkles size={14} style={{ color: "var(--seed-accent)" }} />
-          <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--seed-fg)" }}>会话提取角色卡</span>
-          <span style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)" }}>({extractedCards.length})</span>
-          <span style={{ fontSize: "var(--fs-10)", color: "var(--seed-muted)", marginLeft: 4 }}>
-            长对话整理时自动提取，角色出场时自动注入；「转为普通卡」可移入角色卡库
-          </span>
-        </div>
-
-        {extractedCards.length === 0 ? (
-          <div style={{ padding: "24px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>
-            暂无提取角色卡。对话足够长时点击底栏「整理故事」，将自动提取出场的重要角色。
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {extractedCards.map((c) => (
-              <div key={c.id} style={{ padding: 12, borderRadius: 10, background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                    <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</span>
-                    {(c.triggerWords ?? []).slice(0, 4).map((w) => (
-                      <span key={w} style={{ fontSize: "var(--fs-10)", padding: "2px 8px", borderRadius: 999, background: "var(--seed-accent-bg)", color: "var(--seed-accent)" }}>{w}</span>
-                    ))}
-                  </div>
-                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                    <button
-                      onClick={() => promoteExtractedCard(c.id)}
-                      style={{ padding: "5px 10px", borderRadius: 8, fontSize: "var(--fs-11)", color: "var(--seed-accent)", background: "var(--seed-accent-bg)", border: "1px solid color-mix(in srgb, var(--seed-accent) 40%, transparent)", cursor: "pointer" }}
-                    >
-                      转为普通卡
-                    </button>
-                    <button
-                      onClick={() => removeExtractedCard(c.id)}
-                      style={{ padding: "5px 10px", borderRadius: 8, fontSize: "var(--fs-11)", color: "var(--danger)", background: "transparent", border: "1px solid var(--seed-border)", cursor: "pointer" }}
-                    >
-                      删除
-                    </button>
-                  </div>
-                </div>
-                <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.5, marginTop: 6, whiteSpace: "pre-line" }}>{c.systemPrompt}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 角色卡回收站：删除的角色卡保留 30 天，可恢复 */}
-      <div style={{ marginTop: 20, padding: 18, borderRadius: 18, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <Trash2 size={14} style={{ color: "var(--seed-accent)" }} />
-          <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--seed-fg)" }}>角色卡回收站</span>
-          <span style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)" }}>({trashCards.length})</span>
-          <span style={{ fontSize: "var(--fs-10)", color: "var(--seed-muted)", marginLeft: 4 }}>删除的角色卡（含提取卡）保留 30 天，到期自动清理</span>
-        </div>
-
-        {trashCards.length === 0 ? (
-          <div style={{ padding: "24px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>
-            回收站为空。删除角色卡后将在这里保留 30 天。
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {trashCards.map((c) => (
-              <div key={c.id} style={{ padding: 12, borderRadius: 10, background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                  <span style={{ fontSize: 14, flexShrink: 0 }}>{c.emoji || "🎭"}</span>
-                  <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
-                  {c.isExtracted && (
-                    <span style={{ fontSize: "var(--fs-9)", padding: "1px 7px", borderRadius: 999, background: "var(--seed-accent-bg)", color: "var(--seed-accent)", flexShrink: 0 }}>提取</span>
-                  )}
-                  <span style={{ fontSize: "var(--fs-10)", color: "var(--seed-muted)", flexShrink: 0 }}>
-                    {formatTime(c.deletedAt || Date.now())} 前删除
-                  </span>
-                </div>
-                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                  <button
-                    onClick={() => restoreCardFromTrash(c.id)}
-                    style={{ padding: "5px 10px", borderRadius: 8, fontSize: "var(--fs-11)", color: "var(--seed-accent)", background: "var(--seed-accent-bg)", border: "1px solid color-mix(in srgb, var(--seed-accent) 40%, transparent)", cursor: "pointer" }}
-                  >
-                    恢复
-                  </button>
-                  <button
-                    onClick={() => { if (confirm(`彻底删除角色卡「${c.name}」？此操作不可恢复，其会话绑定将一并清除。`)) purgeCardFromTrash(c.id); }}
-                    style={{ padding: "5px 10px", borderRadius: 8, fontSize: "var(--fs-11)", color: "var(--danger)", background: "transparent", border: "1px solid var(--seed-border)", cursor: "pointer" }}
-                  >
-                    彻底删除
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
         )}
       </div>
 

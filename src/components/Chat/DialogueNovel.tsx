@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/Layout/ConfirmDialog";
 import { MarkdownRender } from "./MarkdownRender";
 import { parseSceneReply, type SceneInfo } from "@/lib/sceneTemplate";
 import { stopCompress } from "@/lib/contextCompress";
+import { registerBackHandler } from "@/lib/androidBack";
 
 export function DialogueNovel() {
   const { messages, sendMessage, streaming, stopStreaming, regenerate, editAndSend, editMessage, deleteMessage } = useChat();
@@ -44,6 +45,20 @@ export function DialogueNovel() {
   // 流式完成过渡动画：正文从模板全文切换到解析 body 时淡入，避免「突然截断」的突兀感
   const [settlingId, setSettlingId] = useState<string | null>(null);
   const lastStreamingRef = useRef(false);
+
+  // Android 返回手势：压缩确认框打开时先取消
+  useEffect(() => {
+    const unregister = registerBackHandler(() => {
+      const prompt = useUIStore.getState().compressPrompt;
+      const callbacks = useUIStore.getState().compressPromptCallbacks;
+      if (prompt && callbacks) {
+        callbacks.onCancel();
+        return true;
+      }
+      return false;
+    });
+    return unregister;
+  }, []);
 
   // 空白会话（kind=blank，无角色设定）使用普通对话排版，冒险会话使用小说排版
   const isBlank = (activeSession?.kind ?? "adventure") === "blank";

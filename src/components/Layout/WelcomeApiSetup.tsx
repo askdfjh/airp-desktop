@@ -251,7 +251,7 @@ export function WelcomeApiSetup({
             <circle cx="12" cy="12" r="3" />
             <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
           </svg>
-          AIRP
+          灵叙 Narra
         </div>
         <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--seed-fg)", marginBottom: 4, lineHeight: 1.2 }}>
           配置模型服务

@@ -66,7 +66,7 @@ export function ToolsPanel() {
             {/* Provider selector */}
             <div style={{ marginBottom: 14 }}>
               <label style={{ fontSize: "var(--fs-11)", fontWeight: 500, color: "var(--seed-muted)", display: "block", marginBottom: 6 }}>搜索服务</label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 6 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6 }}>
                 {PROVIDER_KEYS.map((k) => {
                   const p = SEARCH_PROVIDERS[k];
                   const isActive = provider === k;

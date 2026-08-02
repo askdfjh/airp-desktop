@@ -248,6 +248,15 @@ function ModelsSection() {
   const [connectionStatus, setConnectionStatus] = useState<Record<string, ConnectionStatus>>({});
   const [connectionMsg, setConnectionMsg] = useState<Record<string, string>>({});
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  // 窄屏（手机）：左右分栏改为上下堆叠
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 820px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 820px)');
+    const handler = (e: MediaQueryListEvent) => setIsNarrow(e.matches);
+    mq.addEventListener('change', handler);
+    setIsNarrow(mq.matches);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   useEffect(() => {
     if (!selectedId && providers.length > 0) {
@@ -425,12 +434,13 @@ function ModelsSection() {
   }, [providers, searchQuery]);
 
   return (
-    <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
+    <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0, flexDirection: isNarrow ? 'column' : 'row' }}>
       {/* Left Sidebar */}
       <div style={{
-        width: 240, flexShrink: 0, display: 'flex', flexDirection: 'column',
+        width: isNarrow ? '100%' : 240, flexShrink: 0, display: 'flex', flexDirection: 'column',
         background: 'var(--seed-surface)', borderRadius: 16, border: '1px solid var(--seed-border)',
         overflow: 'hidden',
+        maxHeight: isNarrow ? 220 : 'none',
       }}>
         {/* Search */}
         <div style={{ padding: '10px', borderBottom: '1px solid var(--seed-border)' }}>
@@ -535,7 +545,7 @@ function ModelsSection() {
       </div>
 
       {/* Right Detail Panel */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: isNarrow ? 300 : 0 }}>
         {!selectedProvider ? (
           <div className="seed-empty-state" style={{
             flex: 1, background: 'var(--seed-surface)', borderRadius: 16, border: '1px solid var(--seed-border)',
@@ -1299,6 +1309,8 @@ function SectionContent({ activeTab }: { activeTab: NavKey }) {
 }
 
 export function ProviderConfigPanel() {
+  // Android 无自绘标题栏（TitleBar 不渲染），设置面板需从顶部 0 开始
+  const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
   const { setSettingsOpen } = useUIStore();
   const { providers, activeProviderId, activeModel, setActiveProvider, setActiveModel } = useProviderStore();
   const [activeTab, setActiveTab] = useState<NavKey>("models");
@@ -1312,7 +1324,7 @@ export function ProviderConfigPanel() {
   }, [activeProviderId, activeTab]);
 
     return (
-    <div className="fixed seed-settings-panel" style={{ top: 40, left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", flexDirection: "column", background: "radial-gradient(ellipse 80% 60% at 50% 0%, var(--seed-accent-bg) 0%, transparent 60%), radial-gradient(ellipse 60% 50% at 20% 100%, color-mix(in srgb, var(--seed-accent) 3%, transparent) 0%, transparent 50%), var(--seed-bg)" }}>
+    <div className="fixed seed-settings-panel" style={{ top: isAndroid ? 0 : 40, left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", flexDirection: "column", background: "radial-gradient(ellipse 80% 60% at 50% 0%, var(--seed-accent-bg) 0%, transparent 60%), radial-gradient(ellipse 60% 50% at 20% 100%, color-mix(in srgb, var(--seed-accent) 3%, transparent) 0%, transparent 50%), var(--seed-bg)" }}>
       {/* 主内容区 */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div className="seed-page-header">

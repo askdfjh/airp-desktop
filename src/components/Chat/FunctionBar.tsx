@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Brain, ChevronDown, Check, Feather, Search, WrapText, Square } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
@@ -12,6 +12,7 @@ import { isThinkingModel } from "@/providers/openai";
 import { SessionPopup } from "./SessionPopup";
 import { SearchPanel } from "./SearchPanel";
 import { WorldInfoPanel } from "./WorldInfoPanel";
+import { registerBackHandler } from "@/lib/androidBack";
 
 type OpenMenu = "provider" | "model" | "style" | null;
 
@@ -58,6 +59,35 @@ export function FunctionBar() {
       window.removeEventListener("keydown", onKey);
     };
   }, [openMenu]);
+
+      // Android back: close popups (session mgmt/search/world info/dropdown) first, then dismiss the keyboard
+  useEffect(() => {
+    const unregister = registerBackHandler(() => {
+      if (showSessionPopup) {
+        setShowSessionPopup(false);
+        return true;
+      }
+      if (showSearch) {
+        setShowSearch(false);
+        return true;
+      }
+      if (showWorldInfo) {
+        setShowWorldInfo(false);
+        return true;
+      }
+      if (openMenu) {
+        setOpenMenu(null);
+        return true;
+      }
+      const ae = document.activeElement as HTMLElement | null;
+      if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA")) {
+        ae.blur();
+        return true;
+      }
+      return false;
+    });
+    return unregister;
+  }, [showSessionPopup, showSearch, showWorldInfo, openMenu]);
 
   // Cycle theme
   const cycleTheme = () => {

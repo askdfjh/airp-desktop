@@ -16,6 +16,7 @@ import {
   restoreFromTrash,
   deleteFromTrash,
   cleanExpiredTrash,
+  duplicateWorldBook,
 } from "@/lib/db";
 
 interface WorldState {
@@ -31,6 +32,7 @@ interface WorldState {
   addBook: (book: Omit<WorldBook, "id" | "entries" | "createdAt" | "updatedAt">) => Promise<void>;
   updateBook: (id: string, fields: Partial<Pick<WorldBook, "name" | "theme" | "description" | "tags" | "isActive" | "isBuiltin" | "violationWords">>) => Promise<void>;
   removeBook: (id: string) => Promise<void>;
+  duplicateBook: (id: string) => Promise<string | null>;
   setActiveBook: (id: string) => Promise<void>;
   deactivateAllBooks: () => Promise<void>;
 
@@ -103,6 +105,15 @@ export const useWorldStore = create<WorldState>((set, get) => ({
       const selectedBookId = st.selectedBookId === id ? null : st.selectedBookId;
       return { books, activeBook, selectedBookId };
     });
+  },
+
+  duplicateBook: async (id) => {
+    const newId = await duplicateWorldBook(id);
+    if (newId) {
+      const books = await loadWorldBooks(true);
+      set({ books, selectedBookId: newId });
+    }
+    return newId;
   },
 
   loadTrashFromDb: async () => {

@@ -1337,6 +1337,25 @@ export async function updateWorldBook(id: string, fields: Partial<Pick<WorldBook
   );
 }
 
+/** 复制世界书为可编辑副本（含全部条目，isBuiltin=false），返回新 id。 */
+export async function duplicateWorldBook(sourceId: string): Promise<string | null> {
+  const books = await loadWorldBooks(true);
+  const source = books.find((b) => b.id === sourceId);
+  if (!source) return null;
+  const now = Date.now();
+  const newId = "wb_copy_" + now + "_" + Math.random().toString(36).slice(2, 8);
+  await insertWorldBook({
+    ...source,
+    id: newId,
+    name: source.name + "（副本）",
+    isActive: false,
+    isBuiltin: false,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return newId;
+}
+
 export async function deleteWorldBook(id: string): Promise<void> {
   const rows = await getDb().select<WorldBookRow[]>(
     "SELECT * FROM world_books WHERE id = $1 LIMIT 1;",
@@ -1706,6 +1725,56 @@ export async function restoreConversations(snap: ConversationsSnapshot): Promise
       ["id", "characterId", "sessionId", "worldContext", "event", "description", "turnCount", "createdAt"].map((c) => normalizeSettingValue(c, row[c]))
     );
   }
+}
+
+/* ---------- 同步合并导入（WebDAV 云端下载用，INSERT OR IGNORE 不覆盖现有） ---------- */
+
+/** 合并导入世界书 + 词条；返回 (新世界书数, 新词条数) */
+export async function mergeWorldBooks(snap: {
+  worldBooks?: Record<string, unknown>[];
+  worldBookEntries?: Record<string, unknown>[];
+}): Promise<{ books: number; entries: number }> {
+  const db = getDb();
+  let books = 0;
+  let entries = 0;
+  for (const row of snap.worldBooks ?? []) {
+    const r = await db.execute(
+      "INSERT OR IGNORE INTO world_books (id, name, theme, description, tags, isActive, isBuiltin, violationWords, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);",
+      ["id", "name", "theme", "description", "tags", "isActive", "isBuiltin", "violationWords", "createdAt", "updatedAt"].map((c) => normalizeSettingValue(c, row[c]))
+    );
+    books += r.rowsAffected;
+  }
+  for (const row of snap.worldBookEntries ?? []) {
+    const r = await db.execute(
+      'INSERT OR IGNORE INTO world_book_entries (id, bookId, uid, category, title, "key", keysecondary, content, constant, selective, "order", position, insertion_depth, disable, linkedCharacterIds, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17);',
+      ["id", "bookId", "uid", "category", "title", "key", "keysecondary", "content", "constant", "selective", "order", "position", "insertion_depth", "disable", "linkedCharacterIds", "createdAt", "updatedAt"].map((c) => normalizeSettingValue(c, row[c]))
+    );
+    entries += r.rowsAffected;
+  }
+  return { books, entries };
+}
+
+/** 合并导入角色卡（含提取卡）；返回新角色卡数 */
+export async function mergeCharacterCards(rows: Record<string, unknown>[]): Promise<number> {
+  const db = getDb();
+  let count = 0;
+  for (const row of rows) {
+    const ccVal = (c: string, fallback: string | number | null) =>
+      row[c] === undefined || row[c] === null ? fallback : normalizeSettingValue(c, row[c]);
+    const r = await db.execute(
+      'INSERT OR IGNORE INTO character_cards (id, name, description, systemPrompt, emoji, tags, isBuiltin, createdAt, updatedAt, personality, scenario, firstMes, mesExample, worldBookId, characterBookEntries, isExtracted, triggerWords, deleted, deletedAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19);',
+      [
+        ccVal("id", ""), ccVal("name", ""), ccVal("description", ""), ccVal("systemPrompt", ""),
+        ccVal("emoji", "🎭"), ccVal("tags", "[]"), ccVal("isBuiltin", 0), ccVal("createdAt", 0),
+        ccVal("updatedAt", 0), ccVal("personality", ""), ccVal("scenario", ""), ccVal("firstMes", ""),
+        ccVal("mesExample", ""), ccVal("worldBookId", null), ccVal("characterBookEntries", "[]"),
+        ccVal("isExtracted", 0), ccVal("triggerWords", "[]"),
+        ccVal("deleted", 0), ccVal("deletedAt", null),
+      ]
+    );
+    count += r.rowsAffected;
+  }
+  return count;
 }
 
 /** 创建分支会话：把 sourceId 会话中 upToMessageId（含）及之前的所有消息复制到新会话（消息重新生成 id），并复制会话角色绑定；返回新会话 id。 */

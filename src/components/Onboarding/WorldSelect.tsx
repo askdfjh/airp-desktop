@@ -244,7 +244,7 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: () => void }) {
             <circle cx="12" cy="12" r="3" />
             <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
           </svg>
-          AIRP
+          灵叙 Narra
         </div>
         <h1 style={{ fontSize: 40, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--seed-fg)", marginBottom: 12, lineHeight: 1.2 }}>
           选择你的世界
@@ -290,7 +290,7 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: () => void }) {
       </div>
 
       {/* Preset world grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 280px)", gap: 20, justifyContent: "center", marginBottom: 20 }}>
+      <div data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 20, justifyContent: "center", marginBottom: 20, maxWidth: 900, marginLeft: "auto", marginRight: "auto", width: "100%" }}>
         {filteredWorlds.map((world) => (
           <div
             key={world.id}
@@ -316,7 +316,7 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: () => void }) {
       </div>
 
       {/* 随机开局 + 自定义世界入口（贴合设计稿 bottom-row） */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 280px)", gap: 20, justifyContent: "center" }}>
+      <div data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 20, justifyContent: "center", maxWidth: 900, marginLeft: "auto", marginRight: "auto", width: "100%" }}>
         <div
           className="seed-card seed-card--custom"
           onClick={onRandomStart}

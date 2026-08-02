@@ -1,4 +1,4 @@
-﻿/* ---- Font size system ---- */
+/* ---- Font size system ---- */
 :root {
   --fs-8: 8px;
   --fs-9: 9px;
@@ -1790,6 +1790,165 @@ mark.seed-hl {
 .seed-func-btn:hover::after {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+/* 窄屏（手机）紧凑模式：输入区压高、底栏键位集中、无 hover tooltip */
+@media (max-width: 820px) {
+  /* 去掉全局点击蓝色遮罩（Android WebView tap highlight） */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button,
+  [data-tooltip],
+  .seed-tip {
+    -webkit-touch-callout: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  /* JS 长按检测后显示的 tooltip（.seed-tip-show） */
+  .seed-tip-show::after {
+    opacity: 1 !important;
+    transform: translateX(-50%) translateY(0) !important;
+    transition: opacity 0.15s ease !important;
+  }
+  /* 开局卡片：网格 → 圆角长方形单列竖向排列（居中） */
+  [data-onboarding-grid] {
+    display: flex !important;
+    flex-direction: column;
+    gap: 10px;
+    max-width: none !important;
+    width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    margin-bottom: 0 !important;
+    justify-content: flex-start !important;
+  }
+  [data-onboarding-grid] + [data-onboarding-grid] {
+    margin-top: 16px !important;
+  }
+  [data-onboarding-grid] > * {
+    width: 100% !important;
+    min-height: 0;
+    padding: 16px 18px !important;
+    border-radius: 16px;
+    /* 长按不出现选择蓝框/系统菜单/震动反馈 */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+  [data-onboarding-grid][data-grid-compact] > * {
+    width: 100% !important;
+    min-height: 0;
+    padding: 12px 16px !important;
+  }
+  .seed-input-inner {
+    padding: 10px 12px 8px;
+  }
+  .seed-input-row {
+    gap: 8px;
+  }
+  .seed-text-input {
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 14px;
+    min-height: 40px;
+    max-height: 120px;
+  }
+  .seed-send-btn {
+    width: 38px;
+    height: 38px;
+  }
+  .seed-send-btn:active {
+    transform: scale(0.92);
+  }
+  /* 设置-输出预设：参数行在窄屏收紧标签与数值宽度，给滑杆留空间 */
+  .seed-param-row > span:first-child {
+    width: 68px !important;
+    font-size: 11px;
+  }
+  .seed-param-row > span:last-child {
+    width: 42px !important;
+    font-size: 11px !important;
+  }
+  /* 对话推荐条：与输入框同宽同 padding 居中（对齐 .seed-input-inner） */
+  .seed-suggest-bar {
+    padding: 0;
+  }
+  .seed-suggest-head,
+  .seed-suggest-inner {
+    max-width: none;
+  }
+  .seed-suggest-inner {
+    padding: 8px 12px 10px;
+  }
+  .seed-suggest-chip {
+    width: calc(100% - 50px);
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: 12px;
+    font-size: 12.5px;
+  }
+  .seed-func-bar {
+    gap: 2px;
+    padding: 6px 0 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    justify-content: flex-start;
+  }
+  .seed-func-bar::-webkit-scrollbar {
+    display: none;
+  }
+  .seed-func-btn {
+    width: 30px;
+    height: 30px;
+    margin: 0 2px;
+    flex-shrink: 0;
+  }
+  .seed-func-chip {
+    height: 30px;
+    max-width: 96px !important;
+    padding: 0 8px;
+    font-size: 11px;
+    margin: 0 2px;
+    flex-shrink: 0;
+  }
+  /* 手机无 hover：隐藏所有 tooltip（hover 在触屏无效且会残留） */
+  .seed-func-btn::after,
+  .seed-func-chip::after,
+  .seed-tip::after {
+    display: none;
+  }
+  /* 弹窗遮罩：Android WebView 的 backdrop-filter 渲染异常（黑色伪影/不显示），改用纯色 */
+  [data-popover-overlay] {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(0, 0, 0, 0.5) !important;
+  }
+  .seed-func-btn,
+  .seed-func-chip {
+    /* 窄屏点击反馈即时生效：去掉 0.2s 过渡，避免按下无反馈、关闭面板时高亮延迟闪现 */
+    transition: none !important;
+  }
+  .seed-func-btn:hover,
+  .seed-func-chip:hover {
+    background: transparent;
+    color: var(--seed-muted);
+  }
+  /* 手机按压反馈：按下立即显示底色（松开即消失），提示点击位置 */
+  .seed-func-btn:active,
+  .seed-func-chip:active {
+    background: color-mix(in srgb, var(--seed-accent) 12%, transparent) !important;
+    color: var(--seed-accent) !important;
+  }
+  .seed-func-chip:active {
+    border-color: color-mix(in srgb, var(--seed-accent) 35%, transparent) !important;
+  }
+  .seed-func-btn--active,
+  .seed-func-chip--active {
+    color: var(--seed-accent);
+  }
 }
 
 /* 搴曟爮妯″瀷/鏈嶅姟閫夋嫨 chip锛堜笌鍔熻兘鎸夐挳鍚屼竴鎺掞級 */

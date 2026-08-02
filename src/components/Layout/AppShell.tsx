@@ -13,6 +13,7 @@ import { SessionList } from "@/components/Sidebar/SessionList";
 import { useEffect, useState, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ConfirmDialog } from "@/components/Layout/ConfirmDialog";
+import { isAndroid, registerBackHandler, dispatchBack } from "@/lib/androidBack";
 import { TitleBar } from "@/components/Layout/TitleBar";
 import { WelcomeScreen } from "@/components/Layout/WelcomeScreen";
 import { WelcomeApiSetup } from "@/components/Layout/WelcomeApiSetup";
@@ -44,14 +45,16 @@ export function AppShell() {
   const clearWorldTrash = useWorldStore((s) => s.clearExpiredTrash);
   const [eff, setEff] = useState<"dark" | "light">(() => {
     try {
-      const raw = localStorage.getItem("airp-ui-v2");
+      const raw = localStorage.getItem("airp-ui-v3") || localStorage.getItem("airp-ui-v2");
       if (raw) {
         const s = JSON.parse(raw)?.state;
+        if (s?.theme === "dark") return "dark";
         if (s?.theme === "light") return "light";
         if (s?.theme === "system") return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
       }
     } catch {}
-    return "dark";
+    // 默认跟随系统主题
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   });
   const [welcomeSeen, setWelcomeSeen] = useState<boolean>(() => {
     try {
@@ -70,6 +73,7 @@ export function AppShell() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [showRemoveAllConfirm, setShowRemoveAllConfirm] = useState(false);
   const phaseInitializedRef = useRef(false);
+  const lastBackRef = useRef(0);
 
   // 应用启动：初始化 SQLite 并加载历史会话
   useEffect(() => {
@@ -140,13 +144,84 @@ export function AppShell() {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = () => { if (theme === "system") setEff(mq.matches ? "dark" : "light"); };
     mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
+    // Android WebView 不派发 uiMode 媒体查询变化（matchMedia change 不触发），轮询兜底实现实时跟随
+    const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
+    let poll: ReturnType<typeof setInterval> | null = null;
+    if (isAndroid) {
+      poll = setInterval(() => {
+        if (theme === "system") setEff(mq.matches ? "dark" : "light");
+      }, 1500);
+    }
+    return () => {
+      mq.removeEventListener("change", handler);
+      if (poll) clearInterval(poll);
+    };
   }, [theme, effectiveTheme]);
 
   // 同步原生窗口标题栏主题
   useEffect(() => {
     getCurrentWindow().setTheme(eff).catch(() => {});
   }, [eff]);
+
+  // Android 返回手势：分层消费（确认对话框 → 设置面板 → 开局步骤回退），未消费则交给根级「两次返回退出」
+  useEffect(() => {
+    const unregister = registerBackHandler(() => {
+      const s = useUIStore.getState();
+      if (showExitConfirm) {
+        setShowExitConfirm(false);
+        return true;
+      }
+      if (deleteTarget) {
+        setDeleteTarget(null);
+        return true;
+      }
+      if (showRemoveAllConfirm) {
+        setShowRemoveAllConfirm(false);
+        return true;
+      }
+      if (s.settingsOpen) {
+        s.setSettingsOpen(false);
+        return true;
+      }
+      if (s.appPhase === "onboarding" && s.onboardingStep > 1) {
+        s.setOnboardingStep((s.onboardingStep - 1) as 1 | 2 | 3);
+        return true;
+      }
+      return false;
+    });
+    return unregister;
+  }, [showExitConfirm, deleteTarget, showRemoveAllConfirm]);
+
+  useEffect(() => {
+    if (!isAndroid) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    import("@tauri-apps/api/app").then(({ onBackButtonPress }) => {
+      if (disposed) return;
+      onBackButtonPress(async () => {
+        const consumed = await dispatchBack();
+        if (consumed) return;
+        const now = Date.now();
+        if (now - lastBackRef.current < 2000) {
+          const { invoke } = await import("@tauri-apps/api/core");
+          invoke("exit_app").catch(() => {});
+        } else {
+          lastBackRef.current = now;
+          useUIStore.getState().notify("再按一次返回退出");
+        }
+      }).then((listener) => {
+          if (disposed) listener.unregister().catch(() => {});
+        else
+          unlisten = () => {
+            listener.unregister().catch(() => {});
+          };
+      });
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
 
   // 窗口关闭确认
   useEffect(() => {
@@ -248,7 +323,7 @@ export function AppShell() {
         {settingsOpen && <ProviderConfigPanel />}
         {showExitConfirm && (
           <ConfirmDialog
-            title="退出 AIRP"
+            title="退出应用"
             message="确定要退出吗？"
             confirmLabel="退出"
             cancelLabel="取消"
@@ -269,7 +344,7 @@ export function AppShell() {
         {settingsOpen && <ProviderConfigPanel />}
         {showExitConfirm && (
           <ConfirmDialog
-            title="退出 AIRP"
+            title="退出应用"
             message="确定要退出吗？"
             confirmLabel="退出"
             cancelLabel="取消"
@@ -288,17 +363,6 @@ export function AppShell() {
       {/* 自绘标题栏：无边框窗口的拖拽区 + 窗口控制按钮 */}
       <TitleBar />
 
-      {/* DB 状态指示灯：右上角 info-badge 下方，低调显示 */}
-      <div
-        title={dbReady === true ? "SQLite 已连接" : dbReady === false ? "SQLite 连接失败" : "SQLite 连接中..."}
-        style={{
-          position: "fixed", bottom: 14, right: 18, zIndex: 200,
-          width: 6, height: 6, borderRadius: "50%",
-          background: dbReady === true ? "var(--success)" : dbReady === false ? "var(--danger)" : "var(--warning)",
-          boxShadow: `0 0 6px ${dbReady === true ? "var(--success)" : dbReady === false ? "var(--danger)" : "var(--warning)"}`,
-          opacity: 0.6,
-        }}
-      />
 
       <DialogueNovel />
 
@@ -322,7 +386,7 @@ export function AppShell() {
 
       {showExitConfirm && (
         <ConfirmDialog
-          title="退出 AIRP"
+          title="退出应用"
           message="确定要退出吗？"
           confirmLabel="退出"
           cancelLabel="取消"

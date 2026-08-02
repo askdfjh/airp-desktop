@@ -3,12 +3,14 @@ import type { Session } from "@/types";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useUIStore } from "@/stores/uiStore";
 import { TRASH_RETENTION_MS } from "@/lib/db";
+import { useKeyboardShift } from "@/hooks/useKeyboardShift";
 
 interface Props {
   onClose: () => void;
 }
 
 export function SessionPopup({ onClose }: Props) {
+  const kbdShift = useKeyboardShift();
   const sessions = useSessionStore((s) => s.sessions);
   const trash = useSessionStore((s) => s.trash);
   const activeId = useSessionStore((s) => s.activeId);
@@ -260,6 +262,7 @@ export function SessionPopup({ onClose }: Props) {
   return (
     <div
       ref={overlayRef}
+      data-popover-overlay
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
       style={{
         position: "fixed",
@@ -271,14 +274,16 @@ export function SessionPopup({ onClose }: Props) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        paddingTop: 0,
+        paddingBottom: kbdShift > 0 ? kbdShift + 16 : 0,
         animation: "seed-fade-in-up 0.2s ease-out",
       }}
     >
       <div
         style={{
-          width: "480px",
-          minWidth: "480px",
-          maxWidth: "90vw",
+          width: "min(480px, 94vw)",
+          minWidth: 0,
+          maxWidth: "94vw",
           minHeight: "280px",
           maxHeight: "70vh",
           background: seed.bg,

@@ -1,5 +1,5 @@
 {
-  "productName": "AIRP",
+  "productName": "灵叙 Narra",
   "version": "0.1.0",
   "identifier": "com.airp.app",
   "build": {
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "AIRP",
+        "title": "灵叙 Narra",
         "width": 1000,
         "height": 700,
         "minWidth": 640,
@@ -27,7 +27,13 @@
   "bundle": {
     "active": true,
     "targets": ["nsis", "msi"],
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.ico"]
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.ico"],
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/installer.ico",
+        "uninstallerIcon": "icons/installer.ico"
+      }
+    }
   },
   "plugins": {}
 }

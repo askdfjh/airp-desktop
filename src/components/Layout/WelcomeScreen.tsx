@@ -68,7 +68,7 @@ export function WelcomeScreen({
         </div>
 
         <h1 style={{ margin: 0, fontSize: 34, fontWeight: 700, letterSpacing: "0.06em", color: "var(--seed-fg)" }}>
-          AIRP
+          灵叙 Narra
         </h1>
         <p style={{ margin: 0, fontSize: 14, color: "var(--seed-muted)", letterSpacing: "0.2em" }}>
           沉浸式 AI 互动小说
