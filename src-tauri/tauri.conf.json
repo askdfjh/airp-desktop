@@ -29,6 +29,10 @@
     "targets": ["nsis", "msi"],
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.ico"],
     "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper",
+        "silent": true
+      },
       "nsis": {
         "installerIcon": "icons/installer.ico",
         "uninstallerIcon": "icons/installer.ico"
