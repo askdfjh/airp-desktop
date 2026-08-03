@@ -2969,3 +2969,132 @@ useChat hook 中的流式状态随组件卸载而丢失，导致会话中断。
 
 **验证**
 - `npx tsc --noEmit` 零错误 ✅、`vite build` 通过 ✅
+
+**AI 鍒涘缓妯″紡锛堣鑹?涓栫晫瀵硅瘽寮忓垱寤猴級**
+- 鏂板銆屽垱寤烘ā寮忋€嶏細鍦ㄨ缃?瑙掕壊鍗?涓栫晫涔﹂潰鏉跨偣鍑汇€孉I 鍒涘缓銆嶏紝杩涘叆鍏ㄥ睆瀵硅瘽鐣岄潰锛屼笌銆岃瀹氬笀銆嶅璇濆悗涓€閿彁鐐兼垚缁撴瀯鍖栬鑹?涓栫晫璁惧畾锛岄瑙堝彲缂栬緫锛屼繚瀛樺悗鍐欏叆瑙掕壊鍗★紙character_cards锛夋垨涓栫晫涔︼紙world_books + world_book_entries锛夛紱鎵嬪姩鍒涘缓琛ㄥ崟宸插垹闄?- 瀹炵幇锛?  1. `createGuide.ts`锛氳鑹?10 闂?/ 涓栫晫 8 闂紩瀵煎ぇ绾层€乣buildCreateSystemPrompt`锛堢牬闄愯瘝 鈫?璁惧畾甯堣鑹?鈫?寮曞瑙勫垯 鈫?纭€ц姹傦級銆佹湰鍦板紑鍦虹櫧
+  2. `createStore.ts`锛氬垱寤哄璇濈嫭绔嬬姸鎬侊紙涓嶈繘鍏ヤ細璇濆垪琛級锛宭ocalStorage 鍘嗗彶 `airp-create-history-v1`锛堜笂闄?20 鏉★紝鍙噸鏂拌浇鍏?鍒犻櫎/娓呯┖锛?  3. `characterExtract.ts` 瀵煎嚭 `parseJsonObject`銆佹柊澧?`extractCharacterForCreate`锛沗worldExtract.ts` 鏂板 `extractWorld`锛堝閲忔彁鐐兼椂瀵规瘮 existing 鏍囪 鏂板/淇敼锛?  4. `CreateModeView.tsx`锛氬叏灞?z-index 200锛孉I 鎻愰棶/鑷敱鎻忚堪涓ょ寮曞锛屾ā鍨嬭疆鎹紝Esc/鍋滄锛岀牬闄愯瘝锛坅pplied 涓旀湭缁戝畾鎴栧惈褰撳墠妯″瀷锛夊紑澶存敞鍏?  5. `DraftPreview.tsx`锛氬彲缂栬緫棰勮锛屼繚瀛樺悗涓嶅叧闂彲缁х画瀵硅瘽澧為噺淇敼锛堝啀娆＄敓鎴愭椂浼?existing锛?  6. `CreateHistory.tsx`锛氬彸渚ф瘺鐜荤拑鍘嗗彶鎶藉眽
+  7. `worldStore.addBook` 鏀逛负杩斿洖 bookId锛沗uiStore` 鏂板 `createMode`/`setCreateMode`锛沗AppShell` 涓夊鎸傝浇 + Android 杩斿洖閿垎灞傛秷璐?  8. `CharacterPanel.tsx`/`WorldPanel.tsx`锛氱Щ闄ゆ墜鍔ㄥ垱寤鸿〃鍗曪紙addCard/addBook 鐩磋皟銆乻howForm 绛夌姸鎬侊級锛屾柊澧炪€孉I 鍒涘缓銆嶅叆鍙ｏ紱琛?`--success-border` CSS 鍙橀噺
+- 淇锛歚messagesRef` 闂寘杩囨湡瀵艰嚧鍒氬彂閫佺殑娑堟伅涓嶈繘 API 璇锋眰锛堟敼鐢?`useCreateStore.getState()`锛夛紱鍏ュ彛婕忚皟 `open(type)` 瀵艰嚧妯″紡娈嬬暀
+- 娑夊強锛歚createGuide.ts`, `createStore.ts`, `characterExtract.ts`, `worldExtract.ts`, `CreateModeView.tsx`, `DraftPreview.tsx`, `CreateHistory.tsx`, `worldStore.ts`, `uiStore.ts`, `AppShell.tsx`, `CharacterPanel.tsx`, `WorldPanel.tsx`, `index.css`
+
+**楠岃瘉**
+- `npx tsc --noEmit` 閫氳繃 ?
+
+### 2026-08-02（创建模式体验修复 + 输入框自适应 + 开局流程衔接）
+
+**创建模式 bug 修复包**
+- 顶栏遮挡：`CreateModeView` / `DraftPreview` / `CreateHistory` 全屏层原用 inset:0 被 40px 自绘标题栏盖住，改为桌面端 `top: 40`（Android 为 0）
+- 创建角色/世界串台：`WorldPanel` 两处「AI 创建」按钮只调 `setCreateMode("world")` 未调 store `open("world")`，type 残留上次值；统一走 `openCreateMode()`（CharacterPanel 同样式）
+- 双引导：StrictMode 下 `useEffect([], [])` 双跑，闭包 messages 是旧值导致开场白推两次；改为 `useCreateStore.getState()` 判断后只推一次
+- 模型按钮改为可点击下拉菜单：新增 `modelMenuOpen`/`modelBtnRef`，`applyCreateModel(pid, model)` 更新全局并同步当前会话 `updateSessionModel`；Esc 优先级：先关模型菜单→历史抽屉→退出；点击外部关闭；Check/ChevronDown 图标
+- 模型菜单按可用过滤：订阅 `enabledProviders` + `usableProviders`（与 FunctionBar `availableProviders` 同逻辑：`enabledProviders[p.id] !== false || p.id === activeProviderId`），空态文案「未配置可用的模型服务…」；移除 hide-narrow
+- 涉及：`CreateModeView.tsx`, `CreateHistory.tsx`, `DraftPreview.tsx`, `WorldPanel.tsx`, `CharacterPanel.tsx`
+
+**输入框随内容自适应（全局）**
+- 新建 `src/lib/autoGrow.tsx`：
+  - `fitTextarea(el, maxHeight=320)`：高度随内容撑高，超上限转滚动（overflowY auto）
+  - `fitInputWidth(el, min=70, max=360)`：隐藏 span 按当前字号测量文本宽度自适应（min~max）
+  - `AutoTextarea` / `AutoInput` 组件：useEffect + onInput 双保险，保留全部原生 props
+- 应用范围（上限均控制在窗口内，超出滚动而非无限撑高）：
+  - 创建模式预览卡片 DraftPreview：文本字段 AutoTextarea（上限 200）、emoji/题材基调/标签/触发词/关键词 AutoInput（70~520 区间）
+  - 世界编辑表单 WorldPanel：描述 AutoTextarea（200）、主题 AutoInput（90~200）、条目关键词 AutoInput（200~520）、内容 AutoTextarea（240）
+  - 角色编辑弹窗 EditDialog：textarea 统一 AutoTextarea（上限 260，避让弹窗 maxHeight calc(100vh-40px)）
+  - CharacterPanel worldContext：AutoInput（140~360）
+  - 会话主输入框 DialogueNovel（fitTextarea 上限 160，原 overflow:hidden 长内容直接裁剪不动）、消息编辑弹窗 MessageBubble（上限 360，去掉 resize 手柄）、创建模式会话输入框 CreateModeView（上限 140）
+- 涉及：`autoGrow.tsx`（新建）, `DraftPreview.tsx`, `WorldPanel.tsx`, `CharacterPanel.tsx`, `EditDialog.tsx`, `DialogueNovel.tsx`, `MessageBubble.tsx`, `CreateModeView.tsx`
+
+**dev server 端口修复（EACCES ::1:1420）**
+- 现象：`tauri dev` 报 `listen EACCES: permission denied ::1:1420`
+- 排查：netstat / Get-NetTCPConnection 无进程占用、node 实测 1420/1421 绑定均 EACCES、8080/随机端口正常 → `netsh interface ipv4 show excludedportrange` 发现系统保留端口范围 **1414-1513**（Hyper-V/WinNAT 动态保留）恰好覆盖 1420，任何进程无法绑定，且该范围随系统状态变化不可配置
+- 修复：vite 端口 1420→5173（HMR 1421→5174）、host 固定 `127.0.0.1` 规避 ::1 绑定；`tauri.conf.json` devUrl 同步 `http://localhost:5173`
+- 涉及：`vite.config.ts`, `src-tauri/tauri.conf.json`
+
+**创建模式引导方式切换 + 消息操作（对齐空白会话）**
+- 切换引导方式（AI 提问 ⇄ 自由描述）：
+  - 仅剩开场白：原地替换开场文案
+  - 已聊过：ConfirmDialog 确认「清空并切换」，确认后重置对话 + 清空 savedDraft/preview，避免两种引导混用
+- 消息操作条（hover 显示）：复制 / 编辑（用户=编辑并重新发送，AI=编辑回复）/ 重新生成（仅最后一条 AI）/ 删除（开场白与流式输出中隐藏）
+- `handleSend` 重构为 `doStream(text, appendUser)`：编辑发送/重新生成时不新增用户消息直接请求
+- `createStore` 新增 `updateMessage(id, patch)` / `removeMessage(id)`
+- 涉及：`CreateModeView.tsx`, `createStore.ts`
+
+**创建世界保存后自动进入开局流程**
+- 需求：生成世界之后没有生成相应的开局
+- 修复：`DraftPreview.handleSave` 世界保存成功后自动 `setCreateMode(null)` → `setSelectedWorld(bookId, name)` → 激活世界书 `setActiveBook` → 清空旧视角/角色/场景选择 → `setAppPhase("onboarding")` + `setOnboardingStep(2)`（视角选择）；自定义世界无匹配预设场景时用户可选「AI 随机开局」
+- 涉及：`DraftPreview.tsx`
+
+**世界选择页：男频/女频增加自定义世界开局**
+- 每个 tab（男频/女频）网格末尾新增「自定义世界」卡片（显示已创建数量），点击展开「我的世界」面板：
+  - 列出所有自定义世界书（名字/描述/条目数/主题），点击即选中 + 激活该书 + 跳转视角选择
+  - 空状态提示 + 「AI 创建世界」按钮（直接打开创建模式）
+  - 面板头部「退出」按钮收起面板
+- 底部「自定义世界」卡片行为改为展开同一面板（原为打开设置）
+- 涉及：`WorldSelect.tsx`
+
+**开局流程整体退出**
+- 需求：进入世界选择后不想选时没有退出入口
+- `OnboardingFlow` 右上角固定「退出」按钮（三个步骤通用）：
+  - 有活跃会话（如创建世界保存后被带入）→ `resetOnboarding` + 回到对话模式
+  - 无会话（首次启动进入）→ 弹出「退出应用」确认框
+- 涉及：`OnboardingFlow.tsx`, `AppShell.tsx`
+
+**验证**
+- `npx tsc --noEmit` 零错误 ✅
+### 2026-08-03（安卓 debug 版构建安装 + 图标修复）
+
+**背景**
+用户要求把仓库最新代码（含 AI 创建模式等 8/2 未提交改动）同步到安卓端（华为 PLJ110，arm64-v8a），构建 debug 版 APK 安装。
+
+**环境检查结论**
+- ✅ Rust 1.97.1 + `aarch64-linux-android` 目标已装；`armv7-linux-androideabi` 缺失（rustup 默认源下载卡死 → 用 rsproxy.cn 镜像 `RUSTUP_DIST_SERVER` 加速后成功）
+- ✅ Android SDK（%LOCALAPPDATA%\Android\Sdk）+ NDK 27.0.12077973 + Gradle 缓存
+- ✅ Java 用 Android Studio 自带 JBR（OpenJDK 21），JAVA_HOME 指向 `C:\Program Files\Android\Android Studio\jbr`
+- ❌ `src-tauri/gen/android` 工程不存在（8/2 构建后已删）→ `npx tauri android init` 重建
+- ❌ ANDROID_HOME / JAVA_HOME 未设系统环境变量 → 每次命令临时指定
+
+**构建过程踩坑（按顺序）**
+
+1. **rustup 下载卡死**：`tauri android init` 自动装 armv7 target 时在 static.rust-lang.org 卡住 → 手动 `rustup target add armv7-linux-androideabi` + rsproxy.cn 镜像，秒下。init 后还需 i686/x86_64（模拟器用），镜像同样解决
+
+2. **符号链接失败（关键）**：`tauri android build` 在 Rust 编译完成后，需要在 jniLibs 里创建 symlink 把 .so 链进去，Windows 未开开发者模式 → `Creation symbolic link is not allowed` 构建中止
+   - 绕行方案：不再用 `tauri android build`，改手动流程：
+     1. `cargo build --target aarch64-linux-android`（debug profile）——注意需设 `CC/CXX/AR_aarch64_linux_android` + `CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER` 指向 NDK clang（否则报 `linker cc not found`）
+     2. 复制 `libairp_desktop_lib.so` → `gen/android/app/src/main/jniLibs/arm64-v8a/`
+     3. 直接 `gradlew assembleDebug` 打包 APK
+
+3. **Gradle wrapper 下载超时**：模板要求 gradle-8.14.3，services.gradle.org 超时 → 改 `gradle-wrapper.properties` 指向本地已缓存的 **gradle-8.13**（AGP 8.11.0 要求 ≥8.13，恰好满足）
+
+4. **Maven 依赖下载 TLS 中断**：repo.maven.apache.org 握手失败 → 根 `build.gradle.kts` 和 `buildSrc/build.gradle.kts` 的 repositories 前置阿里云镜像（google/central/public/gradle-plugin 四个 maven 源），原源保留兜底
+
+5. **rustBuild 任务失败**：gradle 的 RustPlugin 每个 ABI 注册 `rustBuild*Debug` 任务，会再跑 `tauri android android-studio-script` 找 dev server addr 文件而 panic → 因 .so 已手动就位，用 `-x rustBuildArmDebug -x rustBuildArm64Debug -x rustBuildX86Debug -x rustBuildX86_64Debug -x rustBuildUniversalDebug` 跳过
+   - 最终构建命令：`gradlew assembleDebug --no-daemon -x rustBuild*`
+   - 产物：`gen/android/app/build/outputs/apk/arm64/debug/app-arm64-debug.apk`
+
+**安装**
+- 旧版（8/2 装）为 release 签名（`adb shell run-as` 提示 not debuggable），`install -r` 报 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`
+- `adb backup` 备份为空（47 字节，app 不支持备份）→ 手机本地数据无法提取
+- 卸载重装 debug 版：`adb uninstall com.airp.app` + `adb install` ✅ 启动正常（PID 存活、无 FATAL 崩溃日志）
+- 注意：卸载导致手机本地数据清空，后续如需跨设备数据互通走 WebDAV 云端同步
+
+**图标默认化修复**
+- 现象：用户反馈手机图标变成 Tauri 默认图标
+- 根因：`tauri android init` 生成的 Android 工程 mipmap 全部用默认图标（3377 字节小图），且 `src-tauri/icons/` 缺 icon.png 等标准图标集，从未跑过 `tauri icon`
+- 修复：`npx tauri icon src-tauri/icons/128x128@2x.png`（256x256 源图）→ 自动生成全平台图标集（含 Windows 全尺寸、iOS、Android mipmap-hdpi~xxxhdpi 共 15 个文件）并直接写入 `gen/android/app/src/main/res/` → 重新 gradle 构建 → `adb install -r` 覆盖安装（debug 签名一致）✅
+- 残留：源图仅 256px，xxxhdpi 放大后略有模糊，有高清原图后可重跑
+
+**验证**
+- `npx tsc --noEmit` 零错误 ✅
+- 前端 vite build 3.06s ✅
+- Rust debug .so 编译 ✅（仅既有 FetchArgs dead_code 警告）
+- Gradle BUILD SUCCESSFUL ✅
+- 手机安装 + 启动验证 ✅
+
+**可复用构建流程（下次安卓构建）**
+```
+$env:ANDROID_HOME="C:\Users\OOTD\AppData\Local\Android\Sdk"; $env:JAVA_HOME="C:\Program Files\Android\Android Studio\jbr"
+$ndk="C:\Users\OOTD\AppData\Local\Android\Sdk\ndk\27.0.12077973\toolchains\llvm\prebuilt\windows-x86_64\bin"
+cargo build --target aarch64-linux-android   # 设 CC/CXX/AR/LINKER 指向 $ndk\aarch64-linux-android21-clang.cmd
+# 复制 .so 到 gen/android/app/src/main/jniLibs/arm64-v8a/
+cd src-tauri/gen/android; gradlew assembleDebug --no-daemon -x rustBuildArmDebug -x rustBuildArm64Debug -x rustBuildX86Debug -x rustBuildX86_64Debug -x rustBuildUniversalDebug
+adb install -r app/build/outputs/apk/arm64/debug/app-arm64-debug.apk
+```
