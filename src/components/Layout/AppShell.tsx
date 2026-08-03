@@ -17,6 +17,8 @@ import { isAndroid, registerBackHandler, dispatchBack } from "@/lib/androidBack"
 import { TitleBar } from "@/components/Layout/TitleBar";
 import { WelcomeScreen } from "@/components/Layout/WelcomeScreen";
 import { WelcomeApiSetup } from "@/components/Layout/WelcomeApiSetup";
+import { CreateModeView } from "@/components/Create/CreateModeView";
+import { useCreateStore } from "@/stores/createStore";
 
 export function AppShell() {
   const {
@@ -29,6 +31,7 @@ export function AppShell() {
     setMcpActive,
     appPhase,
     setAppPhase,
+    createMode,
   } = useUIStore();
   const loadFromDb = useSessionStore((s) => s.loadFromDb);
   const removeSession = useSessionStore((s) => s.remove);
@@ -163,10 +166,15 @@ export function AppShell() {
     getCurrentWindow().setTheme(eff).catch(() => {});
   }, [eff]);
 
-  // Android 返回手势：分层消费（确认对话框 → 设置面板 → 开局步骤回退），未消费则交给根级「两次返回退出」
+  // Android 返回手势：分层消费（创建模式 → 确认对话框 → 设置面板 → 开局步骤回退），未消费则交给根级「两次返回退出」
   useEffect(() => {
     const unregister = registerBackHandler(() => {
       const s = useUIStore.getState();
+      if (s.createMode) {
+        useCreateStore.getState().close();
+        s.setCreateMode(null);
+        return true;
+      }
       if (showExitConfirm) {
         setShowExitConfirm(false);
         return true;
@@ -246,6 +254,19 @@ export function AppShell() {
   const handleExitCancel = () => {
     exitConfirmRef.current = false;
     setShowExitConfirm(false);
+  };
+
+  // 开局流程退出：有活跃会话 → 回到对话模式；无会话（首次进入）→ 退出应用确认
+  const handleOnboardingExit = () => {
+    const ui = useUIStore.getState();
+    const { activeId, sessions } = useSessionStore.getState();
+    const hasActive = activeId && sessions.some((s) => s.id === activeId);
+    if (hasActive) {
+      ui.resetOnboarding();
+      ui.setAppPhase("dialogue");
+    } else {
+      setShowExitConfirm(true);
+    }
   };
 
   // 欢迎页：跳过 → 直接进入对话；配置完成（关闭设置面板且已配置 provider）→ 进入正常流程
@@ -331,6 +352,7 @@ export function AppShell() {
             onCancel={handleExitCancel}
           />
         )}
+        {createMode && <CreateModeView />}
       </div>
     );
   }
@@ -340,7 +362,7 @@ export function AppShell() {
     return (
       <div className={`theme-${eff}`} style={{ height: "100vh", width: "100vw", overflow: "hidden", background: "var(--seed-bg)" }}>
         <TitleBar />
-        <OnboardingFlow />
+        <OnboardingFlow onExit={handleOnboardingExit} />
         {settingsOpen && <ProviderConfigPanel />}
         {showExitConfirm && (
           <ConfirmDialog
@@ -352,6 +374,7 @@ export function AppShell() {
             onCancel={handleExitCancel}
           />
         )}
+        {createMode && <CreateModeView />}
       </div>
     );
   }
@@ -416,6 +439,8 @@ export function AppShell() {
           onCancel={() => setShowRemoveAllConfirm(false)}
         />
       )}
+
+      {createMode && <CreateModeView />}
     </div>
   );
 }

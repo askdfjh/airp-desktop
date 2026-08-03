@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
-import { Globe, Plus, Trash2, Edit3, FileText, Copy, Search } from "lucide-react";
+import { Globe, Trash2, Edit3, FileText, Copy, Search, Wand2 } from "lucide-react";
 import { useWorldStore } from "@/stores/worldStore";
+import { useUIStore } from "@/stores/uiStore";
+import { useCreateStore } from "@/stores/createStore";
+import { AutoTextarea, AutoInput } from "@/lib/autoGrow";
 import type { WorldBook, WorldBookEntry } from "@/types";
 
 export function WorldPanel() {
@@ -8,9 +11,9 @@ export function WorldPanel() {
     books, loaded, loadFromDb,
     selectedBookId, selectBook,
     activeBook, setActiveBook, deactivateAllBooks,
-    addBook, updateBook, removeBook, duplicateBook,
+    updateBook, removeBook, duplicateBook,
     trashBooks, loadTrashFromDb, restoreBookFromTrash, purgeBookFromTrash,
-    addEntry, updateEntry, removeEntry
+    updateEntry, removeEntry
   } = useWorldStore();
 
   const [viewTab, setViewTab] = useState<"world" | "trash">("world");
@@ -24,23 +27,14 @@ export function WorldPanel() {
     return () => mq.removeEventListener('change', handler);
   }, []);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showBookForm, setShowBookForm] = useState(false);
   const [editingBook, setEditingBook] = useState<WorldBook | null>(null);
   const [editingEntry, setEditingEntry] = useState<WorldBookEntry | null>(null);
-  const [showEntryForm, setShowEntryForm] = useState(false);
 
-  // Book form state
-  const [newBookName, setNewBookName] = useState("");
-  const [newBookTheme, setNewBookTheme] = useState("");
-  const [newBookDesc, setNewBookDesc] = useState("");
-  const [newBookTags, setNewBookTags] = useState("");
-
-  // Entry form state
-  const [newEntryCategory, setNewEntryCategory] = useState("");
-  const [newEntryTitle, setNewEntryTitle] = useState("");
-  const [newEntryKeys, setNewEntryKeys] = useState("");
-  const [newEntryContent, setNewEntryContent] = useState("");
-  const [newEntryPosition, setNewEntryPosition] = useState<"system" | "situation" | "last">("situation");
+  const setCreateMode = useUIStore((s) => s.setCreateMode);
+  const openCreateMode = () => {
+    useCreateStore.getState().open("world");
+    setCreateMode("world");
+  };
 
   useEffect(() => { if (!loaded) loadFromDb(); }, []);
   useEffect(() => { loadTrashFromDb(); }, []);
@@ -56,30 +50,6 @@ export function WorldPanel() {
     return d.getMonth() + 1 + "月" + d.getDate() + "日";
   };
 
-  const resetBookForm = () => {
-    setNewBookName(""); setNewBookTheme(""); setNewBookDesc(""); setNewBookTags("");
-  };
-
-  const resetEntryForm = () => {
-    setNewEntryCategory(""); setNewEntryTitle(""); setNewEntryKeys(""); setNewEntryContent(""); setNewEntryPosition("situation");
-  };
-
-  const handleCreateBook = async () => {
-    if (!newBookName.trim()) return;
-    await addBook({
-      name: newBookName.trim(),
-      theme: newBookTheme.trim(),
-      description: newBookDesc.trim(),
-      tags: newBookTags.split(",").map(t => t.trim()).filter(Boolean),
-      isActive: false,
-      isBuiltin: false,
-      violationWords: [],
-      entries: [],
-    } as Omit<WorldBook, "id" | "entries" | "createdAt" | "updatedAt">);
-    resetBookForm();
-    setShowBookForm(false);
-  };
-
   const handleUpdateBook = async () => {
     if (!editingBook) return;
     await updateBook(editingBook.id, {
@@ -89,25 +59,6 @@ export function WorldPanel() {
       tags: editingBook.tags,
     });
     setEditingBook(null);
-  };
-
-  const handleCreateEntry = async () => {
-    if (!selectedBookId || !newEntryTitle.trim()) return;
-    const keys = newEntryKeys.split(",").map(k => k.trim()).filter(Boolean);
-    await addEntry(selectedBookId, {
-      category: newEntryCategory.trim() || "其他",
-      title: newEntryTitle.trim(),
-      key: keys.length > 0 ? keys : [newEntryTitle.trim()],
-      content: newEntryContent.trim(),
-      constant: false,
-      selective: false,
-      order: 100,
-      position: newEntryPosition,
-      insertionDepth: 50,
-      disable: false,
-    } as Omit<WorldBookEntry, "uid" | "createdAt" | "updatedAt">);
-    resetEntryForm();
-    setShowEntryForm(false);
   };
 
   const handleUpdateEntry = async () => {
@@ -210,26 +161,13 @@ export function WorldPanel() {
                 />
               </div>
               <button
-                onClick={() => { setShowBookForm(!showBookForm); setEditingBook(null); }}
-                style={{ ...btnPrimary, padding: "8px 14px", background: showBookForm && !editingBook ? "var(--seed-accent)" : "var(--seed-accent-bg)", color: showBookForm && !editingBook ? "#fff" : "var(--seed-accent)" }}
+                onClick={openCreateMode}
+                title="与 AI 对话式创建世界，完成后自动写入世界书条目"
+                style={{ ...btnPrimary, padding: "8px 14px" }}
               >
-                <Plus size={12} /> 新建
+                <Wand2 size={12} /> AI 创建
               </button>
             </div>
-
-            {(showBookForm && !editingBook) && (
-              <div style={{ padding: 12, borderRadius: 12, background: "var(--seed-surface)", border: "1px solid var(--seed-border)", display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)", marginBottom: 2 }}>创建新世界</div>
-                <input value={newBookName} onChange={(e) => setNewBookName(e.target.value)} placeholder="世界名称 *" style={inputStyle} />
-                <input value={newBookTheme} onChange={(e) => setNewBookTheme(e.target.value)} placeholder="主题 (如: 修仙、都市)" style={{ ...inputStyle, fontSize: "var(--fs-11)" }} />
-                <textarea value={newBookDesc} onChange={(e) => setNewBookDesc(e.target.value)} placeholder="简短描述" style={{ ...inputStyle, fontSize: "var(--fs-11)", minHeight: 48, resize: "vertical" }} />
-                <input value={newBookTags} onChange={(e) => setNewBookTags(e.target.value)} placeholder="标签 (逗号分隔)" style={{ ...inputStyle, fontSize: "var(--fs-11)" }} />
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 2 }}>
-                  <button onClick={() => { setShowBookForm(false); resetBookForm(); }} style={btnSecondary}>取消</button>
-                  <button onClick={handleCreateBook} disabled={!newBookName.trim()} style={{ ...btnPrimary, opacity: !newBookName.trim() ? 0.5 : 1, cursor: !newBookName.trim() ? "not-allowed" : "pointer" }}>创建</button>
-                </div>
-              </div>
-            )}
 
             {/* Grouped list */}
             <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -309,7 +247,7 @@ export function WorldPanel() {
                             </div>
                           </div>
                           <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
-                            <button onClick={(e) => { e.stopPropagation(); setEditingBook(book); setShowBookForm(false); }} title="编辑" style={iconBtn}>
+                            <button onClick={(e) => { e.stopPropagation(); setEditingBook(book); }} title="编辑" style={iconBtn}>
                               <Edit3 size={11} />
                             </button>
                             <button onClick={(e) => { e.stopPropagation(); removeBook(book.id); }} title="删除（进回收站）" style={iconBtn}>
@@ -332,7 +270,7 @@ export function WorldPanel() {
 
               {filtered.length === 0 && (
                 <div style={{ padding: "30px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>
-                  {searchQuery ? "未找到匹配的世界" : "暂无世界，点击右上角新建"}
+                  {searchQuery ? "未找到匹配的世界" : "暂无世界，点击右上角「AI 创建」，与 AI 对话生成世界"}
                 </div>
               )}
             </div>
@@ -386,9 +324,9 @@ export function WorldPanel() {
               <Globe size={28} style={{ color: "var(--seed-accent)" }} />
             </div>
             <div className="seed-empty-title">还没有世界</div>
-            <div className="seed-empty-sub">创建一个专属的故事宇宙，让 AI 沉浸其中</div>
-            <button className="seed-btn-primary" onClick={() => { setShowBookForm(true); setEditingBook(null); }}>
-              <Plus size={13} /> 创建世界
+            <div className="seed-empty-sub">与 AI 对话创建专属的故事宇宙，自动生成世界书条目</div>
+            <button className="seed-btn-primary" onClick={openCreateMode}>
+              <Wand2 size={13} /> AI 创建世界
             </button>
           </div>
         ) : (
@@ -430,14 +368,14 @@ export function WorldPanel() {
               {editingBook && (
                 <div style={{ padding: 12, borderRadius: 10, background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ fontSize: "var(--fs-12)", fontWeight: 600, marginBottom: 2 }}>编辑世界信息</div>
-                  <div style={{ display: "flex", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <input value={editingBook.name} onChange={(e) => setEditingBook({...editingBook, name: e.target.value})} placeholder="名称"
-                      style={{ flex: 1, ...inputStyle, fontSize: "var(--fs-11)" }} />
-                    <input value={editingBook.theme} onChange={(e) => setEditingBook({...editingBook, theme: e.target.value})} placeholder="主题"
-                      style={{ width: 120, ...inputStyle, fontSize: "var(--fs-11)" }} />
+                      style={{ flex: 1, minWidth: 140, ...inputStyle, fontSize: "var(--fs-11)" }} />
+                    <AutoInput value={editingBook.theme} onChange={(e) => setEditingBook({...editingBook, theme: e.target.value})} placeholder="主题" min={90} max={200}
+                      style={{ ...inputStyle, fontSize: "var(--fs-11)" }} />
                   </div>
-                  <textarea value={editingBook.description} onChange={(e) => setEditingBook({...editingBook, description: e.target.value})} placeholder="描述"
-                    style={{ ...inputStyle, fontSize: "var(--fs-11)", minHeight: 40, resize: "vertical" }} />
+                  <AutoTextarea value={editingBook.description} onChange={(e) => setEditingBook({...editingBook, description: e.target.value})} placeholder="描述"
+                    style={{ ...inputStyle, fontSize: "var(--fs-11)", minHeight: 40 }} maxHeight={200} />
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
                     <button onClick={() => setEditingBook(null)} style={btnSecondary}>取消</button>
                     <button onClick={handleUpdateBook} style={btnPrimary}>保存</button>
@@ -454,41 +392,13 @@ export function WorldPanel() {
                   <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--seed-fg)" }}>世界条目</span>
                   <span style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)" }}>({selectedBook.entries.length})</span>
                 </div>
-                <button onClick={() => { setShowEntryForm(!showEntryForm); setEditingEntry(null); resetEntryForm(); }}
-                  style={{ ...btnAccent, background: showEntryForm && !editingEntry ? "var(--seed-accent)" : "var(--seed-accent-bg)", color: showEntryForm && !editingEntry ? "#fff" : "var(--seed-accent)", border: showEntryForm && !editingEntry ? "none" : "1px solid color-mix(in srgb, var(--seed-accent) 40%, transparent)", visibility: selectedBook.isBuiltin ? "hidden" : "visible" }}>
-                  <Plus size={11} /> 新建条目
-                </button>
               </div>
-
-              {(showEntryForm && !editingEntry) && (
-                <div style={{ padding: 12, borderRadius: 12, background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
-                  <div style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)", marginBottom: 2 }}>添加世界规则条目</div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input value={newEntryTitle} onChange={(e) => setNewEntryTitle(e.target.value)} placeholder="条目标题 *" style={{ flex: 1, ...inputStyle, fontSize: "var(--fs-11)" }} />
-                    <input value={newEntryCategory} onChange={(e) => setNewEntryCategory(e.target.value)} placeholder="分类" style={{ width: 100, ...inputStyle, fontSize: "var(--fs-11)" }} />
-                  </div>
-                  <input value={newEntryKeys} onChange={(e) => setNewEntryKeys(e.target.value)} placeholder="触发关键词 (逗号分隔, 如: 筑基, 金丹)" style={{ ...inputStyle, fontSize: "var(--fs-11)" }} />
-                  <textarea value={newEntryContent} onChange={(e) => setNewEntryContent(e.target.value)} placeholder="当对话中出现关键词时，注入的详细内容..." style={{ ...inputStyle, fontSize: "var(--fs-11)", minHeight: 80, resize: "vertical" }} />
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <select value={newEntryPosition} onChange={(e) => setNewEntryPosition(e.target.value as any)}
-                      style={{ padding: "6px 10px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-11)", outline: "none" }}>
-                      <option value="system">系统提示 (System)</option>
-                      <option value="situation">情境提示 (Situation)</option>
-                      <option value="last">最新提示 (Last)</option>
-                    </select>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={() => { setShowEntryForm(false); resetEntryForm(); }} style={btnSecondary}>取消</button>
-                      <button onClick={handleCreateEntry} disabled={!newEntryTitle.trim()} style={{ ...btnPrimary, opacity: !newEntryTitle.trim() ? 0.5 : 1, cursor: !newEntryTitle.trim() ? "not-allowed" : "pointer" }}>保存条目</button>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {/* Entry List */}
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {selectedBook.entries.length === 0 && !showEntryForm && (
+                {selectedBook.entries.length === 0 && (
                   <div style={{ padding: "24px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)", background: "var(--seed-hover-bg)", borderRadius: 8 }}>
-                    暂无条目。点击"新建条目"添加世界规则
+                    暂无条目。可用「AI 创建」对话生成世界条目，或编辑世界后自动补充
                   </div>
                 )}
                 {selectedBook.entries.map((entry) => (
@@ -497,15 +407,15 @@ export function WorldPanel() {
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         <input value={editingEntry.title} onChange={(e) => setEditingEntry({...editingEntry, title: e.target.value})} placeholder="标题" style={{ ...inputStyle, fontSize: "var(--fs-11)" }} />
                         <div style={{ display: "flex", gap: 8 }}>
-                          <input value={editingEntry.key.join(", ")} onChange={(e) => setEditingEntry({...editingEntry, key: e.target.value.split(",").map(k => k.trim()).filter(Boolean)})} placeholder="关键词" style={{ flex: 1, ...inputStyle, fontSize: "var(--fs-11)" }} />
-                          <select value={editingEntry.position} onChange={(e) => setEditingEntry({...editingEntry, position: e.target.value as any})}
-                            style={{ padding: "6px 10px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-11)", outline: "none" }}>
-                            <option value="system">System</option>
-                            <option value="situation">Situation</option>
-                            <option value="last">Last</option>
-                          </select>
+                        <AutoInput value={editingEntry.key.join(", ")} onChange={(e) => setEditingEntry({...editingEntry, key: e.target.value.split(",").map(k => k.trim()).filter(Boolean)})} placeholder="关键词" min={200} max={520} style={{ flex: 1, ...inputStyle, fontSize: "var(--fs-11)" }} />
+                        <select value={editingEntry.position} onChange={(e) => setEditingEntry({...editingEntry, position: e.target.value as any})}
+                          style={{ padding: "6px 10px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-11)", outline: "none" }}>
+                          <option value="system">System</option>
+                          <option value="situation">Situation</option>
+                          <option value="last">Last</option>
+                        </select>
                         </div>
-                        <textarea value={editingEntry.content} onChange={(e) => setEditingEntry({...editingEntry, content: e.target.value})} placeholder="内容" style={{ ...inputStyle, fontSize: "var(--fs-11)", minHeight: 60, resize: "vertical" }} />
+                        <AutoTextarea value={editingEntry.content} onChange={(e) => setEditingEntry({...editingEntry, content: e.target.value})} placeholder="内容" style={{ ...inputStyle, fontSize: "var(--fs-11)", minHeight: 60 }} maxHeight={240} />
                         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
                           <button onClick={() => setEditingEntry(null)} style={btnSecondary}>取消</button>
                           <button onClick={handleUpdateEntry} style={btnPrimary}>保存</button>

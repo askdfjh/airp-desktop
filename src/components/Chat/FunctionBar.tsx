@@ -32,6 +32,14 @@ export function FunctionBar() {
   const worldBtnRef = useRef<HTMLButtonElement>(null);
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const barRef = useRef<HTMLDivElement>(null);
+  const chipRefs = {
+    provider: useRef<HTMLDivElement>(null),
+    model: useRef<HTMLDivElement>(null),
+    style: useRef<HTMLDivElement>(null),
+  };
+  const menuPortalRef = useRef<HTMLDivElement>(null);
+  const openChipEl = openMenu ? chipRefs[openMenu].current : null;
+  const chipRect = openChipEl ? openChipEl.getBoundingClientRect() : null;
   const eff = effectiveTheme();
 
   const showToast = (msg: string) => notify(msg);
@@ -47,7 +55,9 @@ export function FunctionBar() {
   useEffect(() => {
     if (!openMenu) return;
     const onDown = (e: MouseEvent) => {
-      if (barRef.current && !barRef.current.contains(e.target as Node)) setOpenMenu(null);
+      const t = e.target as Node;
+      if (menuPortalRef.current && menuPortalRef.current.contains(t)) return;
+      if (barRef.current && !barRef.current.contains(t)) setOpenMenu(null);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpenMenu(null);
@@ -183,7 +193,7 @@ export function FunctionBar() {
     <>
       <div className="seed-func-bar" ref={barRef}>
         {/* Provider 切换 */}
-        <div style={{ position: "relative" }}>
+        <div ref={chipRefs.provider} style={{ position: "relative" }}>
           <button
             className="seed-func-chip" disabled={compressing}
             data-tooltip={activeProvider ? activeProvider.name : "未配置服务"}
@@ -192,31 +202,10 @@ export function FunctionBar() {
             <span>{activeProvider ? activeProvider.name : "未配置服务"}</span>
             <ChevronDown size={12} style={{ flexShrink: 0 }} />
           </button>
-          {openMenu === "provider" && (
-            <div style={menuStyle}>
-              {availableProviders.length === 0 && (
-                <div style={{ padding: "8px 10px", fontSize: 12, color: "var(--seed-muted)" }}>
-                  暂无 Provider，请在设置中添加
-                </div>
-              )}
-              {availableProviders.map((p) => (
-                <div
-                  key={p.id}
-                  style={itemStyle(p.id === activeProviderId)}
-                  onClick={() => switchProvider(p.id)}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--seed-hover-bg)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = p.id === activeProviderId ? "var(--seed-accent-bg)" : "transparent"; }}
-                >
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{p.name}</span>
-                  {p.id === activeProviderId && <Check size={12} style={{ flexShrink: 0 }} />}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* 模型切换 */}
-        <div style={{ position: "relative" }}>
+        <div ref={chipRefs.model} style={{ position: "relative" }}>
           <button
             className="seed-func-chip" disabled={compressing}
             data-tooltip={activeModel || "选择模型"}
@@ -225,31 +214,10 @@ export function FunctionBar() {
             <span>{activeModel || "选择模型"}</span>
             <ChevronDown size={12} style={{ flexShrink: 0 }} />
           </button>
-          {openMenu === "model" && activeProvider && (
-            <div style={menuStyle}>
-              {models.length === 0 && (
-                <div style={{ padding: "8px 10px", fontSize: 12, color: "var(--seed-muted)" }}>
-                  该服务暂无模型，请在设置中添加
-                </div>
-              )}
-              {models.map((m) => (
-                <div
-                  key={m}
-                  style={itemStyle(m === activeModel)}
-                  onClick={() => applyModel(activeProvider.id, m)}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--seed-hover-bg)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = m === activeModel ? "var(--seed-accent-bg)" : "transparent"; }}
-                >
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{m}</span>
-                  {m === activeModel && <Check size={12} style={{ flexShrink: 0 }} />}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* 文风切换 */}
-        <div style={{ position: "relative" }}>
+        <div ref={chipRefs.style} style={{ position: "relative" }}>
           <button
             className={"seed-func-chip" + (activePreset ? "" : " seed-func-chip--muted")}
             disabled={compressing}
@@ -260,44 +228,6 @@ export function FunctionBar() {
             <span>{activePreset ? activePreset.name : "文风"}</span>
             <ChevronDown size={12} style={{ flexShrink: 0 }} />
           </button>
-          {openMenu === "style" && (
-            <div style={{ ...menuStyle, minWidth: 220, maxWidth: 260 }}>
-              {presets.map((p) => {
-                const act = p.id === activePresetId;
-                return (
-                  <div
-                    key={p.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      padding: "7px 10px",
-                      borderRadius: 8,
-                      fontSize: 12,
-                      cursor: "pointer",
-                      background: act ? "var(--seed-accent-bg)" : "transparent",
-                      color: act ? "var(--seed-accent)" : "var(--seed-muted)",
-                    }}
-                    onClick={() => handleStyleSelect(p.id)}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--seed-hover-bg)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = act ? "var(--seed-accent-bg)" : "transparent"; }}
-                  >
-                    <span style={{ flexShrink: 0, fontWeight: 600, whiteSpace: "nowrap" }}>{p.name}</span>
-                    <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: 0.7 }}>{p.description}</span>
-                    {act && <Check size={12} style={{ flexShrink: 0 }} />}
-                  </div>
-                );
-              })}
-              {activePresetId !== "none" && (
-                <div
-                  style={{ ...itemStyle(false), borderTop: "1px solid var(--seed-border)", marginTop: 4, borderRadius: 0 }}
-                  onClick={() => handleStyleSelect(activePresetId)}
-                >
-                  <span>关闭文风预设</span>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* 思考模式快捷开关 */}
@@ -386,6 +316,103 @@ export function FunctionBar() {
           </svg>
         </button>
       </div>
+
+      {/* 模型/服务/文风 下拉菜单：portal 到 body，fixed 定位，避免窄屏滚动栏裁剪 */}
+      {openMenu && chipRect && createPortal(
+        <div className={`theme-${eff}`} ref={menuPortalRef}>
+          <div
+            style={{
+              ...menuStyle,
+              position: "fixed",
+              bottom: window.innerHeight - chipRect.top + 6,
+              left: Math.max(8, Math.min(chipRect.left, window.innerWidth - (openMenu === "style" ? 260 : 240) - 8)),
+              ...(openMenu === "style" ? { minWidth: 220, maxWidth: 260 } : {}),
+            }}
+          >
+            {openMenu === "provider" && (
+              <>
+                {availableProviders.length === 0 && (
+                  <div style={{ padding: "8px 10px", fontSize: 12, color: "var(--seed-muted)" }}>
+                    暂无 Provider，请在设置中添加
+                  </div>
+                )}
+                {availableProviders.map((p) => (
+                  <div
+                    key={p.id}
+                    style={itemStyle(p.id === activeProviderId)}
+                    onClick={() => switchProvider(p.id)}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--seed-hover-bg)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = p.id === activeProviderId ? "var(--seed-accent-bg)" : "transparent"; }}
+                  >
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{p.name}</span>
+                    {p.id === activeProviderId && <Check size={12} style={{ flexShrink: 0 }} />}
+                  </div>
+                ))}
+              </>
+            )}
+            {openMenu === "model" && activeProvider && (
+              <>
+                {models.length === 0 && (
+                  <div style={{ padding: "8px 10px", fontSize: 12, color: "var(--seed-muted)" }}>
+                    该服务暂无模型，请在设置中添加
+                  </div>
+                )}
+                {models.map((m) => (
+                  <div
+                    key={m}
+                    style={itemStyle(m === activeModel)}
+                    onClick={() => applyModel(activeProvider.id, m)}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--seed-hover-bg)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = m === activeModel ? "var(--seed-accent-bg)" : "transparent"; }}
+                  >
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{m}</span>
+                    {m === activeModel && <Check size={12} style={{ flexShrink: 0 }} />}
+                  </div>
+                ))}
+              </>
+            )}
+            {openMenu === "style" && (
+              <>
+                {presets.map((p) => {
+                  const act = p.id === activePresetId;
+                  return (
+                    <div
+                      key={p.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "7px 10px",
+                        borderRadius: 8,
+                        fontSize: 12,
+                        cursor: "pointer",
+                        background: act ? "var(--seed-accent-bg)" : "transparent",
+                        color: act ? "var(--seed-accent)" : "var(--seed-muted)",
+                      }}
+                      onClick={() => handleStyleSelect(p.id)}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--seed-hover-bg)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = act ? "var(--seed-accent-bg)" : "transparent"; }}
+                    >
+                      <span style={{ flexShrink: 0, fontWeight: 600, whiteSpace: "nowrap" }}>{p.name}</span>
+                      <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: 0.7 }}>{p.description}</span>
+                      {act && <Check size={12} style={{ flexShrink: 0 }} />}
+                    </div>
+                  );
+                })}
+                {activePresetId !== "none" && (
+                  <div
+                    style={{ ...itemStyle(false), borderTop: "1px solid var(--seed-border)", marginTop: 4, borderRadius: 0 }}
+                    onClick={() => handleStyleSelect(activePresetId)}
+                  >
+                    <span>关闭文风预设</span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Toast */}
       {toast && createPortal(

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { AutoTextarea } from "@/lib/autoGrow";
 
 interface Field {
   key: string;
@@ -40,9 +41,10 @@ export function EditDialog({ title, fields, onSave, onCancel, saveLabel = "‰øùÂ≠
             <div key={f.key}>
               <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", marginBottom: 4 }}>{f.label}</div>
               {f.type === "textarea" ? (
-                <textarea value={f.value} onChange={(e) => f.onChange(e.target.value)} placeholder={f.placeholder}
+                <AutoTextarea value={f.value} onChange={(e) => f.onChange(e.target.value)} placeholder={f.placeholder}
                   rows={f.rows ?? 4}
-                  style={{ width: "100%", padding: "8px 10px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-12)", fontFamily: "inherit", resize: "vertical", outline: "none", boxSizing: "border-box" }} />
+                  maxHeight={260}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-12)", fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
               ) : (
                 <input value={f.value} onChange={(e) => f.onChange(e.target.value)} placeholder={f.placeholder}
                   style={{ width: "100%", padding: "8px 10px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-12)", fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />

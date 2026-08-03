@@ -57,7 +57,7 @@ export function DataPanel() {
       notify(`已导出 ${data.groups.length} 项数据`);
     } catch (e) {
       console.error("[settings] export failed:", e);
-      notify("导出失败，请重试");
+      notify("导出失败：" + (e instanceof Error ? e.message : String(e)));
     } finally {
       setBusy(null);
     }

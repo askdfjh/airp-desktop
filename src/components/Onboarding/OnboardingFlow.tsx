@@ -9,7 +9,7 @@ import { WorldSelect, PRESET_WORLDS, WORLD_BOOK_MAP } from "./WorldSelect";
 import { ModeSelect } from "./ModeSelect";
 import { CharacterOpeningSelect } from "./CharacterOpeningSelect";
 
-export function OnboardingFlow() {
+export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
   const { onboardingStep, setAppPhase, resetOnboarding, setPendingOpeningMessage } = useUIStore();
   const addSession = useSessionStore((s) => s.add);
   const setActive = useSessionStore((s) => s.setActive);
@@ -143,6 +143,31 @@ export function OnboardingFlow() {
   return (
     <div className="seed-onboarding">
       <div className="seed-particles">{particles}</div>
+      {onExit && (
+        <button
+          onClick={onExit}
+          title="退出开局流程"
+          style={{
+            position: "fixed",
+            top: /Android/i.test(navigator.userAgent) ? 14 : 54,
+            right: 16,
+            zIndex: 300,
+            display: "flex", alignItems: "center", gap: 5,
+            padding: "7px 14px", borderRadius: 999,
+            border: "1px solid var(--seed-border)",
+            background: "var(--seed-surface)",
+            color: "var(--seed-muted)",
+            fontSize: 12, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
+            transition: "all 0.15s",
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+          退出
+        </button>
+      )}
       <div className="seed-onboarding-content">
         <div className="seed-onboarding-step" key={onboardingStep}>
           {onboardingStep === 1 && <WorldSelect onRandomStart={handleRandomStart} />}

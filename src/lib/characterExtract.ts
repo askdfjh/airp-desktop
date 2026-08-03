@@ -1,5 +1,6 @@
 import type { Message } from "@/types";
 import { chatStream } from "@/providers/openai";
+import type { CharacterDraft } from "@/stores/createStore";
 import {
   findExtractedCharacterCardByName,
   insertCharacterCard,
@@ -86,6 +87,19 @@ function parseJsonArray(text: string): ExtractedCharacterInfo[] | null {
         relationships: String(x.relationships || "").trim(),
         currentStatus: String(x.currentStatus || "").trim(),
       }));
+  } catch {
+    return null;
+  }
+}
+
+/** 宽松 JSON 对象解析：容忍 markdown 代码块与前后说明文字 */
+export function parseJsonObject<T>(text: string): T | null {
+  const clean = (text || "").replace(/```json/gi, "").replace(/```/g, "").trim();
+  const start = clean.indexOf("{");
+  const end = clean.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return null;
+  try {
+    return JSON.parse(clean.slice(start, end + 1)) as T;
   } catch {
     return null;
   }
@@ -336,4 +350,97 @@ export async function saveExtractedCharacters(
     saved++;
   }
   return saved;
+}
+
+/* ---------- 创建模式：单角色完整提炼 ---------- */
+
+function normalizeDraft(raw: Record<string, unknown>): CharacterDraft | null {
+  const name = String(raw.name || "").trim();
+  if (!name) return null;
+  const aliases = Array.isArray(raw.aliases)
+    ? raw.aliases.filter((a: unknown) => typeof a === "string").map((a: string) => a.trim()).filter(Boolean)
+    : [];
+  return {
+    name,
+    emoji: typeof raw.emoji === "string" && raw.emoji ? raw.emoji : "🎭",
+    tags: Array.isArray(raw.tags)
+      ? raw.tags.filter((t: unknown) => typeof t === "string").map((t: string) => t.trim()).filter(Boolean)
+      : [],
+    description: String(raw.description || raw.relationships || "").trim().slice(0, 80),
+    appearance: String(raw.appearance || "").trim(),
+    personality: String(raw.personality || "").trim(),
+    speechStyle: String(raw.speechStyle || "").trim(),
+    background: String(raw.background || "").trim(),
+    relationships: String(raw.relationships || "").trim(),
+    goals: String(raw.goals || "").trim(),
+    triggerWords: aliases.length > 0 ? [name, ...aliases] : [name],
+  };
+}
+
+export interface CreateExtractParams {
+  messages: Message[];
+  /** 增量模式：已保存的角色设定（prompt 中提供，AI 重出同名角色最新版本） */
+  existing?: CharacterDraft | null;
+  provider: { model: string; baseUrl: string; apiKey: string };
+  signal?: AbortSignal;
+}
+
+/**
+ * 从创建模式对话中提炼单个完整角色设定。JSON 解析失败返回 null（调用方提示重试）。
+ */
+export async function extractCharacterForCreate(params: CreateExtractParams): Promise<CharacterDraft | null> {
+  const { messages, existing, provider, signal } = params;
+  const windowText = buildWindowText(messages);
+
+  const systemPrompt =
+    "你是一位资深小说编辑与角色设定师。请从用户的创建对话中提炼出完整的「角色设定卡」，用于角色扮演应用。" +
+    "只输出一个 JSON 对象，不要任何解释文字或 markdown 代码块。";
+
+  let userPrompt =
+    "请从下面的创建对话中提炼角色设定：\n" +
+    "要求：\n" +
+    "1. 只使用对话中明确提及的信息，不要编造；没有的信息填空字符串；\n" +
+    "2. 输出 JSON 对象，格式：\n" +
+    '{"name":"角色名","aliases":["别名","昵称"],"emoji":"角色表情符号","tags":["标签"],"description":"一句话简介","appearance":"外貌特征","personality":"性格特点","speechStyle":"说话风格","background":"背景来历","relationships":"与主角及其他角色的关系","goals":"目标与欲望","triggerWords":["出场触发词"]}\n' +
+    "3. triggerWords 用角色名与别名；tags 用 2-4 个精炼标签；\n" +
+    "4. appearance/personality/background 等信息具体完整（20-80字）。";
+
+  if (existing) {
+    userPrompt +=
+      "\n5. 这是增量修改：下面提供「已有设定」，请输出完整的最新版本（以新对话中的信息覆盖同名角色旧设定，未提及的字段保留旧值）。";
+  }
+
+  userPrompt +=
+    (existing
+      ? `\n\n【已有设定】\n名称：${existing.name}\n外貌：${existing.appearance}\n性格：${existing.personality}\n说话风格：${existing.speechStyle}\n背景：${existing.background}\n关系：${existing.relationships}\n目标：${existing.goals}\n`
+      : "") +
+    "\n创建对话如下（==== 之间）：\n====\n" + windowText + "\n====";
+
+  let raw = "";
+  try {
+    for await (const chunk of chatStream(
+      [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      provider.model,
+      provider.baseUrl,
+      provider.apiKey,
+      false,
+      undefined,
+      signal,
+    )) {
+      raw += chunk.content;
+    }
+  } catch (e) {
+    console.warn("[characterExtract] create LLM call failed:", e);
+    return null;
+  }
+
+  const parsed = parseJsonObject<Record<string, unknown>>(raw);
+  if (!parsed) {
+    console.warn("[characterExtract] create JSON parse failed");
+    return null;
+  }
+  return normalizeDraft(parsed);
 }

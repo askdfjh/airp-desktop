@@ -66,6 +66,9 @@ interface UIState {
   setCompressPrompt: (p: UIState["compressPrompt"]) => void;
   setCompressPromptCallbacks: (c: UIState["compressPromptCallbacks"]) => void;
   markCompressDeclined: () => void;
+  // AI 创建模式（角色/世界）：null = 未打开
+  createMode: "character" | "world" | null;
+  setCreateMode: (m: "character" | "world" | null) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -144,6 +147,9 @@ export const useUIStore = create<UIState>()(
       setCompressPrompt: (p) => set({ compressPrompt: p }),
       setCompressPromptCallbacks: (c) => set({ compressPromptCallbacks: c }),
       markCompressDeclined: () => set({ lastCompressDeclineAt: Date.now() }),
+      // AI 创建模式（不持久化）
+      createMode: null,
+      setCreateMode: (m) => set({ createMode: m }),
     }),
     {
       name: "airp-ui-v3",

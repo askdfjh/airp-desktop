@@ -198,10 +198,12 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: () => void }) {
   const { setSelectedWorld, setOnboardingStep } = useUIStore();
   const [selected, setSelected] = useState<string | null>(null);
   const [gender, setGender] = useState<"male" | "female">("male");
+  const [showCustom, setShowCustom] = useState(false);
   const books = useWorldStore((s) => s.books);
   const setActiveBook = useWorldStore((s) => s.setActiveBook);
   const deactivateAllBooks = useWorldStore((s) => s.deactivateAllBooks);
 
+  const customBooks = books.filter((b) => !b.isBuiltin);
   const filteredWorlds = PRESET_WORLDS.filter((w) => w.gender === gender);
 
   const handleSelect = async (id: string, name: string) => {
@@ -313,7 +315,111 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: () => void }) {
             <div className="seed-card-desc">{world.desc}</div>
           </div>
         ))}
+        {/* 自定义世界入口：每个 tab 都有，点击展开我的世界列表 */}
+        <div
+          className={`seed-card seed-card--custom ${showCustom ? "seed-card--selected" : ""}`}
+          onClick={() => setShowCustom((v) => !v)}
+          style={{
+            border: "1px dashed color-mix(in srgb, var(--seed-fg) 12%, transparent)",
+            background: "transparent",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: 164,
+            textAlign: "center",
+            cursor: "pointer",
+          }}
+        >
+          <div style={{
+            width: 44, height: 44, borderRadius: "50%",
+            border: "1px dashed color-mix(in srgb, var(--seed-fg) 15%, transparent)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            marginBottom: 12, color: "var(--seed-muted)",
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+            </svg>
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--seed-fg)" }}>自定义世界</div>
+          <div style={{ fontSize: 12, color: "var(--seed-muted)", marginTop: 4 }}>
+            {customBooks.length > 0 ? `${customBooks.length} 个已创建的世界` : "创建属于你的独特世界"}
+          </div>
+        </div>
       </div>
+
+      {/* 我的世界：自定义世界书列表 */}
+      {showCustom && (
+        <div style={{ margin: "8px 0 24px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 18 }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--seed-fg)" }}>我的世界</span>
+            <button
+              onClick={() => useUIStore.getState().setCreateMode("world")}
+              style={{
+                display: "flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: 999,
+                border: "1px solid color-mix(in srgb, var(--seed-accent) 40%, transparent)",
+                background: "var(--seed-accent-bg)", color: "var(--seed-accent)",
+                fontSize: 12, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              AI 创建世界
+            </button>
+            <button
+              onClick={() => setShowCustom(false)}
+              style={{
+                display: "flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: 999,
+                border: "1px solid var(--seed-border)", background: "transparent", color: "var(--seed-muted)",
+                fontSize: 12, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+              退出
+            </button>
+          </div>
+          {customBooks.length === 0 ? (
+            <div style={{
+              textAlign: "center", padding: "30px 0", borderRadius: 14,
+              border: "1px dashed var(--seed-border)", color: "var(--seed-muted)", fontSize: 13,
+            }}>
+              还没有自定义世界，点击「AI 创建世界」生成一个
+            </div>
+          ) : (
+            <div data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 20, justifyContent: "center", maxWidth: 900, margin: "0 auto", width: "100%" }}>
+              {customBooks.map((b) => (
+                <div
+                  key={b.id}
+                  className={`seed-card ${selected === b.id ? "seed-card--selected" : ""}`}
+                  onClick={() => handleSelect(b.id, b.name)}
+                  style={{ cursor: "pointer" }}
+                >
+                  <div className="seed-card-check">
+                    <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
+                  </div>
+                  <div className="seed-card-icon" style={{ color: "var(--seed-accent)", background: "color-mix(in srgb, var(--seed-accent) 10%, transparent)" }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
+                      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+                    </svg>
+                  </div>
+                  <div className="seed-card-title">{b.name}</div>
+                  <div className="seed-card-desc">{b.description || b.theme || "暂无描述"}</div>
+                  <div style={{ marginTop: 10, fontSize: 11, color: "var(--seed-muted)" }}>
+                    {b.entries.length} 条条目 · {b.theme || "自定义主题"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 随机开局 + 自定义世界入口（贴合设计稿 bottom-row） */}
       <div data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 20, justifyContent: "center", maxWidth: 900, marginLeft: "auto", marginRight: "auto", width: "100%" }}>
@@ -349,7 +455,7 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: () => void }) {
         </div>
         <div
           className="seed-card seed-card--custom"
-          onClick={() => useUIStore.getState().setSettingsOpen(true)}
+          onClick={() => setShowCustom(true)}
           style={{
             border: "1px dashed color-mix(in srgb, var(--seed-fg) 12%, transparent)",
             background: "transparent",

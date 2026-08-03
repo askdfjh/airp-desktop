@@ -9,6 +9,7 @@ import { MarkdownRender } from "./MarkdownRender";
 import { parseSceneReply, type SceneInfo } from "@/lib/sceneTemplate";
 import { stopCompress } from "@/lib/contextCompress";
 import { registerBackHandler } from "@/lib/androidBack";
+import { fitTextarea } from "@/lib/autoGrow";
 
 export function DialogueNovel() {
   const { messages, sendMessage, streaming, stopStreaming, regenerate, editAndSend, editMessage, deleteMessage } = useChat();
@@ -612,9 +613,10 @@ export function DialogueNovel() {
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
+              onInput={(e) => fitTextarea(e.currentTarget, 160)}
               rows={1}
               disabled={streaming}
-              style={{ overflow: "hidden", resize: "none" }}
+              style={{ resize: "none" }}
             />
             {streaming ? (
               <button className="seed-send-btn" onClick={stopStreaming} style={{ background: "var(--danger, #ef4444)" }}>

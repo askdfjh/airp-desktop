@@ -29,7 +29,7 @@ interface WorldState {
   loadFromDb: () => Promise<void>;
   selectBook: (id: string | null) => void;
   
-  addBook: (book: Omit<WorldBook, "id" | "entries" | "createdAt" | "updatedAt">) => Promise<void>;
+  addBook: (book: Omit<WorldBook, "id" | "entries" | "createdAt" | "updatedAt">) => Promise<string>;
   updateBook: (id: string, fields: Partial<Pick<WorldBook, "name" | "theme" | "description" | "tags" | "isActive" | "isBuiltin" | "violationWords">>) => Promise<void>;
   removeBook: (id: string) => Promise<void>;
   duplicateBook: (id: string) => Promise<string | null>;
@@ -84,6 +84,7 @@ export const useWorldStore = create<WorldState>((set, get) => ({
       books: [newBook, ...st.books],
       selectedBookId: newBook.id 
     }));
+    return newBook.id;
   },
 
   updateBook: async (id, fields) => {

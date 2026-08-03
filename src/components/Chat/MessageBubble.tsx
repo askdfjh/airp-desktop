@@ -3,6 +3,7 @@ import type { Message } from "@/types";
 import { MarkdownRender } from "./MarkdownRender";
 import { StreamingText } from "./StreamingText";
 import { Bot, User, Copy, RotateCw, Pencil, Trash2, Check, Send, Brain, ChevronDown, Wrench } from "lucide-react";
+import { fitTextarea } from "@/lib/autoGrow";
 
 interface Props {
   message: Message;
@@ -407,11 +408,11 @@ export function MessageBubble({ message, streaming, onDelete, onEdit, onRegenera
               minHeight: 120, maxHeight: 360,
               background: "var(--bg-input)", border: "1px solid var(--border-light)",
               borderRadius: 10, padding: 12,
-              resize: "vertical",
               color: "var(--text-primary)", fontFamily: "inherit",
               fontSize: "var(--fs-14)", lineHeight: 1.6,
               outline: "none",
             }}
+            onInput={(e) => fitTextarea(e.currentTarget, 360)}
             autoFocus
             onFocus={(e) => (e.target.style.borderColor = "var(--accent)")}
             onBlur={(e) => (e.target.style.borderColor = "var(--border-light)")}

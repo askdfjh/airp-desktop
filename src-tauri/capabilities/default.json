@@ -6,6 +6,12 @@
     "core:default",
     "dialog:default",
     "fs:default",
+    "fs:allow-write-text-file",
+    "fs:allow-read-text-file",
+    {
+      "identifier": "fs:scope",
+      "allow": [{ "path": "**" }]
+    },
     "shell:default",
     "sql:default",
     "sql:allow-execute",

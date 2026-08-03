@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
-import { Users, Plus, Trash2, Edit3, Sparkles, User, RefreshCw, Search, Send } from "lucide-react";
+import { Users, Trash2, Edit3, Sparkles, User, RefreshCw, Search, Send, Wand2 } from "lucide-react";
 import { useCharacterStore } from "@/stores/characterStore";
 import { useSessionStore } from "@/stores/sessionStore";
+import { useUIStore } from "@/stores/uiStore";
+import { useCreateStore } from "@/stores/createStore";
+import { AutoInput } from "@/lib/autoGrow";
 import type { Character, CharacterArc } from "@/types";
 import { EditDialog } from "@/components/Layout/EditDialog";
 
@@ -26,7 +29,7 @@ function buildCharacterPrompt(c: Character, arcs: CharacterArc[]): string {
 }
 
 export function CharacterPanel() {
-  const { characters, loadCharactersFromDb, addCharacter, updateCharacter, removeCharacter, loadArcs, arcs, clearWorldArcs, restoreDefaultCharacters, cards, loadFromDb, updateCard, removeCard, trashCards, loadTrashFromDb, restoreCardFromTrash, purgeCardFromTrash, clearExpiredTrash } = useCharacterStore();
+  const { characters, loadCharactersFromDb, updateCharacter, removeCharacter, loadArcs, arcs, clearWorldArcs, restoreDefaultCharacters, cards, loadFromDb, updateCard, removeCard, trashCards, loadTrashFromDb, restoreCardFromTrash, purgeCardFromTrash, clearExpiredTrash } = useCharacterStore();
   const { sessions, activeId, updateSystemPrompt } = useSessionStore();
   const [viewTab, setViewTab] = useState<"char" | "extracted" | "trash">("char");
   // 窄屏（手机）：左右分栏改为上下堆叠
@@ -40,16 +43,15 @@ export function CharacterPanel() {
   }, []);
   const [selectedChars, setSelectedChars] = useState<Set<string>>(new Set());
   const [detailId, setDetailId] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<Character | null>(null);
   const [worldContext, setWorldContext] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const [newName, setNewName] = useState("");
-  const [newAppearance, setNewAppearance] = useState("");
-  const [newPersonality, setNewPersonality] = useState("");
-  const [newBackground, setNewBackground] = useState("");
-  const [newTags, setNewTags] = useState("");
+  const setCreateMode = useUIStore((s) => s.setCreateMode);
+  const openCreateMode = () => {
+    useCreateStore.getState().open("character");
+    setCreateMode("character");
+  };
 
   const [editName, setEditName] = useState("");
   const [editAppearance, setEditAppearance] = useState("");
@@ -82,25 +84,7 @@ export function CharacterPanel() {
   const builtinChars = filtered.filter(c => c.isBuiltin);
   const myChars = filtered.filter(c => !c.isBuiltin);
 
-  const resetForm = () => {
-    setNewName(""); setNewAppearance(""); setNewPersonality("");
-    setNewBackground(""); setNewTags("");
-  };
-
-  const handleCreate = async () => {
-    if (!newName.trim()) return;
-    await addCharacter({
-      id: crypto.randomUUID(),
-      name: newName.trim(),
-      appearance: newAppearance.trim(),
-      personality: newPersonality.trim(),
-      background: newBackground.trim(),
-      tags: newTags.split(",").map(t => t.trim()).filter(Boolean),
-      isBuiltin: false,
-    });
-    resetForm();
-    setShowForm(false);
-  };
+  const resetForm = () => {};
 
   const startEdit = (c: Character) => {
     setEditName(c.name); setEditAppearance(c.appearance);
@@ -170,12 +154,6 @@ export function CharacterPanel() {
     transition: "all 0.15s",
   });
 
-  const inputStyle: React.CSSProperties = {
-    padding: "7px 10px", borderRadius: 8, background: "var(--seed-input-bg)",
-    border: "1px solid var(--seed-border)", color: "var(--seed-fg)",
-    fontSize: "var(--fs-12)", fontFamily: "inherit", outline: "none", boxSizing: "border-box", width: "100%",
-  };
-
   return (
     <div style={{ display: "flex", gap: 20, flex: 1, minHeight: 0, flexDirection: isNarrow ? "column" : "row" }}>
       {/* Left column */}
@@ -207,35 +185,19 @@ export function CharacterPanel() {
                 />
               </div>
               <button
-                onClick={() => { setShowForm(!showForm); }}
+                onClick={openCreateMode}
+                title="与 AI 对话式创建角色，完成后自动写入角色卡"
                 style={{
                   display: "flex", alignItems: "center", gap: 4, padding: "8px 12px", borderRadius: 10,
                   fontSize: "var(--fs-11)", fontWeight: 500, fontFamily: "inherit", cursor: "pointer", flexShrink: 0,
-                  background: showForm ? "var(--seed-accent)" : "var(--seed-accent-bg)",
-                  color: showForm ? "#fff" : "var(--seed-accent)",
+                  background: "var(--seed-accent)",
+                  color: "#fff",
                   border: "none",
                 }}
               >
-                <Plus size={12} /> 新建
+                <Wand2 size={12} /> AI 创建
               </button>
             </div>
-
-            {showForm && (
-              <div style={{ padding: 12, borderRadius: 12, background: "var(--seed-surface)", border: "1px solid var(--seed-border)", display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)", marginBottom: 2 }}>创建新角色</div>
-                <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="角色名称 *" style={inputStyle} />
-                <textarea value={newAppearance} onChange={(e) => setNewAppearance(e.target.value)} placeholder="外貌描述" style={{ ...inputStyle, fontSize: "var(--fs-11)", minHeight: 40, resize: "vertical" }} />
-                <textarea value={newPersonality} onChange={(e) => setNewPersonality(e.target.value)} placeholder="性格特征" style={{ ...inputStyle, fontSize: "var(--fs-11)", minHeight: 40, resize: "vertical" }} />
-                <textarea value={newBackground} onChange={(e) => setNewBackground(e.target.value)} placeholder="背景故事" style={{ ...inputStyle, fontSize: "var(--fs-11)", minHeight: 50, resize: "vertical" }} />
-                <input value={newTags} onChange={(e) => setNewTags(e.target.value)} placeholder="标签（逗号分隔）" style={{ ...inputStyle, fontSize: "var(--fs-11)" }} />
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
-                  <button onClick={() => { setShowForm(false); resetForm(); }}
-                    style={{ padding: "5px 12px", borderRadius: 8, fontSize: "var(--fs-11)", fontFamily: "inherit", color: "var(--seed-muted)", background: "transparent", border: "1px solid var(--seed-border)", cursor: "pointer" }}>取消</button>
-                  <button onClick={handleCreate} disabled={!newName.trim()}
-                    style={{ padding: "5px 14px", borderRadius: 8, fontSize: "var(--fs-11)", fontWeight: 500, fontFamily: "inherit", background: "var(--seed-accent)", color: "#fff", border: "none", opacity: !newName.trim() ? 0.5 : 1, cursor: !newName.trim() ? "not-allowed" : "pointer" }}>创建</button>
-                </div>
-              </div>
-            )}
 
             {/* Grouped list */}
             <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -314,7 +276,7 @@ export function CharacterPanel() {
 
               {filtered.length === 0 && (
                 <div style={{ padding: "30px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>
-                  {searchQuery ? "未找到匹配的角色" : "暂无角色，点击右上角新建"}
+                  {searchQuery ? "未找到匹配的角色" : "暂无角色，点击右上角「AI 创建」，与 AI 对话生成角色"}
                 </div>
               )}
             </div>
@@ -490,8 +452,8 @@ export function CharacterPanel() {
                   <span style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)" }}>({arcs.length})</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <input value={worldContext} onChange={(e) => setWorldContext(e.target.value)} placeholder="世界/会话上下文"
-                    style={{ padding: "6px 10px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-11)", fontFamily: "inherit", outline: "none", width: 140 }}
+                  <AutoInput value={worldContext} onChange={(e) => setWorldContext(e.target.value)} placeholder="世界/会话上下文" min={140} max={360}
+                    style={{ padding: "6px 10px", borderRadius: 8, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-fg)", fontSize: "var(--fs-11)", fontFamily: "inherit", outline: "none" }}
                   />
                   {arcs.length > 0 && (
                     <button onClick={() => { if (confirm("确定清空该世界上下文的所有经历？")) clearWorldArcs(selected.id, worldContext); }}
