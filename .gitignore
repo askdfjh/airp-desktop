@@ -19,6 +19,9 @@ coverage
 # 临时/备份文件
 *.bak
 __patch_*.js
+*开发日志*.md
+*dev-log*.md
+*development-log*.md
 
 # 开发临时脚本
 fix_*.cjs
