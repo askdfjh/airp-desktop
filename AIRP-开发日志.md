@@ -3098,3 +3098,201 @@ cargo build --target aarch64-linux-android   # 设 CC/CXX/AR/LINKER 指向 $ndk\
 cd src-tauri/gen/android; gradlew assembleDebug --no-daemon -x rustBuildArmDebug -x rustBuildArm64Debug -x rustBuildX86Debug -x rustBuildX86_64Debug -x rustBuildUniversalDebug
 adb install -r app/build/outputs/apk/arm64/debug/app-arm64-debug.apk
 ```
+
+### 2026-08-03（严重 BUG 巡检修复 1：package.json BOM 导致 Vite 构建失败）
+
+**问题**
+- `vite build` 失败，报错：`Unexpected token '﻿' ... is not valid JSON`
+- 触发点：Vite 读取项目根目录 `package.json` / PostCSS 配置搜索路径时，遇到文件开头 UTF-8 BOM（`EF BB BF`）解析失败
+
+**修复**
+- 将 `package.json` 重新写为无 BOM UTF-8
+- 验证文件开头字节从 `EF BB BF` 变为 `7B 0D 0A`
+
+**验证**
+- `vite build` 通过 ✅
+- 仍有非阻断 warning：CSS 中存在一处疑似乱码/未闭合字符串；后续单独处理
+
+### 2026-08-03（严重 BUG 巡检修复 2：generationStore 迁移类型阻断）
+
+**问题**
+- `tsc --noEmit` 失败：`src/stores/generationStore.ts(161,53): error TS18048: 'old' is possibly 'undefined'`
+- 根因：Zustand persist `migrate(persisted)` 中将 `persisted` 转为 `Partial<GenerationState> | undefined`，最终 `return { ...old, presets: cleaned }` 时可能展开 `undefined`
+
+**修复**
+- 将 `old` 默认值改为 `{}`：`const old = (persisted ?? {}) as Partial<GenerationState>`
+- 保持原迁移行为不变：清理旧 `dm-master` / `jailbreak` 字段，并补齐内置预设
+
+**验证**
+- `tsc --noEmit` 通过 ✅
+
+### 2026-08-03（本轮严重 BUG 修复最终验证）
+
+**验证结果**
+- TypeScript：`tsc --noEmit` 通过 ✅
+- 前端：`vite build` 通过 ✅
+- Rust：`cargo check` 通过 ✅（仅 `FetchArgs dead_code` warning）
+- Android：`gradlew assembleDebug --no-daemon -x rustBuild*` 通过 ✅
+
+**剩余非阻断提示**
+- Vite chunk size / dynamic import warning：不影响构建，可后续做代码分包优化
+- Android release 正式签名仍需配置正式 keystore；当前 debug keystore 仅允许显式参数用于本地临时测试
+
+### 2026-08-03（数据库稳定性修复：favorites 外键约束矛盾）
+
+**问题**
+- `favorites.sessionId` 定义为 `NOT NULL`
+- 外键却使用 `ON DELETE SET NULL`
+- 风险：真正硬删除会话时，SQLite 可能尝试写入 NULL 并触发约束错误
+
+**修复**
+- 新表结构改为 `ON DELETE CASCADE`，收藏随所属会话硬删除
+- 对旧库检测 `PRAGMA foreign_key_list('favorites')`
+- 检测到旧的 `SET NULL` 约束时，自动创建新表、迁移有效数据、替换旧表
+
+**涉及文件**
+- `src/lib/db.ts`
+
+**验证**
+- `tsc --noEmit` 通过 ✅
+
+### 2026-08-03（安全收紧 2：启用 Tauri CSP）
+
+**问题**
+- `tauri.conf.json` 中 `security.csp` 为 `null`，等于关闭内容安全策略
+- 风险：在存在第三方模型回复、联网搜索结果、MCP 工具结果、导入数据等外部内容时，前端安全边界偏弱
+
+**修复**
+- 增加较宽但非空的 CSP：
+  - 默认仅允许自身、Tauri/asset、本地开发地址
+  - `connect-src` 允许 HTTPS 与本地 HTTP/WS，兼容模型 API、开发服务和本地 MCP
+  - `img-src` 允许 `data:` / `blob:`，兼容图片附件预览
+  - 禁止 `object-src`，限制 `base-uri` 和 `frame-ancestors`
+
+**涉及文件**
+- `src-tauri/tauri.conf.json`
+
+**验证**
+- `vite build` 通过 ✅
+- `cargo check` 通过 ✅（仅既有 `FetchArgs dead_code` warning）
+
+### 2026-08-03（安全收紧 3：收窄 Tauri 文件系统权限）
+
+**问题**
+- `capabilities/default.json` 中 `fs:scope` 使用 `{ "path": "**" }`，文件读写范围过宽
+- 风险：如果前端内容、插件链路或工具结果出现异常，文件读写影响面过大
+
+**修复**
+- 将文件范围收窄到常用安全位置：
+  - `$APPDATA/**`
+  - `$LOCALDATA/**`
+  - `$DESKTOP/**`
+  - `$DOCUMENT/**`
+  - `$DOWNLOAD/**`
+- 兼顾正常使用：本地备份导入/导出仍可覆盖桌面、文档、下载目录；应用自身数据仍可读写
+
+**涉及文件**
+- `src-tauri/capabilities/default.json`
+
+**验证**
+- `cargo check` 通过 ✅（仅既有 `FetchArgs dead_code` warning）
+
+### 2026-08-03（Android release 签名保护：避免误用 debug keystore）
+
+**问题**
+- Android release 构建曾直接绑定 debug keystore
+- 风险：可用于本地安装测试，但不适合正式分发；后续切换正式签名会造成升级覆盖失败
+
+**修复**
+- release 默认不再使用 debug keystore
+- 本地临时 release 安装测试需显式传参：`-Pairp.android.allowDebugReleaseSigning=true`
+- 正式分发仍需单独配置 release keystore
+
+**涉及文件**
+- `src-tauri/gen/android/app/build.gradle.kts`
+
+**验证**
+- `gradlew tasks --no-daemon` 通过 ✅
+
+### 2026-08-03（构建 warning 修复：CSS 乱码未闭合字符串）
+
+**问题**
+- `vite build` 虽通过，但 esbuild CSS minify 报 warning：`Unterminated string token`
+- 位置：`src/index.css` 的 `.seed-card--disabled::after`
+- 根因：中文 `即将开放` 被乱码成 `鍗冲皢寮€鏀?` 且缺少结束引号
+
+**修复**
+- 将 CSS content 修复为：`content: '即将开放';`
+
+**验证**
+- `vite build` 通过 ✅
+- 原 CSS syntax warning 已消失 ✅
+- 仅剩 chunk size / dynamic import 常规警告
+
+### 2026-08-03（稳定性修复：窗口关闭监听释放）
+
+**问题**
+- `AppShell.tsx` 注册 `getCurrentWindow().onCloseRequested` 后未保存并调用 unlisten
+- 风险：开发热重载 / React StrictMode / 组件重挂载时可能重复注册关闭监听，导致关闭确认弹窗状态异常或多次触发
+
+**修复**
+- 保存 `onCloseRequested` 返回的 unlisten 函数
+- effect 清理阶段主动释放监听
+- 若监听返回前组件已卸载，立即执行 unlisten，避免悬挂监听
+
+**涉及文件**
+- `src/components/Layout/AppShell.tsx`
+
+**验证**
+- `tsc --noEmit` 通过 ✅
+
+### 2026-08-03（安全收紧 4：移除 HTTP Cookie 片段日志）
+
+**问题**
+- Rust `http_fetch` 在请求后会打印 cookie snippet
+- 风险：联网搜索、第三方站点或 WebDAV/工具链路中的会话信息可能进入控制台日志，不适合 release 或共享排障日志
+
+**修复**
+- 删除 cookie 片段打印
+- 请求日志不再打印完整 URL，改为仅打印 `domain` 与路径前缀，避免 query 参数中潜在敏感信息泄露
+- 保留 `cookies_sent/cookies_now` 计数，方便排查 Cookie 是否生效
+
+**涉及文件**
+- `src-tauri/src/lib.rs`
+
+**验证**
+- `cargo check` 通过 ✅（仅既有 `FetchArgs dead_code` warning）
+
+### 2026-08-03（安全收紧 1：关闭 Markdown raw HTML 渲染）
+
+**问题**
+- `MarkdownRenderer.tsx` 启用了 `rehypeRaw`，模型回复、导入内容或工具结果中的 HTML 会被解析进真实 DOM
+- 风险：虽然 React 不会直接执行普通 `<script>`，但 raw HTML 仍可能带来界面污染、外部资源加载、异常链接/属性等安全与体验风险
+
+**修复**
+- 移除 `rehype-raw` import
+- `rehypePlugins` 改为仅保留 `rehypeHighlight`
+- 普通 Markdown、GFM 表格/列表、代码高亮、一键复制保留
+
+**涉及文件**
+- `src/components/Chat/MarkdownRenderer.tsx`
+
+**验证**
+- `tsc --noEmit` 通过 ✅
+
+### 2026-08-03（严重 BUG 巡检修复 3：工具调用无限循环保护）
+
+**问题**
+- `useChat.ts` 中发送、重新生成、编辑并发送三条链路的工具调用循环均为 `while (result?.toolCalls && result.toolCalls.length > 0)`，没有最大轮数限制
+- 风险：模型若持续要求调用 `web_search` / MCP 工具，可能导致 UI 长时间卡在工具执行、持续网络请求、持续消耗第三方 API 额度
+
+**修复**
+- 新增统一常量：`MAX_TOOL_ROUNDS = 3`
+- 三处工具调用循环均加入轮数计数
+- 超过上限时写入一条 assistant 提示：工具调用已达到 3 轮上限，停止继续调用工具，引导用户收窄问题或手动重试
+
+**涉及文件**
+- `src/hooks/useChat.ts`
+
+**验证**
+- `tsc --noEmit` 通过 ✅

@@ -1,6 +1,5 @@
 ﻿import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import rehypeRaw from "rehype-raw";
 import rehypeHighlight from "rehype-highlight";
 import "highlight.js/styles/github-dark.css";
 import { useCallback, useState, isValidElement } from "react";
@@ -70,7 +69,7 @@ export default function MarkdownRenderer({ content, highlight }: { content: stri
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeRaw, rehypeHighlight]}
+      rehypePlugins={[rehypeHighlight]}
       components={{
         text({ children }) {
           // 搜索结果关键词高亮：对每个纯文本节点拆分匹配词，用 <mark> 标记

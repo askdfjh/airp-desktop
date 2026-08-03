@@ -70,9 +70,28 @@ export async function initDb(): Promise<void> {
       id TEXT PRIMARY KEY,
       sessionId TEXT NOT NULL,
       createdAt INTEGER NOT NULL,
-      FOREIGN KEY (sessionId) REFERENCES sessions(id) ON DELETE SET NULL
+      FOREIGN KEY (sessionId) REFERENCES sessions(id) ON DELETE CASCADE
     );
   `);
+  const favoriteFk = await db.select<{ on_delete?: string }[]>(
+    "PRAGMA foreign_key_list('favorites');"
+  ).catch(() => []);
+  if (favoriteFk.some((fk) => fk.on_delete === "SET NULL")) {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS favorites_new (
+        id TEXT PRIMARY KEY,
+        sessionId TEXT NOT NULL,
+        createdAt INTEGER NOT NULL,
+        FOREIGN KEY (sessionId) REFERENCES sessions(id) ON DELETE CASCADE
+      );
+    `);
+    await db.execute(`
+      INSERT OR IGNORE INTO favorites_new (id, sessionId, createdAt)
+      SELECT id, sessionId, createdAt FROM favorites WHERE sessionId IS NOT NULL;
+    `);
+    await db.execute(`DROP TABLE favorites;`);
+    await db.execute(`ALTER TABLE favorites_new RENAME TO favorites;`);
+  }
   await db.execute(`
     CREATE TABLE IF NOT EXISTS prompt_templates (
       id TEXT PRIMARY KEY,

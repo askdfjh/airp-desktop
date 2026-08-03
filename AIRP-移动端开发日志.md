@@ -82,8 +82,28 @@ cd src-tauri\gen\android
 adb install -r app\build\outputs\apk\arm64\debug\app-arm64-debug.apk
 ```
 
+### 2026-08-03（严重 BUG 巡检修复：Android release 防止误用 debug keystore）
+
+**问题**
+- `src-tauri/gen/android/app/build.gradle.kts` 中 release 构建直接使用 debug keystore 签名
+- 风险：本地可安装，但不适合正式分发；后续切换正式签名会导致覆盖安装失败，也容易误把 debug 签名包当正式包发出
+
+**修复**
+- release 默认不再绑定 debug keystore
+- 如仅需本地临时 release 安装测试，可显式传入：`-Pairp.android.allowDebugReleaseSigning=true`
+- 正式分发前仍需配置正式 release keystore
+
+**验证**
+- `gradlew tasks --no-daemon` 通过 ✅
+
+**本轮最终验证**
+- 共享前端 `tsc --noEmit` 通过 ✅
+- 共享前端 `vite build` 通过 ✅
+- `cargo check` 通过 ✅
+- `gen/android/gradlew assembleDebug --no-daemon -x rustBuild*` 通过 ✅
+
 ## 待办
 - [ ] 手机端配置 WebDAV 同步并从云端恢复数据（桌面端数据 → 云端 → 手机）
 - [ ] 高清 logo 源图（≥512px）重跑 `tauri icon`
-- [ ] release 版签名方案（正式分发用）
+- [ ] 配置正式 release keystore（正式分发用）
 - [ ] 手机端真机实测：返回键分层消费、响应式布局、WebDAV 下载合并

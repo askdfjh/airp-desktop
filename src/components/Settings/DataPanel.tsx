@@ -18,6 +18,7 @@ import {
   type BackupGroupKey,
 } from "@/lib/settingsBackup";
 import { useUIStore } from "@/stores/uiStore";
+import { ComplianceNotice } from "./ComplianceNotice";
 
 interface ImportTarget {
   data: SettingsBackup;
@@ -408,6 +409,12 @@ export function DataPanel() {
               上传备份到云端（每次按时间保留，不覆盖旧备份）；导入时先查看每个备份包含的内容，再勾选导入
             </div>
           </div>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <ComplianceNotice>
+            云端备份会把所选数据上传到你的 WebDAV 服务，其中可能包含对话、角色、世界书、模型配置或密钥。请确认云盘账号安全，并避免同步无权保存或传播的数据。
+          </ComplianceNotice>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>

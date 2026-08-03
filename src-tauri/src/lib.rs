@@ -116,9 +116,12 @@ async fn http_fetch(
         let domain = parsed_url.domain().unwrap_or("");
         let sent = get_cookie_jar().cookies(&parsed_url);
         let sent_count = sent.as_ref().map(|v| v.as_bytes().split(|&b| b == b';').count()).unwrap_or(0);
-        println!("[http_fetch] -> {} | domain={} | cookies_sent={}",
-                 &url.chars().take(100).collect::<String>(),
-                 domain, sent_count);
+        println!(
+            "[http_fetch] -> domain={} path={} | cookies_sent={}",
+            domain,
+            parsed_url.path().chars().take(80).collect::<String>(),
+            sent_count
+        );
     }
 
     let method = match method.to_uppercase().as_str() {
@@ -157,10 +160,6 @@ async fn http_fetch(
         let after_count = after.as_ref().map(|v| v.as_bytes().split(|&b| b == b';').count()).unwrap_or(0);
         println!("[http_fetch] <- {} | status={} | cookies_now={}",
                  parsed_url.domain().unwrap_or("?"), status, after_count);
-        if after_count > 0 {
-            let snippet: String = after.as_ref().unwrap().as_bytes().iter().map(|&b| b as char).take(120).collect();
-            println!("[http_fetch]    cookie snippet: {}", snippet);
-        }
     }
 
     if !status.is_success() {

@@ -4,6 +4,7 @@ import { useMcpStore } from "@/stores/mcpStore";
 import { useUIStore } from "@/stores/uiStore";
 import { healthCheck, listTools } from "@/lib/mcpClient";
 import type { McpTool } from "@/types";
+import { ComplianceNotice } from "./ComplianceNotice";
 
 interface McpPanelProps {
   onClose?: () => void;
@@ -147,6 +148,10 @@ export function McpPanel({ onClose }: McpPanelProps) {
       <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.5, maxWidth: 560 }}>
         添加 MCP 服务器后，AI 可在对话中调用外部工具与数据服务。
       </div>
+
+      <ComplianceNotice>
+        MCP 服务器可能读写文件、访问网络或调用本机/远程能力。请只连接可信服务器，并确认工具用途符合中国法律法规和第三方服务规则。
+      </ComplianceNotice>
 
       {showForm && (
         <div style={{ padding: 14, background: "var(--seed-surface)", borderRadius: 16, border: "1px solid var(--seed-border)", display: "flex", flexDirection: "column", gap: 8 }}>

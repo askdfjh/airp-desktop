@@ -732,7 +732,7 @@ button.ghost:hover { color:var(--seed-accent); }
   pointer-events: none;
 }
 .seed-card--disabled::after {
-  content: '鍗冲皢寮€鏀?;
+  content: '即将开放';
   position: absolute;
   top: 12px;
   right: 12px;

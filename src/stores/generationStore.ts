@@ -157,7 +157,7 @@ export const useGenerationStore = create<GenerationState>()(
         }),
     }),
     { name: "airp-generation-v1", version: 5, migrate: (persisted: unknown) => {
-      const old = persisted as Partial<GenerationState> | undefined;
+      const old = (persisted ?? {}) as Partial<GenerationState>;
       const presets = Array.isArray(old?.presets) ? old.presets : [];
       // 清除 dm-master + 旧 jailbreak 字段
       const cleaned = presets

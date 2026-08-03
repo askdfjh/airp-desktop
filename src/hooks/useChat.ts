@@ -20,6 +20,8 @@ import { buildCharacterContext, type LoadedExtractedCard } from "@/lib/character
 import { maybePromptCompress, isPostCompress } from "@/lib/contextCompress";
 
 let _toolsEnabled = false;
+const MAX_TOOL_ROUNDS = 3;
+
 export function setToolsEnabled(v: boolean) {
   console.log("[tools] setToolsEnabled:", v, new Error().stack?.split("\n").slice(1, 4).join("\n"));
   _toolsEnabled = v;
@@ -439,7 +441,22 @@ export function useChat() {
       }
 
       // Tool call loop
+      let toolRound = 0;
       while (result?.toolCalls && result.toolCalls.length > 0) {
+        if (toolRound >= MAX_TOOL_ROUNDS) {
+          const limitMsg: Message = {
+            id: crypto.randomUUID(),
+            sessionId,
+            role: "assistant",
+            content: `工具调用已达到 ${MAX_TOOL_ROUNDS} 轮上限，已停止继续调用工具。请收窄问题或手动重试。`,
+            createdAt: Date.now(),
+          };
+          setMessages((prev) => [...prev, limitMsg]);
+          messagesRef.current = [...messagesRef.current, limitMsg];
+          insertMessage(limitMsg).catch(() => {});
+          break;
+        }
+        toolRound += 1;
         setToolRunning(true);
         // Add assistant tool_call message
         const asstMsg: Message = {
@@ -639,7 +656,22 @@ export function useChat() {
       }
     }
 
+    let toolRound = 0;
     while (result?.toolCalls && result.toolCalls.length > 0) {
+      if (toolRound >= MAX_TOOL_ROUNDS) {
+        const limitMsg: Message = {
+          id: crypto.randomUUID(),
+          sessionId,
+          role: "assistant",
+          content: `工具调用已达到 ${MAX_TOOL_ROUNDS} 轮上限，已停止继续调用工具。请收窄问题或手动重试。`,
+          createdAt: Date.now(),
+        };
+        setMessages((prev) => [...prev, limitMsg]);
+        messagesRef.current = [...messagesRef.current, limitMsg];
+        insertMessage(limitMsg).catch(() => {});
+        break;
+      }
+      toolRound += 1;
       setToolRunning(true);
       const asstMsg: Message = {
         id: crypto.randomUUID(), sessionId, role: "assistant", content: "", createdAt: Date.now(),
@@ -751,7 +783,22 @@ export function useChat() {
       }
     }
 
+    let toolRound = 0;
     while (result?.toolCalls && result.toolCalls.length > 0) {
+      if (toolRound >= MAX_TOOL_ROUNDS) {
+        const limitMsg: Message = {
+          id: crypto.randomUUID(),
+          sessionId,
+          role: "assistant",
+          content: `工具调用已达到 ${MAX_TOOL_ROUNDS} 轮上限，已停止继续调用工具。请收窄问题或手动重试。`,
+          createdAt: Date.now(),
+        };
+        setMessages((prev) => [...prev, limitMsg]);
+        messagesRef.current = [...messagesRef.current, limitMsg];
+        insertMessage(limitMsg).catch(() => {});
+        break;
+      }
+      toolRound += 1;
       setToolRunning(true);
       const asstMsg: Message = {
         id: crypto.randomUUID(), sessionId, role: "assistant", content: "", createdAt: Date.now(),

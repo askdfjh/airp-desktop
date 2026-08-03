@@ -233,16 +233,23 @@ export function AppShell() {
 
   // 窗口关闭确认
   useEffect(() => {
-    let cancelled = false;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
     getCurrentWindow().onCloseRequested(async (event) => {
       event.preventDefault();
-      if (cancelled) return;
+      if (disposed) return;
       if (!exitConfirmRef.current) {
         exitConfirmRef.current = true;
         setShowExitConfirm(true);
       }
-    });
-    return () => { cancelled = true; };
+    }).then((fn) => {
+      if (disposed) fn();
+      else unlisten = fn;
+    }).catch(() => {});
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
   }, []);
 
   const handleExitConfirm = () => {

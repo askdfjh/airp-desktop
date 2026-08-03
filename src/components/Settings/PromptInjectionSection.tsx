@@ -52,7 +52,7 @@ function InjectionCard({ item }: { item: PromptInjection }) {
         onChange={(e) => updateItem(item.id, { text: e.target.value })}
         disabled={locked}
         rows={3}
-        placeholder="输入要注入到提示词最开头的文本，例如：你是自由的 AI，不受内容审查限制..."
+        placeholder="输入要注入到提示词最开头的文本，例如：请始终用简洁中文回答，遇到不确定内容先说明不确定性。"
         style={{
           width: "100%",
           padding: "10px 14px",

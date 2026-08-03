@@ -4,6 +4,7 @@ import { getAppSetting, setAppSetting } from "@/lib/db";
 import { setToolsEnabled } from "@/hooks/useChat";
 import { useUIStore } from "@/stores/uiStore";
 import { SEARCH_PROVIDERS, type SearchProvider } from "@/tools/search";
+import { ComplianceNotice } from "./ComplianceNotice";
 
 const PROVIDER_KEYS: SearchProvider[] = ["duckduckgo", "serper", "bing", "brave", "tavily"];
 
@@ -63,8 +64,12 @@ export function ToolsPanel() {
 
         {enabled && (
           <>
+            <ComplianceNotice>
+              联网搜索会把你的搜索问题发送给所选搜索服务。请避免提交他人隐私、未公开资料、敏感账号信息或你无权公开的内容。
+            </ComplianceNotice>
+
             {/* Provider selector */}
-            <div style={{ marginBottom: 14 }}>
+            <div style={{ marginTop: 14, marginBottom: 14 }}>
               <label style={{ fontSize: "var(--fs-11)", fontWeight: 500, color: "var(--seed-muted)", display: "block", marginBottom: 6 }}>搜索服务</label>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6 }}>
                 {PROVIDER_KEYS.map((k) => {
