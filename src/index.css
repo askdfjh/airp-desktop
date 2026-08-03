@@ -977,10 +977,6 @@ button.ghost:hover { color:var(--seed-accent); }
   z-index: 2;
   flex-shrink: 0;
   padding: 0 24px;
-  border-top: 1px solid var(--seed-border);
-  background: var(--seed-glass);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
 }
 .seed-suggest-head {
   max-width: 720px;

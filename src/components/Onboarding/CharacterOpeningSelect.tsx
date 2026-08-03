@@ -87,8 +87,8 @@ export function CharacterOpeningSelect({ onComplete }: Props) {
     }
   };
 
-  // 允许无角色无场景直接开始：用户可以选择角色+场景，也可以跳过直接进入对话
-  const canStart = true;
+  // 必须选中开局场景（预设场景或 AI 随机开局）才能开始冒险；角色可选（不选则用默认主角）
+  const canStart = !!selectedScenario;
 
   return (
     <div>
@@ -387,12 +387,13 @@ export function CharacterOpeningSelect({ onComplete }: Props) {
         <button
           className="seed-cta"
           disabled={!canStart}
+          title={!canStart ? "请先选择开局场景" : undefined}
           onClick={onComplete}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
           </svg>
-          {selectedChar && selectedScenario ? "开始冒险" : selectedChar ? "以此角色开始" : "直接开始"}
+          {!canStart ? "请选择开局场景" : selectedChar ? "开始冒险" : "直接开始"}
         </button>
       </div>
 

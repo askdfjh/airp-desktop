@@ -179,7 +179,9 @@ async fn webdav_request(args: WebdavArgs) -> Result<(u16, String), String> {
     let client = get_http_client();
     let method = match args.method.to_uppercase().as_str() {
         "PUT" => reqwest::Method::PUT,
+        "DELETE" => reqwest::Method::DELETE,
         "MKCOL" => reqwest::Method::from_bytes(b"MKCOL").expect("valid method"),
+        "PROPFIND" => reqwest::Method::from_bytes(b"PROPFIND").expect("valid method"),
         _ => reqwest::Method::GET,
     };
 

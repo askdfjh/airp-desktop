@@ -1,47 +1,29 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { ArrowLeft, Send, Wand2, User, Globe, History, Sparkles, Square, Loader2, Check, ChevronDown, Copy, Pencil, RotateCw, Trash2 } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ArrowLeft, Wand2, Loader2, Check, ChevronDown, Copy, Pencil, RotateCw, Trash2, History, Sparkles } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { useProviderStore } from "@/stores/providerStore";
 import { useSessionStore } from "@/stores/sessionStore";
 import { usePromptInjectionStore } from "@/stores/promptInjectionStore";
 import { useCreateStore, createMessage } from "@/stores/createStore";
-import { buildCreateSystemPrompt, buildLocalOpening, buildGuideQuestions, GUIDE_LABEL, type GuideMode } from "@/lib/createGuide";
+import { buildCreateSystemPrompt, buildLocalOpening, GUIDE_LABEL, type GuideMode } from "@/lib/createGuide";
 import { extractCharacterForCreate } from "@/lib/characterExtract";
 import { extractWorld } from "@/lib/worldExtract";
 import { chatStream } from "@/providers/openai";
 import { getSendBlocker } from "@/hooks/useChat";
 import { fitTextarea } from "@/lib/autoGrow";
-import { ConfirmDialog } from "@/components/Layout/ConfirmDialog";
-import type { Message } from "@/types";
-
-const actionBtnIcon: React.CSSProperties = {
-  width: 26, height: 26, borderRadius: 7, border: "none",
-  background: "var(--seed-hover-bg)", color: "var(--seed-muted)",
-  display: "flex", alignItems: "center", justifyContent: "center",
-  cursor: "pointer", transition: "color 0.12s",
-};
-const actionBtnPrimary: React.CSSProperties = {
-  padding: "5px 14px", borderRadius: 8, border: "none", cursor: "pointer",
-  background: "var(--seed-accent)", color: "#fff", fontSize: "var(--fs-11)", fontWeight: 600,
-  fontFamily: "inherit", display: "flex", alignItems: "center",
-};
-const actionBtnSecondary: React.CSSProperties = {
-  padding: "5px 14px", borderRadius: 8, border: "1px solid var(--seed-border)", cursor: "pointer",
-  background: "transparent", color: "var(--seed-muted)", fontSize: "var(--fs-11)", fontWeight: 500,
-  fontFamily: "inherit", display: "flex", alignItems: "center",
-};
 import { StreamingText } from "@/components/Chat/StreamingText";
+import { MarkdownRender } from "@/components/Chat/MarkdownRender";
 import { DraftPreview } from "./DraftPreview";
 import { CreateHistory } from "./CreateHistory";
+import { ConfirmDialog } from "@/components/Layout/ConfirmDialog";
+import type { Message } from "@/types";
 
 export function CreateModeView() {
   const ui = useUIStore();
   // Android 无自绘标题栏（TitleBar 不渲染），创建模式从顶部 0 开始；桌面端避开 40px 标题栏
   const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
-  const {
-    type, guideMode, messages, streaming, generating, preview, savedDraft,
-    setGuideMode, pushMessage, updateLastAssistant, updateMessage, removeMessage, setStreaming, setGenerating, setPreview, setSavedDraft,
-  } = useCreateStore();
+  const { type, guideMode, messages, streaming, generating, preview, savedDraft } = useCreateStore();
   const providers = useProviderStore((s) => s.providers);
   const activeProviderId = useProviderStore((s) => s.activeProviderId);
   const activeModel = useProviderStore((s) => s.activeModel);
@@ -57,19 +39,28 @@ export function CreateModeView() {
   );
 
   const [inputValue, setInputValue] = useState("");
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [guideMenuOpen, setGuideMenuOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [pendingGuide, setPendingGuide] = useState<GuideMode | null>(null);
   const [editingMsg, setEditingMsg] = useState<{ id: string; role: Message["role"]; content: string } | null>(null);
   const [editText, setEditText] = useState("");
   const modelBtnRef = useRef<HTMLDivElement>(null);
+  const guideBtnRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  // 窄屏（手机）：底栏两行布局，生成按钮独立一行不被挤到滚动区外
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 720px)");
+    const handler = (e: MediaQueryListEvent) => setIsNarrow(e.matches);
+    mq.addEventListener("change", handler);
+    setIsNarrow(mq.matches);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   const activeProvider = providers.find((p) => p.id === activeProviderId);
-  const guideQuestions = buildGuideQuestions(type);
   const label = GUIDE_LABEL[type];
 
   // 打开创建模式：注入本地开场白（第一问 / 自由描述引导）
@@ -84,15 +75,17 @@ export function CreateModeView() {
 
   // 切换引导方式：仅剩开场白时同步替换开场文案；已聊过则确认后重置对话（两种引导混用会乱）
   const handleGuideModeChange = (m: GuideMode) => {
-    if (m === guideMode) return;
-    if (messages.length <= 1) {
-      setGuideMode(m);
-      const msgs = useCreateStore.getState().messages;
-      if (msgs.length === 1 && msgs[0].opening) {
+    if (m === guideMode) { setGuideMenuOpen(false); return; }
+    const msgs = useCreateStore.getState().messages;
+    if (msgs.length <= 1) {
+      useCreateStore.getState().setGuideMode(m);
+      const cur = useCreateStore.getState().messages;
+      if (cur.length === 1 && cur[0].opening) {
         useCreateStore.setState({
-          messages: [{ ...msgs[0], content: buildLocalOpening(type, m) }],
+          messages: [{ ...cur[0], content: buildLocalOpening(type, m) }],
         });
       }
+      setGuideMenuOpen(false);
     } else {
       setPendingGuide(m);
     }
@@ -101,7 +94,7 @@ export function CreateModeView() {
   const confirmGuideChange = () => {
     if (!pendingGuide) return;
     const m = pendingGuide;
-    setGuideMode(m);
+    useCreateStore.getState().setGuideMode(m);
     useCreateStore.setState({
       messages: [{ ...createMessage("assistant", buildLocalOpening(type, m)), opening: true }],
       savedDraft: null,
@@ -118,30 +111,33 @@ export function CreateModeView() {
       .filter(Boolean);
   }, [injectionItems, activeModel]);
 
-  // Esc：先关模型菜单/历史抽屉，再关创建模式
+  // Esc：先关模型菜单/引导菜单/历史抽屉，再关创建模式
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (modelMenuOpen) { setModelMenuOpen(false); return; }
+      if (guideMenuOpen) { setGuideMenuOpen(false); return; }
       if (historyOpen) { setHistoryOpen(false); return; }
       abortRef.current?.abort();
-      setStreaming(false);
-      setGenerating(false);
+      useCreateStore.getState().close();
       ui.setCreateMode(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [historyOpen, modelMenuOpen, ui, setStreaming, setGenerating]);
+  }, [modelMenuOpen, guideMenuOpen, historyOpen, ui]);
 
-  // 点击模型菜单外部关闭
+  // 点击菜单外部关闭（portal 内点击不关闭）
   useEffect(() => {
-    if (!modelMenuOpen) return;
+    if (!modelMenuOpen && !guideMenuOpen) return;
     const onDown = (e: MouseEvent) => {
-      if (modelBtnRef.current && !modelBtnRef.current.contains(e.target as Node)) setModelMenuOpen(false);
+      const t = e.target as Node;
+      const inPortal = menuPortalRef.current ? menuPortalRef.current.contains(t) : false;
+      if (modelMenuOpen && modelBtnRef.current && !modelBtnRef.current.contains(t) && !inPortal) setModelMenuOpen(false);
+      if (guideMenuOpen && guideBtnRef.current && !guideBtnRef.current.contains(t) && !inPortal) setGuideMenuOpen(false);
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
-  }, [modelMenuOpen]);
+  }, [modelMenuOpen, guideMenuOpen]);
 
   // 切换模型：与会话底栏同源（全局 activeProvider/activeModel + 同步当前会话），选择后保持一致性
   const applyCreateModel = (pid: string, model: string) => {
@@ -169,7 +165,8 @@ export function CreateModeView() {
   // 发送：chatStream 裸调用，零会话上下文注入（仅破限词 + 引导大纲）
   // appendUser=false 用于「编辑后重发 / 重新生成」：不新增用户消息，直接请求回复
   const doStream = async (text: string, appendUser: boolean) => {
-    if (streaming || generating) return;
+    const st = useCreateStore.getState();
+    if (st.streaming || st.generating) return;
     const blocker = getSendBlocker();
     if (blocker) {
       ui.notify(blocker, "settings");
@@ -177,18 +174,18 @@ export function CreateModeView() {
     }
     const provider = activeProvider!;
     if (appendUser) {
-      pushMessage(createMessage("user", text));
+      useCreateStore.getState().pushMessage(createMessage("user", text));
       setInputValue("");
     }
     const assistantMsg = createMessage("assistant", "");
-    pushMessage(assistantMsg);
-    setStreaming(true);
+    useCreateStore.getState().pushMessage(assistantMsg);
+    useCreateStore.getState().setStreaming(true);
     const ac = new AbortController();
     abortRef.current = ac;
     let acc = "";
     try {
       const injections = collectInjections();
-      const sys = buildCreateSystemPrompt(type, guideMode, injections);
+      const sys = buildCreateSystemPrompt(type, useCreateStore.getState().guideMode, injections);
       const apiMessages = [
         { role: "system" as const, content: sys },
         ...useCreateStore.getState().messages.map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content })),
@@ -203,18 +200,16 @@ export function CreateModeView() {
         ac.signal,
       )) {
         acc += chunk.content;
-        updateLastAssistant(acc);
+        useCreateStore.getState().updateLastAssistant(acc);
       }
     } catch (e) {
       if (!(e instanceof DOMException && e.name === "AbortError")) {
         console.warn("[create] send failed:", e);
-        if (acc) updateLastAssistant(acc);
-        else {
-          updateLastAssistant("（回复失败，请重试）");
-        }
+        if (acc) useCreateStore.getState().updateLastAssistant(acc);
+        else useCreateStore.getState().updateLastAssistant("（回复失败，请重试）");
       }
     } finally {
-      setStreaming(false);
+      useCreateStore.getState().setStreaming(false);
       abortRef.current = null;
     }
   };
@@ -247,7 +242,7 @@ export function CreateModeView() {
     if (!content) return;
     const role = editingMsg.role;
     const id = editingMsg.id;
-    updateMessage(id, { content });
+    useCreateStore.getState().updateMessage(id, { content });
     setEditingMsg(null);
     setEditText("");
     if (role === "user") void doStream(content, false);
@@ -261,7 +256,7 @@ export function CreateModeView() {
     if (!last || last.role !== "assistant") return;
     const lastUser = [...msgs.slice(0, -1)].reverse().find((m) => m.role === "user");
     if (!lastUser) return;
-    removeMessage(last.id);
+    useCreateStore.getState().removeMessage(last.id);
     await doStream(lastUser.content, false);
   };
 
@@ -278,7 +273,7 @@ export function CreateModeView() {
       return;
     }
     const provider = activeProvider!;
-    setGenerating(true);
+    useCreateStore.getState().setGenerating(true);
     const ac = new AbortController();
     abortRef.current = ac;
     try {
@@ -300,19 +295,57 @@ export function CreateModeView() {
         ui.notify("生成结果解析失败，请补充描述后重试");
         return;
       }
-      setPreview(draft);
+      useCreateStore.getState().setPreview(draft);
     } catch (e) {
       if (!(e instanceof DOMException && e.name === "AbortError")) {
         console.warn("[create] generate failed:", e);
         ui.notify("生成失败，请重试");
       }
     } finally {
-      setGenerating(false);
+      useCreateStore.getState().setGenerating(false);
       abortRef.current = null;
     }
   };
 
   const isLastStreaming = (index: number) => streaming && index === messages.length - 1 && messages[index].role === "assistant";
+  const canGenerate = messages.length >= 2;
+  // 菜单基础样式：实体背景（无 backdrop-filter，避免 Tauri WebView 渲染伪影），定位由 portal fixed 覆盖
+  const menuStyle: React.CSSProperties = {
+    position: "fixed",
+    minWidth: 200,
+    maxWidth: 260,
+    maxHeight: 280,
+    overflowY: "auto",
+    background: "var(--seed-surface)",
+    border: "1px solid var(--seed-border)",
+    borderRadius: 12,
+    boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
+    padding: 4,
+    zIndex: 300,
+  };
+  const itemStyle = (active: boolean): React.CSSProperties => ({
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "7px 10px",
+    borderRadius: 8,
+    fontSize: 12,
+    cursor: "pointer",
+    background: active ? "var(--seed-accent-bg)" : "transparent",
+    color: active ? "var(--seed-accent)" : "var(--seed-fg)",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  });
+
+  // 菜单定位：向上弹出（bottom = chip 顶部 + 6px），left 防溢出视口
+  const menuPortalRef = useRef<HTMLDivElement>(null);
+  const guideRect = guideMenuOpen && guideBtnRef.current ? guideBtnRef.current.getBoundingClientRect() : null;
+  const modelRect = modelMenuOpen && modelBtnRef.current ? modelBtnRef.current.getBoundingClientRect() : null;
+  const menuPos = (rect: DOMRect, w = 240) => ({
+    bottom: window.innerHeight - rect.top + 6,
+    left: Math.max(8, Math.min(rect.left, window.innerWidth - w - 8)),
+  });
 
   return (
     <div
@@ -328,281 +361,222 @@ export function CreateModeView() {
         background: "var(--seed-bg)",
       }}
     >
-      {/* 顶部引导横幅：创建模式专属，与普通会话明显区分 */}
-      <div style={{ padding: "14px 18px 12px", borderBottom: "1px solid var(--seed-border)", background: "linear-gradient(180deg, var(--seed-accent-bg), transparent)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", rowGap: 8, maxWidth: 860, margin: "0 auto" }}>
-          <button
-            onClick={() => { abortRef.current?.abort(); ui.setCreateMode(null); }}
-            title="返回"
-            style={{ width: 32, height: 32, borderRadius: 9, border: "none", background: "transparent", color: "var(--seed-muted)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
-          >
-            <ArrowLeft size={17} />
-          </button>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0, minWidth: 0 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 9, background: "var(--seed-accent)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                {type === "character" ? <User size={15} style={{ color: "#fff" }} /> : <Globe size={15} style={{ color: "#fff" }} />}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--seed-fg)", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  创建模式 · {label}
-                </span>
-                <span style={{ fontSize: "var(--fs-10)", color: "var(--seed-accent)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>与设定师对话，完成后自动生成</span>
-              </div>
-            </div>
-
-          {/* 引导方式切换 */}
-          <div style={{ display: "flex", gap: 3, padding: 3, background: "var(--seed-input-bg)", borderRadius: 999, border: "1px solid var(--seed-border)", marginLeft: 6 }}>
-            {(["ask", "free"] as GuideMode[]).map((m) => (
-              <button
-                key={m}
-                onClick={() => handleGuideModeChange(m)}
-                style={{
-                  padding: "4px 12px", borderRadius: 999, border: "none", cursor: "pointer",
-                  fontSize: "var(--fs-10)", fontWeight: 500, fontFamily: "inherit",
-                  background: guideMode === m ? "var(--seed-accent)" : "transparent",
-                  color: guideMode === m ? "#fff" : "var(--seed-muted)",
-                  transition: "all 0.15s",
-                }}
-              >
-                {m === "ask" ? "AI 提问" : "自由描述"}
-              </button>
-            ))}
-          </div>
-
-          <div style={{ flex: 1 }} />
-
-          {/* 模型切换（与会话同源：providerStore.activeModel，选择后同步当前会话） */}
-          <div ref={modelBtnRef} style={{ position: "relative", flexShrink: 0 }}>
-            <button
-              onClick={() => setModelMenuOpen((v) => !v)}
-              title="切换模型"
-              style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 999, border: "1px solid var(--seed-border)", background: "var(--seed-surface)", color: "var(--seed-muted)", fontSize: "var(--fs-10)", fontFamily: "inherit", cursor: "pointer", maxWidth: 180, overflow: "hidden" }}
-            >
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{activeModel || "选择模型"}</span>
-              <ChevronDown size={11} style={{ flexShrink: 0, transform: modelMenuOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
-            </button>
-            {modelMenuOpen && (
-              <div style={{
-                position: "absolute", top: "calc(100% + 6px)", right: 0, minWidth: 200, maxWidth: 260, maxHeight: 280, overflowY: "auto",
-                background: "var(--seed-surface)", border: "1px solid var(--seed-border)", borderRadius: 12,
-                boxShadow: "0 8px 30px rgba(0,0,0,0.25)", padding: 4, zIndex: 30,
-              }}>
-                {usableProviders.map((p) => (
-                  <div key={p.id}>
-                    <div style={{ padding: "6px 10px 2px", fontSize: "var(--fs-9)", color: "var(--seed-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      {p.name}
-                    </div>
-                    {p.models.map((m) => {
-                      const isActive = p.id === activeProviderId && m === activeModel;
-                      return (
-                        <div
-                          key={m}
-                          onClick={() => applyCreateModel(p.id, m)}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 8,
-                            fontSize: "var(--fs-12)", cursor: "pointer", color: isActive ? "var(--seed-accent)" : "var(--seed-fg)",
-                            background: isActive ? "var(--seed-accent-bg)" : "transparent",
-                          }}
-                        >
-                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{m}</span>
-                          {isActive && <Check size={12} style={{ flexShrink: 0 }} />}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
-                {usableProviders.length === 0 && (
-                  <div style={{ padding: "10px", fontSize: "var(--fs-11)", color: "var(--seed-muted)" }}>未配置可用的模型服务，请先在设置中启用并配置 API Key</div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* 历史记录 */}
-          <button
-            onClick={() => setHistoryOpen(true)}
-            title="历史记录"
-            style={{ width: 32, height: 32, borderRadius: 9, border: "1px solid var(--seed-border)", background: "var(--seed-surface)", color: "var(--seed-muted)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
-          >
-            <History size={15} />
-          </button>
-        </div>
-
-        {/* 生成中状态条 */}
-        {generating && (
-          <div style={{ maxWidth: 860, margin: "10px auto 0", display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10, background: "var(--seed-accent-bg)", border: "1px solid var(--seed-accent-border)", color: "var(--seed-accent)", fontSize: "var(--fs-11)" }}>
-            <Loader2 size={13} style={{ animation: "spin 0.9s linear infinite" }} />
-            正在把对话提炼成{label}设定...
-            <button
-              onClick={() => abortRef.current?.abort()}
-              style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4, border: "none", background: "transparent", color: "var(--seed-accent)", fontSize: "var(--fs-10)", cursor: "pointer", fontFamily: "inherit" }}
-            >
-              <Square size={10} fill="currentColor" /> 停止
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* 消息区 */}
-      <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: "auto", padding: "18px 20px 8px", background: "color-mix(in srgb, var(--seed-accent-bg) 12%, var(--seed-bg))" }}>
-        <div style={{ maxWidth: 860, margin: "0 auto", display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* 消息区：与空白会话一致的排版（安卓避开系统状态栏） */}
+      <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: "auto", paddingTop: isAndroid ? "calc(env(safe-area-inset-top, 0px) + 16px)" : undefined }}>
+        <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 24px 8px" }}>
           {messages.map((m, i) => {
+            // 未完成的流式占位（空内容）不渲染，由 typing 指示器代替
+            if (m.role === "assistant" && !m.content) return null;
             const streamingThis = isLastStreaming(i);
             const isUser = m.role === "user";
             const isEditing = editingMsg?.id === m.id;
+            const isLastAssistant = !isUser && i === messages.length - 1;
+
+            if (isEditing) {
+              return (
+                <div key={m.id} className="seed-edit-block">
+                  <textarea
+                    className="seed-edit-textarea"
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    onInput={(e) => fitTextarea(e.currentTarget, 260)}
+                    autoFocus
+                    rows={3}
+                  />
+                  <div className="seed-edit-actions">
+                    <button className="seed-edit-btn seed-edit-btn--cancel" onClick={() => setEditingMsg(null)}>取消</button>
+                    <button className="seed-edit-btn seed-edit-btn--save" onClick={saveEdit} disabled={!editText.trim()}>
+                      {isUser ? "保存并发送" : "保存"}
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
             return (
-              <div key={m.id} className="cr-msg" style={{ display: "flex", flexDirection: isUser ? "row-reverse" : "row", gap: 10, alignItems: "flex-start" }}>
-                <div
-                  style={{
-                    width: 30, height: 30, borderRadius: "50%", flexShrink: 0,
-                    background: isUser ? "var(--seed-accent)" : "var(--seed-surface)",
-                    border: isUser ? "none" : "1px solid var(--seed-border)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}
-                >
-                  {isUser ? <User size={14} style={{ color: "#fff" }} /> : <Sparkles size={14} style={{ color: "var(--seed-accent)" }} />}
-                </div>
-                <div style={{ maxWidth: "78%", display: "flex", flexDirection: "column", gap: 4, alignItems: isUser ? "flex-end" : "flex-start" }}>
-                  {!isUser && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: "var(--fs-9)", padding: "1px 7px", borderRadius: 999, background: "var(--seed-accent-bg)", color: "var(--seed-accent)" }}>
-                        {m.opening ? `问 1/${guideQuestions.length}` : "设定师"}
-                      </span>
-                      {m.opening && (
-                        <span style={{ fontSize: "var(--fs-9)", color: "var(--seed-muted)" }}>AI 引导</span>
-                      )}
-                    </div>
-                  )}
-                  {isEditing ? (
-                    <div style={{ width: "100%", padding: 10, borderRadius: 14, background: "var(--seed-surface)", border: "1px solid var(--seed-accent-border)", display: "flex", flexDirection: "column", gap: 8 }}>
-                      <textarea
-                        autoFocus
-                        value={editText}
-                        onChange={(e) => setEditText(e.target.value)}
-                        onInput={(e) => fitTextarea(e.currentTarget, 240)}
-                        rows={3}
-                        style={{
-                          width: "100%", boxSizing: "border-box", padding: "8px 10px", borderRadius: 8,
-                          background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)",
-                          color: "var(--seed-fg)", fontSize: "var(--fs-13)", fontFamily: "inherit",
-                          outline: "none", resize: "none", lineHeight: 1.6,
-                        }}
-                      />
-                      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                        <button onClick={() => setEditingMsg(null)} style={actionBtnSecondary}>取消</button>
-                        <button onClick={saveEdit} disabled={!editText.trim()} style={actionBtnPrimary}>{isUser ? "保存并重新发送" : "保存"}</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div
-                        style={{
-                          padding: "10px 14px", borderRadius: 14,
-                          background: isUser ? "var(--seed-accent)" : "var(--seed-surface)",
-                          border: isUser ? "none" : "1px solid var(--seed-border)",
-                          color: isUser ? "#fff" : "var(--seed-fg)",
-                          fontSize: "var(--fs-13)", lineHeight: 1.65, whiteSpace: "pre-wrap", wordBreak: "break-word",
-                        }}
-                      >
-                        {streamingThis ? (
-                          <StreamingText content={m.content} active />
-                        ) : (
-                          m.content || ""
-                        )}
-                      </div>
-                      {!streamingThis && (
-                        <div className="cr-msg-actions" style={{ display: "flex", gap: 2, opacity: 0, transition: "opacity 0.12s" }}>
-                          <button onClick={() => copyMessage(m.content)} title="复制" style={actionBtnIcon}>
-                            <Copy size={12} />
-                          </button>
-                          {!m.opening && (
-                            <button onClick={() => startEdit(m.id, m.role, m.content)} title={isUser ? "编辑并重新发送" : "编辑回复"} style={actionBtnIcon}>
-                              <Pencil size={12} />
-                            </button>
-                          )}
-                          {!isUser && !m.opening && i === messages.length - 1 && (
-                            <button onClick={() => void handleRegenerate()} title="重新生成" style={actionBtnIcon}>
-                              <RotateCw size={12} />
-                            </button>
-                          )}
-                          {!m.opening && (
-                            <button onClick={() => removeMessage(m.id)} title="删除" style={actionBtnIcon}>
-                              <Trash2 size={12} />
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
+              <div key={m.id} className="seed-msg-wrapper" style={{ marginBottom: 20 }}>
+                {isUser ? (
+                  <p className="seed-user-input">{m.content}</p>
+                ) : (
+                  <div className="seed-chat-assistant">
+                    {streamingThis ? (
+                      <StreamingText content={m.content} active />
+                    ) : (
+                      <MarkdownRender content={m.content} />
+                    )}
+                  </div>
+                )}
+                {!streamingThis && (
+                  <div className="seed-msg-actions">
+                    <button className="seed-msg-action-btn" data-tooltip="复制" onClick={() => copyMessage(m.content)}>
+                      <Copy size={13} />
+                    </button>
+                    {!m.opening && (
+                      <button className="seed-msg-action-btn" data-tooltip={isUser ? "编辑并发送" : "编辑回复"} onClick={() => startEdit(m.id, m.role, m.content)}>
+                        <Pencil size={13} />
+                      </button>
+                    )}
+                    {!isUser && !m.opening && isLastAssistant && (
+                      <button className="seed-msg-action-btn" data-tooltip="重新生成" onClick={() => void handleRegenerate()}>
+                        <RotateCw size={13} />
+                      </button>
+                    )}
+                    {!m.opening && (
+                      <button className="seed-msg-action-btn" data-tooltip="删除" onClick={() => useCreateStore.getState().removeMessage(m.id)}>
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
+
+          {/* 流式中打字机指示器 */}
+          {streaming && messages.length > 0 && !messages[messages.length - 1].content && (
+            <div className="seed-typing"><span /><span /><span /></div>
+          )}
+
           {messages.length === 0 && (
-            <div style={{ padding: "60px 0", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>加载中...</div>
+            <div style={{ textAlign: "center", padding: "80px 0", color: "var(--seed-muted)" }}>
+              <p style={{ fontSize: 16, marginBottom: 8 }}>加载中...</p>
+            </div>
           )}
         </div>
       </div>
 
-      {/* 输入区 */}
-      <div style={{ padding: "12px 20px 16px", borderTop: "1px solid var(--seed-border)", background: "var(--seed-bg)" }}>
-        <div style={{ maxWidth: 860, margin: "0 auto", display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+      {/* 底部输入区：与空白会话一致 */}
+      <div className="seed-input-area">
+        <div className="seed-input-inner" style={isAndroid ? { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" } : undefined}>
+          <div className="seed-input-row">
             <textarea
-              ref={inputRef}
+              className="seed-text-input"
+              placeholder={type === "character" ? "描述你想创建的角色" : "描述你想创建的世界"}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              onInput={(e) => fitTextarea(e.currentTarget, 140)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  void handleSend();
+                  handleSend();
                 }
               }}
-              placeholder={type === "character" ? "回答设定师的问题，或直接描述你想要的角色..." : "回答设定师的问题，或直接描述你想要的的世界..."}
-              rows={2}
-              style={{
-                flex: 1, resize: "none", padding: "10px 14px", borderRadius: 14,
-                background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)",
-                color: "var(--seed-fg)", fontSize: "var(--fs-13)", fontFamily: "inherit",
-                outline: "none", minHeight: 44, maxHeight: 140, lineHeight: 1.5,
-              }}
+              onInput={(e) => fitTextarea(e.currentTarget, 160)}
+              rows={1}
+              disabled={streaming || generating}
+              style={{ resize: "none" }}
             />
-            <button
-              onClick={() => {
-                if (streaming) { abortRef.current?.abort(); return; }
-                void handleSend();
-              }}
-              disabled={!inputValue.trim() || generating}
-              title={streaming ? "停止生成" : "发送"}
-              style={{
-                width: 38, height: 38, borderRadius: 12, border: "none", flexShrink: 0,
-                background: inputValue.trim() && !streaming && !generating ? "var(--seed-accent)" : "var(--seed-hover-bg)",
-                color: inputValue.trim() && !streaming && !generating ? "#fff" : "var(--seed-muted)",                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-              }}
-            >
-              {streaming ? <Square size={14} fill="currentColor" /> : <Send size={15} />}
-            </button>
+            {streaming ? (
+              <button className="seed-send-btn" data-tooltip="停止生成" onClick={() => abortRef.current?.abort()} style={{ background: "var(--danger, #ef4444)" }}>
+                <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+              </button>
+            ) : (
+              <button className="seed-send-btn" data-tooltip="发送" onClick={handleSend} disabled={!inputValue.trim() || generating}>
+                <svg viewBox="0 0 24 24">
+                  <line x1="12" y1="19" x2="12" y2="5" />
+                  <polyline points="5 12 12 5 19 12" />
+                </svg>
+              </button>
+            )}
           </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-            <span style={{ fontSize: "var(--fs-10)", color: "var(--seed-muted)" }}>Enter 发送 · Shift+Enter 换行 · Esc 退出</span>
-            <button
-              onClick={() => void handleGenerate()}
-              disabled={streaming || generating || messages.length < 2}
-              title="把对话提炼成完整设定"
-              style={{
-                display: "flex", alignItems: "center", gap: 6, padding: "8px 20px", borderRadius: 999,
-                border: "none", cursor: generating || streaming || messages.length < 2 ? "not-allowed" : "pointer",
-                background: generating || streaming || messages.length < 2 ? "var(--seed-hover-bg)" : "var(--seed-accent)",
-                color: generating || streaming || messages.length < 2 ? "var(--seed-muted)" : "#fff",
-                fontSize: "var(--fs-12)", fontWeight: 600, fontFamily: "inherit",
-                opacity: generating || streaming || messages.length < 2 ? 0.6 : 1,
-              }}
-            >
-              {generating ? <Loader2 size={14} style={{ animation: "spin 0.9s linear infinite" }} /> : <Wand2 size={14} />}
-              {generating ? "生成中..." : `生成${label}设定`}
-            </button>
+
+          {/* 底栏：返回/引导/模型 靠左，历史/生成 靠右；窄屏两行（生成独立全宽） */}
+          <div style={{ display: "flex", flexDirection: "column", gap: isNarrow ? 10 : 0 }}>
+            <div className="seed-func-bar">
+              <button
+                className="seed-func-btn"
+                data-tooltip="返回"
+                onClick={() => { abortRef.current?.abort(); useCreateStore.getState().close(); ui.setCreateMode(null); }}
+              >
+                <ArrowLeft size={16} />
+              </button>
+
+              {/* 引导方式切换 */}
+              <div ref={guideBtnRef}>
+                <button
+                  className="seed-func-chip"
+                  disabled={generating}
+                  data-tooltip="对话引导方式"
+                  onClick={() => setGuideMenuOpen((v) => !v)}
+                >
+                  <Sparkles size={13} style={{ flexShrink: 0 }} />
+                  <span>{guideMode === "ask" ? "AI 提问" : "自由描述"}</span>
+                  <ChevronDown size={12} style={{ flexShrink: 0, transform: guideMenuOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+                </button>
+              </div>
+
+              {/* 模型切换 */}
+              <div ref={modelBtnRef}>
+                <button
+                  className="seed-func-chip"
+                  disabled={generating}
+                  data-tooltip={activeModel || "选择模型"}
+                  onClick={() => setModelMenuOpen((v) => !v)}
+                >
+                  <span style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {activeModel || "选择模型"}
+                  </span>
+                  <ChevronDown size={12} style={{ flexShrink: 0, transform: modelMenuOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+                </button>
+              </div>
+
+              <div style={{ flex: 1 }} />
+
+              {/* 历史记录 */}
+              <button
+                className="seed-func-btn"
+                data-tooltip="创建历史"
+                onClick={() => setHistoryOpen(true)}
+              >
+                <History size={16} />
+              </button>
+
+              {/* 生成设定（桌面：行内右对齐） */}
+              {!isNarrow && (
+                <button
+                  onClick={() => { if (generating) { abortRef.current?.abort(); return; } void handleGenerate(); }}
+                  disabled={streaming || !canGenerate}
+                  title={!canGenerate ? "先和设定师聊几句，再生成" + label + "设定" : "把对话提炼成完整设定"}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 999,
+                    border: "none", cursor: streaming || !canGenerate ? "not-allowed" : "pointer",
+                    background: generating || (streaming || !canGenerate) ? "var(--seed-hover-bg)" : "var(--seed-accent)",
+                    color: generating || (streaming || !canGenerate) ? "var(--seed-muted)" : "#fff",
+                    fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+                    opacity: generating || (streaming || !canGenerate) ? 0.6 : 1,
+                  }}
+                >
+                  {generating ? (
+                    <><Loader2 size={14} style={{ animation: "spin 0.9s linear infinite" }} />停止</>
+                  ) : (
+                    <><Wand2 size={14} />生成{label}设定</>
+                  )}
+                </button>
+              )}
+            </div>
+
+            {/* 窄屏：生成按钮独立一行，全宽主操作 */}
+            {isNarrow && (
+              <button
+                onClick={() => { if (generating) { abortRef.current?.abort(); return; } void handleGenerate(); }}
+                disabled={streaming || !canGenerate}
+                title={!canGenerate ? "先和设定师聊几句，再生成" + label + "设定" : "把对话提炼成完整设定"}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  padding: "11px 0", borderRadius: 999, width: "100%",
+                  border: "none", cursor: streaming || !canGenerate ? "not-allowed" : "pointer",
+                  background: generating || (streaming || !canGenerate) ? "var(--seed-hover-bg)" : "var(--seed-accent)",
+                  color: generating || (streaming || !canGenerate) ? "var(--seed-muted)" : "#fff",
+                  fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+                  opacity: generating || (streaming || !canGenerate) ? 0.6 : 1,
+                }}
+              >
+                {generating ? (
+                  <><Loader2 size={14} style={{ animation: "spin 0.9s linear infinite" }} />停止</>
+                ) : (
+                  <><Wand2 size={14} />生成{label}设定</>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -624,11 +598,62 @@ export function CreateModeView() {
         />
       )}
 
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .cr-msg:hover .cr-msg-actions { opacity: 1 !important; }
-        .cr-msg-actions button:hover { color: var(--seed-accent) !important; }
-      `}</style>
+      {/* 引导/模型菜单：portal 到 body（fixed 定位 + 实体背景，避免底栏 backdrop-filter 祖先导致安卓 WebView 弹出异常） */}
+      {(guideMenuOpen || modelMenuOpen) && createPortal(
+        <div className={`theme-${ui.effectiveTheme()}`} ref={menuPortalRef}>
+          {guideMenuOpen && guideRect && (
+            <div style={{ ...menuStyle, bottom: menuPos(guideRect, 240).bottom, left: menuPos(guideRect, 240).left, width: 240 }}>
+              <div
+                style={{ ...itemStyle(guideMode === "ask"), flexDirection: "column", alignItems: "stretch", gap: 2 }}
+                onClick={() => handleGuideModeChange("ask")}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+                  <span style={{ flex: 1 }}>AI 提问</span>
+                  {guideMode === "ask" && <Check size={12} style={{ flexShrink: 0 }} />}
+                </div>
+                <span style={{ fontSize: 11, color: "var(--seed-muted)", whiteSpace: "normal", lineHeight: 1.4 }}>设定师逐题提问，引导你完善设定</span>
+              </div>
+              <div
+                style={{ ...itemStyle(guideMode === "free"), flexDirection: "column", alignItems: "stretch", gap: 2 }}
+                onClick={() => handleGuideModeChange("free")}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+                  <span style={{ flex: 1 }}>自由描述</span>
+                  {guideMode === "free" && <Check size={12} style={{ flexShrink: 0 }} />}
+                </div>
+                <span style={{ fontSize: 11, color: "var(--seed-muted)", whiteSpace: "normal", lineHeight: 1.4 }}>直接描述你的想法，结束后帮你整理</span>
+              </div>
+            </div>
+          )}
+          {modelMenuOpen && modelRect && (
+            <div style={{ ...menuStyle, bottom: menuPos(modelRect, 260).bottom, left: menuPos(modelRect, 260).left, width: 260 }}>
+              {usableProviders.map((p) => (
+                <div key={p.id}>
+                  <div style={{ padding: "6px 10px 2px", fontSize: 10, color: "var(--seed-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    {p.name}
+                  </div>
+                  {p.models.map((m) => (
+                    <div
+                      key={m}
+                      style={itemStyle(p.id === activeProviderId && m === activeModel)}
+                      onClick={() => applyCreateModel(p.id, m)}
+                    >
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{m}</span>
+                      {p.id === activeProviderId && m === activeModel && <Check size={12} style={{ flexShrink: 0 }} />}
+                    </div>
+                  ))}
+                </div>
+              ))}
+              {usableProviders.length === 0 && (
+                <div style={{ padding: "10px", fontSize: 12, color: "var(--seed-muted)" }}>未配置可用的模型服务，请先在设置中启用并配置 API Key</div>
+              )}
+            </div>
+          )}
+        </div>,
+        document.body
+      )}
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

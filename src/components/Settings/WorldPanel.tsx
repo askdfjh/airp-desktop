@@ -324,10 +324,7 @@ export function WorldPanel() {
               <Globe size={28} style={{ color: "var(--seed-accent)" }} />
             </div>
             <div className="seed-empty-title">还没有世界</div>
-            <div className="seed-empty-sub">与 AI 对话创建专属的故事宇宙，自动生成世界书条目</div>
-            <button className="seed-btn-primary" onClick={openCreateMode}>
-              <Wand2 size={13} /> AI 创建世界
-            </button>
+            <div className="seed-empty-sub">点击上方「AI 创建」，与 AI 对话创建专属的故事宇宙，自动生成世界书条目</div>
           </div>
         ) : (
           <>

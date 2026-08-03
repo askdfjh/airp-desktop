@@ -161,3 +161,31 @@ export async function loadSyncState(): Promise<SyncState> {
 export async function saveSyncState(state: SyncState): Promise<void> {
   await setAppSetting(SYNC_STATE_KEY, JSON.stringify(state));
 }
+
+/* ---------- 云端备份保留策略 ---------- */
+
+export interface BackupRetention {
+  /** limit = 仅保留最近 N 个；all = 全部保留 */
+  mode: "limit" | "all";
+  count: number;
+}
+
+const RETENTION_KEY = "cloud_backup_retention";
+
+export async function loadBackupRetention(): Promise<BackupRetention> {
+  const raw = await getAppSetting(RETENTION_KEY);
+  if (!raw) return { mode: "limit", count: 30 };
+  try {
+    const c = JSON.parse(raw) as Partial<BackupRetention>;
+    return {
+      mode: c.mode === "all" ? "all" : "limit",
+      count: Number(c.count) > 0 ? Math.floor(Number(c.count)) : 30,
+    };
+  } catch {
+    return { mode: "limit", count: 30 };
+  }
+}
+
+export async function saveBackupRetention(r: BackupRetention): Promise<void> {
+  await setAppSetting(RETENTION_KEY, JSON.stringify({ mode: r.mode, count: Math.max(1, Math.floor(r.count)) }));
+}

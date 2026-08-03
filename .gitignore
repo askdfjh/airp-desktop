@@ -19,3 +19,10 @@ coverage
 # 临时/备份文件
 *.bak
 __patch_*.js
+
+# 开发临时脚本
+fix_*.cjs
+find_block.cjs
+inject_cookie.*
+append_log.ps1
+_fix_bar.js

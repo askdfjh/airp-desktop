@@ -65,12 +65,32 @@ export function DialogueNovel() {
   const isBlank = (activeSession?.kind ?? "adventure") === "blank";
 
   // Auto-scroll when at bottom
+  const [inputHidden, setInputHidden] = useState(false);
+  const lastScrollTopRef = useRef(0);
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
     const el = scrollRef.current;
     const threshold = 100;
-    setIsAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < threshold);
-  }, []);
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    setIsAtBottom(atBottom);
+    // 输入框自动隐藏：下滑看历史 → 隐藏；上滑回底 / 滚到底 / 正在输入或流式 → 显示
+    const dir = el.scrollTop - lastScrollTopRef.current;
+    lastScrollTopRef.current = el.scrollTop;
+    const ae = document.activeElement;
+    const typing = !!ae && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT");
+    if (atBottom || typing || streaming) {
+      setInputHidden(false);
+      return;
+    }
+    if (dir > 10) setInputHidden(true);
+    else if (dir < -10) setInputHidden(false);
+  }, [streaming]);
+
+  // 切换会话时重置隐藏状态与滚动记录
+  useEffect(() => {
+    setInputHidden(false);
+    lastScrollTopRef.current = 0;
+  }, [activeSession?.id]);
 
   useEffect(() => {
     if (isAtBottom && scrollRef.current) {
@@ -213,8 +233,17 @@ export function DialogueNovel() {
   const suggestions = parsedReply?.suggestions ?? [];
 
   // 开局生成状态：已有开局消息且第一条 AI 回复尚未完成 → 显示「世界生成中...」/「完成规划」
-  const firstAssistantDone = allVisible.some((m) => m.role === "assistant" && m.content && !streaming);
-  const openingActive = !isBlank && !!openingMsg && !firstAssistantDone;
+  // 用 ref 记忆「开局已完成」，避免每次发送消息时（全局 streaming 变化）状态条反复出现
+  const [openingDone, setOpeningDone] = useState(false);
+  const openingDoneRef = useRef(false);
+  useEffect(() => {
+    if (openingDoneRef.current) return;
+    if (allVisible.some((m) => m.role === "assistant" && m.content) && !streaming) {
+      openingDoneRef.current = true;
+      setOpeningDone(true);
+    }
+  }, [allVisible, streaming]);
+  const openingActive = !isBlank && !!openingMsg && !openingDone;
   const assistantStarted = openingActive && !!lastAssistantMsg?.content;
 
   // 停止生成时若开局流尚未产出任何内容 → 删除开局消息，避免状态条永久卡在「世界生成中...」（表现为界面挂起）
@@ -287,6 +316,8 @@ export function DialogueNovel() {
       return;
     }
     setInputValue(text.trim());
+    // 选择推荐后自动收回推荐条
+    setSuggestBarOpen(false);
     if (inputRef.current) {
       inputRef.current.focus();
       inputRef.current.scrollIntoView({ block: "nearest" });
@@ -389,7 +420,7 @@ export function DialogueNovel() {
       )}
 
       {/* Scrollable content */}
-      <div className="seed-dialogue-scroll" ref={scrollRef} onScroll={handleScroll}>
+      <div className="seed-dialogue-scroll" ref={scrollRef} onScroll={handleScroll} style={{ paddingBottom: inputHidden ? 8 : 152 }}>
         <div className="seed-dialogue-content">
           {/* Chapter divider：第 N 章 · 章节名（AI 动态更新，仅冒险会话） */}
           {visibleMessages.length > 0 && !isBlank && (
@@ -582,28 +613,37 @@ export function DialogueNovel() {
         </div>
       </div>
 
-      {/* 对话推荐条（输入框上方，可折叠） */}
-      {!isBlank && (suggestions.length > 0 || isParsingLive) && (
-        <div className="seed-suggest-bar">
-          <div className="seed-suggest-head" onClick={() => setSuggestBarOpen((v) => !v)}>
-            <span className="seed-suggest-head-title">
-              对话推荐{suggestions.length > 0 ? ` (${suggestions.length})` : ""}
-            </span>
-            <svg
-              className={`seed-scene-chevron${suggestBarOpen ? " is-open" : ""}`}
-              width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
+      {/* Bottom input area：下滑看历史时自动隐藏（含推荐条），上滑/滚到底/输入中自动显示 */}
+      <div
+        className="seed-input-area"
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          transform: inputHidden ? "translateY(calc(100% + 2px))" : "none",
+          transition: "transform 0.28s ease",
+        }}
+      >
+        {/* 对话推荐条（输入框上方，可折叠）：与输入区同属底部浮层，一起隐藏/显示 */}
+        {!isBlank && (suggestions.length > 0 || isParsingLive) && (
+          <div className="seed-suggest-bar">
+            <div className="seed-suggest-head" onClick={() => setSuggestBarOpen((v) => !v)}>
+              <span className="seed-suggest-head-title">
+                对话推荐{suggestions.length > 0 ? ` (${suggestions.length})` : ""}
+              </span>
+              <svg
+                className={`seed-scene-chevron${suggestBarOpen ? " is-open" : ""}`}
+                width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </div>
+            {suggestBarOpen && (
+              <SuggestBar suggestions={suggestions} streaming={isParsingLive} onPick={handleSuggest} />
+            )}
           </div>
-          {suggestBarOpen && (
-            <SuggestBar suggestions={suggestions} streaming={isParsingLive} onPick={handleSuggest} />
-          )}
-        </div>
-      )}
-
-      {/* Bottom input area */}
-      <div className="seed-input-area">
+        )}
         <div className="seed-input-inner">
           <div className="seed-input-row">
             <textarea
@@ -614,6 +654,7 @@ export function DialogueNovel() {
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
               onInput={(e) => fitTextarea(e.currentTarget, 160)}
+              onFocus={() => setInputHidden(false)}
               rows={1}
               disabled={streaming}
               style={{ resize: "none" }}

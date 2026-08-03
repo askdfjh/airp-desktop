@@ -102,11 +102,22 @@ export interface SettingsBackup {
   type: string;
   version: number;
   exportedAt: string;
+  /** 导出设备：desktop（桌面端）/ android（安卓端）；兼容旧备份（无此字段） */
+  device?: "desktop" | "android";
   groups: BackupGroupKey[];
   localStorage: Record<string, string | null>;
   database: Partial<SettingsDbSnapshot>;
   /** 勾选「会话与消息」时写入 */
   conversations?: ConversationsSnapshot;
+}
+
+export const DEVICE_LABELS: Record<string, string> = {
+  desktop: "桌面端",
+  android: "安卓端",
+};
+
+export function currentDevice(): "desktop" | "android" {
+  return typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent) ? "android" : "desktop";
 }
 
 /** 按勾选收集数据（localStorage + SQLite 设置表 + 会话消息）；不传则导出全部 */
@@ -132,6 +143,7 @@ export async function exportAllData(
     type: SETTINGS_BACKUP_TYPE,
     version: SETTINGS_BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
+    device: currentDevice(),
     groups: ALL_BACKUP_GROUPS.filter((k) => selected.has(k)),
     localStorage: localStorageData,
     database,
@@ -162,8 +174,7 @@ export function getBackupGroups(data: SettingsBackup): BackupGroupKey[] {
   return inferred;
 }
 
-function countGroupItems(data: SettingsBackup, key: BackupGroupKey): number {
-  let n = 0;
+function countGroupItems(data: SettingsBackup, key: BackupGroupKey): number {  let n = 0;
   for (const lsKey of GROUP_LOCAL_STORAGE_KEYS[key]) {
     const raw = data.localStorage[lsKey];
     if (!raw) continue;
@@ -184,9 +195,14 @@ function countGroupItems(data: SettingsBackup, key: BackupGroupKey): number {
   return n;
 }
 
-/** 导入结果摘要：每项一行「名称（数量）」 */
-export function summarizeImportedGroups(data: SettingsBackup): string[] {
-  return getBackupGroups(data).map((key) => {
+/** 某组在备份中的条目数（localStorage store 元素数 + SQLite 行数）；供列表预览使用 */
+export function countBackupGroupItems(data: SettingsBackup, key: BackupGroupKey): number {
+  return countGroupItems(data, key);
+}
+
+/** 按指定组生成摘要：每项一行「名称（数量）」 */
+export function summarizeGroups(data: SettingsBackup, groups: BackupGroupKey[]): string[] {
+  return groups.map((key) => {
     if (key === "worldBooks") {
       const books = data.database.worldBooks?.length ?? 0;
       const entries = data.database.worldBookEntries?.length ?? 0;
@@ -205,20 +221,63 @@ export function summarizeImportedGroups(data: SettingsBackup): string[] {
   });
 }
 
-/** 导入备份：写回备份中包含的 localStorage + SQLite 表，合并会话记录，并重新水合各 store */
-export async function importAllData(data: SettingsBackup): Promise<void> {
-  // 1. localStorage（仅处理备份中包含的键，未包含的不动）
-  for (const [key, v] of Object.entries(data.localStorage)) {
-    if (v === null || v === undefined) {
-      localStorage.removeItem(key);
-    } else {
-      localStorage.setItem(key, v);
+/** 导入结果摘要：每项一行「名称（数量）」 */
+export function summarizeImportedGroups(data: SettingsBackup): string[] {
+  return summarizeGroups(data, getBackupGroups(data));
+}
+
+/** 按勾选组比较两份备份内容是否一致（忽略元数据与未勾选组；跨设备时 localStorage 差异不影响判断） */
+export function backupContentEquals(a: SettingsBackup, b: SettingsBackup, groups?: BackupGroupKey[]): boolean {
+  const selected = new Set(groups ?? getBackupGroups(a));
+  const lsKeys = new Set<string>();
+  const tables = new Set<keyof SettingsDbSnapshot>();
+  for (const key of ALL_BACKUP_GROUPS) {
+    if (!selected.has(key)) continue;
+    for (const k of GROUP_LOCAL_STORAGE_KEYS[key]) lsKeys.add(k);
+    for (const t of GROUP_DB_TABLES[key]) tables.add(t);
+  }
+  const normLs = (d: SettingsBackup) => {
+    const out: Record<string, string | null> = {};
+    for (const k of lsKeys) out[k] = d.localStorage[k] ?? null;
+    return JSON.stringify(out);
+  };
+  const normDb = (d: SettingsBackup) => {
+    const out: Record<string, unknown> = {};
+    for (const t of tables) out[t] = d.database[t];
+    return JSON.stringify(out);
+  };
+  if (normLs(a) !== normLs(b)) return false;
+  if (normDb(a) !== normDb(b)) return false;
+  if (selected.has("conversations") && JSON.stringify(a.conversations ?? null) !== JSON.stringify(b.conversations ?? null)) return false;
+  return true;
+}
+
+/** 导入备份：按勾选的组写回（localStorage + SQLite 表 + 会话合并），并重新水合各 store；不传 groups 则导入备份包含的全部组 */
+export async function importAllData(data: SettingsBackup, groups?: BackupGroupKey[]): Promise<void> {
+  const selected = new Set(groups ?? getBackupGroups(data));
+  // 1. localStorage（仅处理选中组的键，未选中的不动）
+  for (const key of ALL_BACKUP_GROUPS) {
+    if (!selected.has(key)) continue;
+    for (const lsKey of GROUP_LOCAL_STORAGE_KEYS[key]) {
+      const v = data.localStorage[lsKey];
+      if (v === null || v === undefined) {
+        localStorage.removeItem(lsKey);
+      } else {
+        localStorage.setItem(lsKey, v);
+      }
     }
   }
-  // 2. SQLite 设置表整体替换（仅备份中包含的表）
-  await restoreSettingsTables(data.database);
+  // 2. SQLite 设置表整体替换（仅选中组对应的表）
+  const tables = new Set<keyof SettingsDbSnapshot>();
+  for (const key of ALL_BACKUP_GROUPS) {
+    if (!selected.has(key)) continue;
+    for (const t of GROUP_DB_TABLES[key]) tables.add(t);
+  }
+  const snap: Partial<SettingsDbSnapshot> = {};
+  for (const t of tables) snap[t] = data.database[t];
+  await restoreSettingsTables(snap);
   // 3. 会话与消息合并恢复（同 ID 跳过，不覆盖现有）
-  if (data.conversations) {
+  if (selected.has("conversations") && data.conversations) {
     await restoreConversations(data.conversations);
   }
   // 4. 重新水合内存状态（localStorage store + DB store）

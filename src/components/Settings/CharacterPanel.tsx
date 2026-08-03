@@ -187,13 +187,7 @@ export function CharacterPanel() {
               <button
                 onClick={openCreateMode}
                 title="与 AI 对话式创建角色，完成后自动写入角色卡"
-                style={{
-                  display: "flex", alignItems: "center", gap: 4, padding: "8px 12px", borderRadius: 10,
-                  fontSize: "var(--fs-11)", fontWeight: 500, fontFamily: "inherit", cursor: "pointer", flexShrink: 0,
-                  background: "var(--seed-accent)",
-                  color: "#fff",
-                  border: "none",
-                }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "8px 16px", borderRadius: 999, border: "none", background: "var(--seed-accent)", color: "#fff", fontSize: "var(--fs-11)", fontWeight: 500, fontFamily: "inherit", cursor: "pointer", transition: "filter 0.15s", flexShrink: 0 }}
               >
                 <Wand2 size={12} /> AI 创建
               </button>

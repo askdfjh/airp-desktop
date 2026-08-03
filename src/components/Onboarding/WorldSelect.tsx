@@ -315,38 +315,6 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: () => void }) {
             <div className="seed-card-desc">{world.desc}</div>
           </div>
         ))}
-        {/* 自定义世界入口：每个 tab 都有，点击展开我的世界列表 */}
-        <div
-          className={`seed-card seed-card--custom ${showCustom ? "seed-card--selected" : ""}`}
-          onClick={() => setShowCustom((v) => !v)}
-          style={{
-            border: "1px dashed color-mix(in srgb, var(--seed-fg) 12%, transparent)",
-            background: "transparent",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            minHeight: 164,
-            textAlign: "center",
-            cursor: "pointer",
-          }}
-        >
-          <div style={{
-            width: 44, height: 44, borderRadius: "50%",
-            border: "1px dashed color-mix(in srgb, var(--seed-fg) 15%, transparent)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            marginBottom: 12, color: "var(--seed-muted)",
-          }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
-            </svg>
-          </div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--seed-fg)" }}>自定义世界</div>
-          <div style={{ fontSize: 12, color: "var(--seed-muted)", marginTop: 4 }}>
-            {customBooks.length > 0 ? `${customBooks.length} 个已创建的世界` : "创建属于你的独特世界"}
-          </div>
-        </div>
       </div>
 
       {/* 我的世界：自定义世界书列表 */}
@@ -454,32 +422,37 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: () => void }) {
           <div style={{ fontSize: 12, color: "var(--seed-muted)", marginTop: 4 }}>世界 / 视角 / 角色 / 场景全部随机</div>
         </div>
         <div
-          className="seed-card seed-card--custom"
-          onClick={() => setShowCustom(true)}
+          className={`seed-card seed-card--custom ${showCustom ? "seed-card--selected" : ""}`}
+          onClick={() => setShowCustom((v) => !v)}
           style={{
-            border: "1px dashed color-mix(in srgb, var(--seed-fg) 12%, transparent)",
-            background: "transparent",
+            border: showCustom
+              ? "1px solid color-mix(in srgb, var(--seed-accent) 40%, transparent)"
+              : "1px dashed color-mix(in srgb, var(--seed-fg) 12%, transparent)",
+            background: showCustom ? "color-mix(in srgb, var(--seed-accent) 6%, transparent)" : "transparent",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
             minHeight: 164,
             textAlign: "center",
+            cursor: "pointer",
           }}
         >
           <div style={{
             width: 44, height: 44, borderRadius: "50%",
             border: "1px dashed color-mix(in srgb, var(--seed-fg) 15%, transparent)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            marginBottom: 12, color: "var(--seed-muted)",
+            marginBottom: 12, color: showCustom ? "var(--seed-accent)" : "var(--seed-muted)",
           }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
           </div>
-          <div style={{ fontSize: 14, fontWeight: 500, color: "var(--seed-muted)" }}>自定义世界</div>
-          <div style={{ fontSize: 12, color: "var(--seed-muted)", opacity: 0.6, marginTop: 4 }}>创建属于你的独特世界</div>
+          <div style={{ fontSize: 14, fontWeight: 500, color: showCustom ? "var(--seed-accent)" : "var(--seed-muted)" }}>自定义世界</div>
+          <div style={{ fontSize: 12, color: "var(--seed-muted)", opacity: 0.7, marginTop: 4 }}>
+            {customBooks.length > 0 ? `${customBooks.length} 个已创建的世界` : "创建属于你的独特世界"}
+          </div>
         </div>
       </div>
     </div>
