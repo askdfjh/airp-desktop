@@ -1,0 +1,167 @@
+import { useState } from "react";
+import { getTropeById } from "@/lib/popularTropes";
+import { getTopicSchemesByAudience, type TopicScheme } from "@/lib/topicSchemes";
+import { getWorldFoundation, worldFoundationLabel } from "@/lib/worldFoundations";
+import { useUIStore } from "@/stores/uiStore";
+import { useWorldStore } from "@/stores/worldStore";
+import { pickMainEntries } from "./onboardingHelpers";
+import type { WorldAudienceFilter } from "@/lib/worldAudience";
+
+export function TopicSelect() {
+  const {
+    setOnboardingStep,
+    setSelectedWorld,
+    setSelectedTopicScheme,
+    setSelectedTrope,
+    setSelectedMainEntry,
+    setSelectedScenario,
+    setSelectedStylePreset,
+    setSelectedMode,
+    setSelectedCharacter,
+    setPlayerName,
+  } = useUIStore();
+  const books = useWorldStore((s) => s.books);
+  const setActiveBook = useWorldStore((s) => s.setActiveBook);
+  const deactivateAllBooks = useWorldStore((s) => s.deactivateAllBooks);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [audienceFilter, setAudienceFilter] = useState<WorldAudienceFilter>("all");
+  const topics = getTopicSchemesByAudience(audienceFilter);
+
+  const chooseTopic = async (topic: TopicScheme) => {
+    setSelected(topic.id);
+    const foundation = getWorldFoundation(topic.worldBaseId);
+    const bookId = foundation.builtinBookId || books.find((b) => b.id === topic.worldBaseId || b.theme === topic.worldBaseId)?.id;
+    const selectedBook = bookId ? books.find((b) => b.id === bookId) || null : null;
+    const mainEntry = pickMainEntries(selectedBook)[0] || null;
+
+    setSelectedTopicScheme(topic.id, topic.label);
+    setSelectedTrope(topic.tropeId, topic.label);
+    setSelectedWorld(topic.worldBaseId, foundation.label);
+    setSelectedMainEntry(mainEntry?.id ?? null, mainEntry?.title ?? null);
+    setSelectedScenario(null, null);
+    setSelectedStylePreset(null, null);
+    setSelectedMode(null);
+    setSelectedCharacter(null, null);
+    setPlayerName("");
+
+    if (bookId) {
+      await setActiveBook(bookId);
+    } else {
+      await deactivateAllBooks();
+    }
+
+    setTimeout(() => setOnboardingStep(2), 450);
+  };
+
+  const randomTopic = () => {
+    const pool = topics.length > 0 ? topics : getTopicSchemesByAudience("all");
+    const topic = pool[Math.floor(Math.random() * pool.length)];
+    if (topic) void chooseTopic(topic);
+  };
+
+  return (
+    <div>
+      <div style={{ textAlign: "center", marginBottom: 42 }}>
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 16px",
+            background: "var(--seed-accent-bg)",
+            border: "1px solid color-mix(in srgb, var(--seed-accent) 15%, transparent)",
+            borderRadius: 999,
+            fontSize: 12,
+            fontWeight: 500,
+            color: "var(--seed-accent)",
+            letterSpacing: "0.05em",
+            textTransform: "uppercase",
+            marginBottom: 24,
+          }}
+        >
+          灵叙 Narra
+        </div>
+        <h1 style={{ fontSize: 40, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--seed-fg)", marginBottom: 12, lineHeight: 1.2 }}>
+          选择你想玩的题材
+        </h1>
+        <p style={{ fontSize: 16, color: "var(--seed-muted)", maxWidth: 520, margin: "0 auto" }}>
+          先选题材，系统会自动匹配世界与基础规则。
+        </p>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 26 }}>
+        {([
+          { key: "all", label: "全部" },
+          { key: "male", label: "男频" },
+          { key: "female", label: "女频" },
+        ] as const).map((tab) => {
+          const active = audienceFilter === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setAudienceFilter(tab.key)}
+              style={{
+                padding: "9px 24px",
+                borderRadius: 999,
+                fontSize: 13.5,
+                fontWeight: 500,
+                fontFamily: "inherit",
+                cursor: "pointer",
+                background: active ? "var(--seed-accent-bg)" : "transparent",
+                color: active ? "var(--seed-accent)" : "var(--seed-muted)",
+                border: active ? "1px solid color-mix(in srgb, var(--seed-accent) 40%, transparent)" : "1px solid var(--seed-border)",
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16 }}>
+        <div
+          className="seed-card seed-card--custom"
+          onClick={randomTopic}
+          style={{
+            padding: "22px 20px",
+            cursor: "pointer",
+            border: "1px dashed color-mix(in srgb, var(--seed-accent) 45%, transparent)",
+            background: "color-mix(in srgb, var(--seed-accent) 6%, transparent)",
+          }}
+        >
+          <div className="seed-card-title" style={{ marginBottom: 8 }}>随机题材</div>
+          <div className="seed-card-desc">
+            {audienceFilter === "all" ? "从全部题材里随机" : audienceFilter === "male" ? "只从男频题材里随机" : "只从女频题材里随机"}
+          </div>
+        </div>
+
+        {topics.map((topic) => {
+          const trope = getTropeById(topic.tropeId);
+          return (
+            <div
+              key={topic.id}
+              className={`seed-card ${selected === topic.id ? "seed-card--selected" : ""}`}
+              onClick={() => void chooseTopic(topic)}
+              style={{ padding: "22px 20px", cursor: "pointer" }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+                <div className="seed-card-title">{topic.label}</div>
+                <span style={{ fontSize: 11, color: "var(--seed-muted)" }}>{trope?.category}</span>
+              </div>
+              <div className="seed-card-desc" style={{ marginBottom: 12 }}>{topic.description}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 999, background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-muted)" }}>
+                  {worldFoundationLabel(topic.worldBaseId)}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ textAlign: "center", marginTop: 24, fontSize: 13, color: "var(--seed-muted)", letterSpacing: "0.08em", fontWeight: 500 }}>
+        1 <span style={{ opacity: 0.4 }}>/ 3</span>
+      </div>
+    </div>
+  );
+}

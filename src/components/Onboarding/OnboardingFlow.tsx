@@ -5,10 +5,16 @@ import { useOnboardingStore } from "@/stores/onboardingStore";
 import { useWorldStore } from "@/stores/worldStore";
 import { useCharacterStore } from "@/stores/characterStore";
 import { useGenerationStore } from "@/stores/generationStore";
-import { WorldSelect, PRESET_WORLDS, WORLD_BOOK_MAP } from "./WorldSelect";
-import { ModeSelect } from "./ModeSelect";
-import { CharacterOpeningSelect } from "./CharacterOpeningSelect";
-import { buildWorldOpeningScenarios, getWorldOpeningScenario } from "@/lib/worldOpeningScenarios";
+import { PRESET_WORLDS, WORLD_BOOK_MAP } from "./WorldSelect";
+import { getWorldOpeningScenario } from "@/lib/worldOpeningScenarios";
+import { buildHotTropeHint, buildTropeOpeningDirective, buildTropeSystemPrompt } from "@/lib/popularTropes";
+import { getTopicOpeningScenario, getTopicOpeningScenarios } from "@/lib/topicOpenings";
+import { getTopicSchemesByAudience } from "@/lib/topicSchemes";
+import { getWorldFoundation } from "@/lib/worldFoundations";
+import { TopicSelect } from "./TopicSelect";
+import { StyleModeSelect } from "./StyleModeSelect";
+import { ProtagonistSelect } from "./ProtagonistSelect";
+import { pickMainEntries } from "./onboardingHelpers";
 import {
   buildProtagonistPrompt,
   defaultPlayerNameForAudience,
@@ -18,7 +24,7 @@ import {
 } from "@/lib/worldAudience";
 
 export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
-  const { onboardingStep, setAppPhase, resetOnboarding, setPendingOpeningMessage } = useUIStore();
+  const { onboardingStep, setAppPhase, resetOnboarding, setPendingOpeningMessage, setOnboardingStep } = useUIStore();
   const addSession = useSessionStore((s) => s.add);
   const setActive = useSessionStore((s) => s.setActive);
   const activeProviderId = useProviderStore((s) => s.activeProviderId);
@@ -35,18 +41,28 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
     const selectedCharacterId = ui.selectedCharacterId;
     const selectedCharacterName = ui.selectedCharacterName;
     const selectedScenarioId = ui.selectedScenarioId;
+    const selectedTopicSchemeId = ui.selectedTopicSchemeId;
     const selectedMode = ui.selectedMode;
+    const selectedTropeId = ui.selectedTropeId;
+    const selectedMainEntryId = ui.selectedMainEntryId;
+    const selectedMainEntryName = ui.selectedMainEntryName;
+    const selectedStylePresetName = ui.selectedStylePresetName;
     const selectedWorldName = ui.selectedWorldName;
     const selectedWorldId = ui.selectedWorldId;
     const worldState = useWorldStore.getState();
     const selectedBook = worldState.activeBook || worldState.books.find((b) => b.id === selectedWorldId) || null;
     const selectedPresetWorld = PRESET_WORLDS.find((w) => w.id === selectedWorldId);
+    const worldviewId = selectedPresetWorld?.id || selectedBook?.theme || selectedWorldId || "custom";
     const selectedAudience: WorldAudience | null =
       selectedPresetWorld?.gender ?? (selectedBook ? inferWorldBookAudience(selectedBook) : null);
     const selectedScenario = selectedScenarioId
-      ? useOnboardingStore.getState().getScenarioById(selectedScenarioId) ||
+      ? getTopicOpeningScenario(selectedTopicSchemeId, selectedScenarioId) ||
+        useOnboardingStore.getState().getScenarioById(selectedScenarioId) ||
         getWorldOpeningScenario(selectedBook, selectedScenarioId)
       : undefined;
+    const selectedMainEntry = selectedMainEntryId
+      ? selectedBook?.entries.find((e) => e.id === selectedMainEntryId || e.title === selectedMainEntryName)
+      : null;
     // 主角名：第 3 步输入 > 所选角色名 > 兜底「主角」
     const typedPlayerName = (ui.playerName || "").trim();
     const playerName = typedPlayerName || selectedCharacterName || defaultPlayerNameForAudience(selectedAudience);
@@ -60,12 +76,35 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
       typedName: !!typedPlayerName || !!selectedCharacterName,
       audience: selectedAudience,
     });
+    const tropePrompt = selectedTropeId
+      ? buildTropeSystemPrompt({
+          tropeId: selectedTropeId,
+          worldviewId,
+        })
+      : isAIOpening
+        ? buildHotTropeHint({
+            audience: selectedAudience,
+            worldName: selectedWorldName || "未知世界",
+            worldviewId,
+          })
+        : "";
+    const mainEntryPrompt = selectedMainEntry
+      ? `【基础规则块】本次开局优先围绕「${selectedMainEntry.title}」展开。该条目只定义基础规则或舞台，不要把它误当成题材。条目内容：${selectedMainEntry.content}`
+      : selectedMainEntryName
+        ? `【基础规则块】本次开局优先围绕「${selectedMainEntryName}」展开。该条目只定义基础规则或舞台，不要把它误当成题材。`
+        : "";
+    const stylePrompt = selectedStylePresetName
+      ? `【风格修饰】整体气质参考「${selectedStylePresetName}」，但不得覆盖世界观规则、基础规则块和题材引擎。`
+      : "";
     const systemPrompt = isAIOpening
-      ? [modePrompt, protagonistPrompt].filter(Boolean).join("\n\n")
+      ? [mainEntryPrompt, modePrompt, protagonistPrompt, tropePrompt, stylePrompt].filter(Boolean).join("\n\n")
       : selectedScenario && selectedMode
         ? selectedScenario.systemPromptTemplate.replace("{characterName}", playerName) +
+          (mainEntryPrompt ? "\n\n" + mainEntryPrompt : "") +
           (modePrompt ? "\n\n" + modePrompt : "") +
-          "\n\n" + protagonistPrompt
+          "\n\n" + protagonistPrompt +
+          (tropePrompt ? "\n\n" + tropePrompt : "") +
+          (stylePrompt ? "\n\n" + stylePrompt : "")
       : hasFullSetup
         ? buildSystemPrompt(
             selectedScenarioId,
@@ -74,12 +113,20 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
           )
         : "";
     // 开局开场消息：选中开局场景时，按场景设定自动发送给 AI 作为第一条消息
+    const mainEntryOpeningDirective = selectedMainEntryName
+      ? `\n\n【基础规则块】第一幕优先从「${selectedMainEntryName}」切入。`
+      : "";
+    const styleOpeningDirective = selectedStylePresetName
+      ? `\n\n【风格】以「${selectedStylePresetName}」作为气质修饰。`
+      : "";
+    const tropeOpeningDirective = buildTropeOpeningDirective({ tropeId: selectedTropeId, worldviewId });
     const openingMessage = isAIOpening
-      ? buildAIOpeningMessage(selectedWorldName || "未知世界", playerName, selectedMode || "novel")
+      ? buildAIOpeningMessage(selectedWorldName || "未知世界", playerName, selectedMode || "novel", selectedAudience, selectedTropeId, worldviewId)
+        + mainEntryOpeningDirective + styleOpeningDirective
       : selectedScenario
-        ? selectedScenario.openingMessage.replace("{characterName}", playerName)
+        ? selectedScenario.openingMessage.replace("{characterName}", playerName) + mainEntryOpeningDirective + tropeOpeningDirective + styleOpeningDirective
       : selectedScenarioId
-        ? buildOpeningMessage(selectedScenarioId, playerName)
+        ? buildOpeningMessage(selectedScenarioId, playerName) + mainEntryOpeningDirective + tropeOpeningDirective + styleOpeningDirective
         : "";
 
     const now = Date.now();
@@ -105,21 +152,23 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
     }
   };
 
+  const handleExitOrBack = () => {
+    if (onboardingStep > 1) {
+      setOnboardingStep((onboardingStep - 1) as any);
+      return;
+    }
+    onExit?.();
+  };
+
   const handleRandomStart = async (filter: WorldAudienceFilter = "all") => {
-    // 1. 随机世界：预设世界 + 用户世界书
     const worldStore = useWorldStore.getState();
     const books = worldStore.books;
-    const customBooks = books.filter((b) => !b.isBuiltin);
-    const presetPool = PRESET_WORLDS.filter((w) => filter === "all" || w.gender === filter);
-    const customPool = customBooks.filter((b) => filter === "all" || inferWorldBookAudience(b) === filter);
-    const pool = [
-      ...presetPool.map((w) => ({ id: w.id, name: w.name })),
-      ...customPool.map((b) => ({ id: b.id, name: b.name })),
-    ];
-    const pick = pool[Math.floor(Math.random() * pool.length)];
+    const topicPool = getTopicSchemesByAudience(filter);
+    const topic = topicPool[Math.floor(Math.random() * topicPool.length)];
+    if (!topic) return;
 
-    // 同步激活对应世界书（无对应书则不注入任何条目）
-    const bookId = WORLD_BOOK_MAP[pick.id] || books.find((b) => b.id === pick.id || b.theme === pick.id)?.id;
+    const foundation = getWorldFoundation(topic.worldBaseId);
+    const bookId = foundation.builtinBookId || books.find((b) => b.id === topic.worldBaseId || b.theme === topic.worldBaseId)?.id;
     if (bookId) {
       await worldStore.setActiveBook(bookId);
     } else {
@@ -127,16 +176,16 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
     }
 
     const ui = useUIStore.getState();
-    ui.setSelectedWorld(pick.id, pick.name);
+    ui.setSelectedTopicScheme(topic.id, topic.label);
+    ui.setSelectedWorld(topic.worldBaseId, foundation.label);
+    ui.setSelectedTrope(topic.tropeId, topic.label);
 
-    // 2. 随机视角（novel / player / custom）
     const mode = (["novel", "player", "custom"] as const)[Math.floor(Math.random() * 3)];
     ui.setSelectedMode(mode);
     if (mode === "player") {
       useGenerationStore.getState().setActivePreset("player-control");
     }
 
-    // 3. 随机角色（无角色库则用主角）
     const chars = useCharacterStore.getState().characters;
     if (chars.length > 0) {
       const ch = chars[Math.floor(Math.random() * chars.length)];
@@ -145,20 +194,23 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
       ui.setSelectedCharacter(null, null);
     }
 
-    // 4. 随机场景：该世界主题下随机；无匹配场景（如娱乐圈/末日等自定义主题书）则用 AI 随机开局兜底
-    const pickedBook = bookId ? books.find((b) => b.id === bookId) : undefined;
-    const resolvedTheme = useOnboardingStore.getState().resolveTheme(pick.id);
-    const scenarios = useOnboardingStore.getState().getScenariosByTheme(resolvedTheme);
-    if (scenarios.length > 0) {
-      const sc = scenarios[Math.floor(Math.random() * scenarios.length)];
-      ui.setSelectedScenario(sc.id, sc.name);
-    } else if (pickedBook) {
-      const generated = buildWorldOpeningScenarios(pickedBook);
-      const sc = generated[Math.floor(Math.random() * generated.length)];
-      ui.setSelectedScenario(sc.id, sc.name);
-    } else {
-      ui.setSelectedScenario("ai-random", "AI 随机开局");
+    const selectedWorldBook = bookId ? books.find((b) => b.id === bookId) || null : null;
+    const mainEntries = pickMainEntries(selectedWorldBook);
+    const pickedMainEntry = mainEntries.length > 0
+      ? mainEntries[Math.floor(Math.random() * mainEntries.length)]
+      : null;
+    ui.setSelectedMainEntry(pickedMainEntry?.id ?? null, pickedMainEntry?.title ?? null);
+
+    const stylePool = useGenerationStore.getState().presets.filter((p) => ["balanced", "creative", "roleplay", "longform", "stable"].includes(p.id));
+    const pickedStyle = stylePool[Math.floor(Math.random() * stylePool.length)];
+    if (pickedStyle) {
+      useGenerationStore.getState().setActivePreset(pickedStyle.id);
+      ui.setSelectedStylePreset(pickedStyle.id, pickedStyle.name);
     }
+
+    const scenarios = getTopicOpeningScenarios(topic.id);
+    const sc = scenarios[Math.floor(Math.random() * scenarios.length)];
+    ui.setSelectedScenario(sc?.id ?? "ai-random", sc?.name ?? "AI 随机开局");
 
     handleComplete();
   };
@@ -182,36 +234,33 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
   return (
     <div className="seed-onboarding">
       <div className="seed-particles">{particles}</div>
-      {onExit && (
-        <button
-          onClick={onExit}
-          title="退出开局流程"
-          style={{
-            position: "fixed",
-            top: /Android/i.test(navigator.userAgent) ? "calc(env(safe-area-inset-top, 0px) + 18px)" : 54,
-            right: 16,
-            zIndex: 300,
-            display: "flex", alignItems: "center", gap: 5,
-            padding: "7px 14px", borderRadius: 999,
-            border: "1px solid var(--seed-border)",
-            background: "var(--seed-surface)",
-            color: "var(--seed-muted)",
-            fontSize: 12, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
-            transition: "all 0.15s",
-          }}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-          退出
-        </button>
-      )}
       <div className="seed-onboarding-content">
+        {onExit && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 18 }}>
+            <button
+              className="seed-breadcrumb-link"
+              onClick={handleExitOrBack}
+              title={onboardingStep > 1 ? "返回上一步" : "退出开局流程"}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            >
+              {onboardingStep > 1 ? (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              )}
+              {onboardingStep > 1 ? "上一步" : "退出流程"}
+            </button>
+          </div>
+        )}
         <div className="seed-onboarding-step" key={onboardingStep}>
-          {onboardingStep === 1 && <WorldSelect onRandomStart={handleRandomStart} />}
-          {onboardingStep === 2 && <ModeSelect />}
-          {onboardingStep === 3 && <CharacterOpeningSelect onComplete={handleComplete} />}
+          {onboardingStep === 1 && <TopicSelect />}
+          {onboardingStep === 2 && <StyleModeSelect />}
+          {onboardingStep === 3 && <ProtagonistSelect onComplete={handleComplete} />}
         </div>
       </div>
     </div>

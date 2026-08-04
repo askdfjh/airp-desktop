@@ -1,12 +1,17 @@
 import { useState } from "react";
 import { useUIStore } from "@/stores/uiStore";
 import { useWorldStore } from "@/stores/worldStore";
-import { audienceLabel, inferWorldBookAudience, type WorldAudienceFilter } from "@/lib/worldAudience";
+import { inferWorldBookAudience, type WorldAudienceFilter } from "@/lib/worldAudience";
+import { getCompatibleTropes, worldviewLabelForId } from "@/lib/popularTropes";
 
 // 预设世界 → 内置世界书 id 映射（没有内置书的世界不注入任何条目）
 export const WORLD_BOOK_MAP: Record<string, string> = {
   cultivation: "wb-builtin-xianxia",
+  fantasy: "wb-builtin-fantasy",
+  urban: "wb-builtin-urban",
   infinite: "wb-builtin-infinite",
+  scifi: "wb-builtin-scifi",
+  apocalypse: "wb-builtin-apocalypse",
   palace: "wb-builtin-palace",
   folklore: "wb-builtin-folklore",
   rulehorror: "wb-builtin-rulehorror",
@@ -70,6 +75,21 @@ export const PRESET_WORLDS = [
       <svg viewBox="0 0 24 24">
         <path d="M18.178 8c5.096 0 5.096 8 0 8-3.742 0-5.907-4-9.315-4-3.328 0-3.328 4 0 4 2.424 0 4.089-2.2 5.5-3.7" />
         <path d="M5.822 16c-5.096 0-5.096-8 0-8 3.742 0 5.907 4 9.315 4 3.328 0 3.328-4 0-4-2.424 0-4.089 2.2-5.5 3.7" />
+      </svg>
+    ),
+  },
+  {
+    id: "apocalypse",
+    name: "末世求生",
+    desc: "灾变初夜，活下去是第一目标",
+    gender: "male" as const,
+    color: "#7c8cff",
+    glow: "rgba(124,140,255,0.15)",
+    icon: (
+      <svg viewBox="0 0 24 24">
+        <path d="M12 2l9 17H3L12 2z" />
+        <path d="M12 8v4" />
+        <circle cx="12" cy="16.5" r="1" />
       </svg>
     ),
   },
@@ -196,7 +216,7 @@ export const PRESET_WORLDS = [
 ];
 
 export function WorldSelect({ onRandomStart }: { onRandomStart?: (filter: WorldAudienceFilter) => void }) {
-  const { setSelectedWorld, setOnboardingStep } = useUIStore();
+  const { setSelectedWorld, setSelectedTrope, setOnboardingStep } = useUIStore();
   const [selected, setSelected] = useState<string | null>(null);
   const [audienceFilter, setAudienceFilter] = useState<WorldAudienceFilter>("all");
   const [showCustom, setShowCustom] = useState(false);
@@ -217,6 +237,7 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: (filter: WorldA
   const handleSelect = async (id: string, name: string) => {
     setSelected(id);
     setSelectedWorld(id, name);
+    setSelectedTrope(null, null);
     // 同步激活对应的世界书：仅激活当前选中的世界，避免上一本书的条目继续注入
     const bookId = WORLD_BOOK_MAP[id] || books.find((b) => b.id === id || b.theme === id)?.id;
     if (bookId) {
@@ -315,14 +336,29 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: (filter: WorldA
                 : undefined,
             } as React.CSSProperties}
           >
-            <div className="seed-card-check">
-              <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
-            </div>
             <div className="seed-card-icon" style={{ color: world.color, background: `color-mix(in srgb, ${world.color} 10%, transparent)` }}>
               {world.icon}
             </div>
             <div className="seed-card-title">{world.name}</div>
             <div className="seed-card-desc">{world.desc}</div>
+            <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 6 }}>
+              <span style={{
+                fontSize: 11, padding: "3px 9px", borderRadius: 999,
+                background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-muted)",
+              }}>
+                世界观 · {worldviewLabelForId(world.id)}
+              </span>
+              {getCompatibleTropes({ worldviewId: world.id, audience: world.gender, worldText: world.name })
+                .slice(0, 2)
+                .map((t) => (
+                  <span key={t.id} style={{
+                    fontSize: 11, padding: "3px 9px", borderRadius: 999,
+                    background: "var(--seed-accent-bg)", border: "1px solid var(--seed-accent-border)", color: "var(--seed-accent)",
+                  }}>
+                    {t.label}
+                  </span>
+                ))}
+            </div>
           </div>
         ))}
       </div>
@@ -378,9 +414,6 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: (filter: WorldA
                   onClick={() => handleSelect(b.id, b.name)}
                   style={{ cursor: "pointer" }}
                 >
-                  <div className="seed-card-check">
-                    <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
-                  </div>
                   <div className="seed-card-icon" style={{ color: "var(--seed-accent)", background: "color-mix(in srgb, var(--seed-accent) 10%, transparent)" }}>
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
@@ -389,6 +422,24 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: (filter: WorldA
                   </div>
                   <div className="seed-card-title">{b.name}</div>
                   <div className="seed-card-desc">{b.description || b.theme || "暂无描述"}</div>
+                  <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    <span style={{
+                      fontSize: 11, padding: "3px 9px", borderRadius: 999,
+                      background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-muted)",
+                    }}>
+                      世界观 · 自定义
+                    </span>
+                    {getCompatibleTropes({ worldviewId: b.theme || b.id, audience: inferWorldBookAudience(b), worldText: [b.name, b.theme, b.description, ...b.tags].join(" ") })
+                      .slice(0, 2)
+                      .map((t) => (
+                        <span key={t.id} style={{
+                          fontSize: 11, padding: "3px 9px", borderRadius: 999,
+                          background: "var(--seed-accent-bg)", border: "1px solid var(--seed-accent-border)", color: "var(--seed-accent)",
+                        }}>
+                          {t.label}
+                        </span>
+                      ))}
+                  </div>
                   <div style={{ marginTop: 10, fontSize: 11, color: "var(--seed-muted)" }}>
                     {b.entries.length} 条条目 · {b.theme || "自定义主题"}
                   </div>

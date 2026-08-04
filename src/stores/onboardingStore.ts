@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import type { WorldAudience } from "@/lib/worldAudience";
+import { buildHotTropeHint } from "@/lib/popularTropes";
 
 export interface OpeningScenario {
   id: string;
@@ -125,6 +127,35 @@ const defaultScenarios: OpeningScenario[] = [
     theme: "infinite",
     systemPromptTemplate: "你正在写一部无限流小说。当前场景：抉择之门——{characterName}站在主神空间的传送门前，面前有三扇门：武侠、恐怖、科幻。请描写三扇门后的诱惑与危险、以及主角的权衡与选择。以沉浸式小说笔法续写。",
     openingMessage: "主神空间的广场上，三扇传送门静静矗立：左门剑光凛冽，中门阴风阵阵，右门星光璀璨。系统提示：「轮回者{characterName}，请选择你的下一个世界。」请开始吧。",
+  },
+
+  // ============ apocalypse 末世求生（3 个） ============
+  {
+    id: "apocalypse-firstnight",
+    name: "末夜降临",
+    description: "灾变刚刚发生，城市正在失去秩序",
+    keywords: ["末世", "生存", "危机"],
+    theme: "apocalypse",
+    systemPromptTemplate: "你正在写一部末世求生小说。当前场景：{characterName}所在的城市在夜里突然陷入灾变。请描写停电、混乱、第一批逃生者和主角的生存抉择。以沉浸式小说笔法续写。",
+    openingMessage: "停电后，整座城市像被谁一把掐灭。{characterName}站在窗边，听见远处传来爆炸声和尖叫声，手机只剩最后一格信号。请开始吧。",
+  },
+  {
+    id: "apocalypse-shelter",
+    name: "避难所抉择",
+    description: "资源有限，跟谁走、去哪躲，是第一道生死题",
+    keywords: ["避难所", "选择", "团队"],
+    theme: "apocalypse",
+    systemPromptTemplate: "你正在写一部末世求生小说。当前场景：{characterName}面前有两个避难所，一个安全但封闭，一个危险却有更多资源。请写出环境压力、同伴意见和主角的权衡。以沉浸式小说笔法续写。",
+    openingMessage: "{characterName}手里攥着两张地图，一张通向地下避难所，一张指向城外的物资点。天色彻底黑下去之前，必须做出决定。请开始吧。",
+  },
+  {
+    id: "apocalypse-outpost",
+    name: "废城据点",
+    description: "建立据点，收拢幸存者，准备下一轮危机",
+    keywords: ["据点", "幸存者", "建设"],
+    theme: "apocalypse",
+    systemPromptTemplate: "你正在写一部末世求生小说。当前场景：{characterName}刚在废城里找到一处勉强可用的据点。请描写据点条件、幸存者状态、物资短缺与下一步扩张计划。以沉浸式小说笔法续写。",
+    openingMessage: "废弃商场里只亮着一盏应急灯。{characterName}把门栓插死，转身看见墙边蜷着的幸存者和只剩一半的物资箱。请开始吧。",
   },
 
   // ============ palace 宫廷古装（3 个） ============
@@ -368,7 +399,7 @@ interface OnboardingState {
   buildModePrompt: (mode: string) => string;
   buildSystemPrompt: (scenarioId: string, characterName: string, mode: string) => string;
   buildOpeningMessage: (scenarioId: string, characterName: string) => string;
-  buildAIOpeningMessage: (worldName: string, characterName: string, mode: string) => string;
+  buildAIOpeningMessage: (worldName: string, characterName: string, mode: string, audience?: WorldAudience | null, tropeId?: string | null, worldviewId?: string | null) => string;
 }
 
 export const useOnboardingStore = create<OnboardingState>((set, get) => ({
@@ -389,6 +420,9 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
       "修仙/仙侠": "cultivation",
       仙侠: "cultivation",
       无限流: "infinite",
+      "末日求生": "apocalypse",
+      "末世求生": "apocalypse",
+      apocalypse: "apocalypse",
       "古代·宫廷": "palace",
       宫廷: "palace",
       民俗悬疑: "folklore",
@@ -435,10 +469,12 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
   },
 
   // AI 随机开局：不选预设场景，由 AI 根据世界与角色即兴创作并立刻开篇
-  buildAIOpeningMessage: (worldName: string, characterName: string, mode: string) => {
+  buildAIOpeningMessage: (worldName: string, characterName: string, mode: string, audience: WorldAudience | null = null, tropeId: string | null = null, worldviewId: string | null = null) => {
     const perspective =
       mode === "novel" ? "第三人称旁观者" : mode === "player" ? "第二人称「你」" : "沉浸式小说";
+    const tropeHint = buildHotTropeHint({ audience, worldName, tropeId, worldviewId });
     return (
+      tropeHint + "\n" +
       "【AI 随机开局】请为【" + worldName + "】世界中的角色「" + characterName +
       "」随机设计一个开局，并立即开始故事：\n" +
       "1. 不要提问，不要列举选项，直接以" + perspective + "视角开篇；\n" +

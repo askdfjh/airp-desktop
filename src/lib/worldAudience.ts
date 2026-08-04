@@ -3,8 +3,8 @@ import type { WorldBook } from "@/types";
 export type WorldAudience = "male" | "female";
 export type WorldAudienceFilter = "all" | WorldAudience;
 
-const FEMALE_RE = /女频|女主|女性|言情|甜宠|宫廷|宫斗|宅斗|后宫|古言|现言|娱乐圈|恋爱|婚恋|重生年代|破镜重圆/;
-const MALE_RE = /男频|男主|男性|修仙|仙侠|玄幻|东方玄幻|都市异能|无限流|科幻|星际|民俗|悬疑|规则怪谈|冒险|战斗|争霸|升级/;
+const FEMALE_RE = /女频|女主|女性|言情|甜宠|宫廷|宫斗|宅斗|后宫|古言|现言|娱乐圈|恋爱|婚恋|重生年代|破镜重圆|先婚后爱|快穿|穿书|年代文|重生年代|契约婚姻/;
+const MALE_RE = /男频|男主|男性|修仙|仙侠|玄幻|东方玄幻|都市异能|无限流|科幻|星际|民俗|悬疑|规则怪谈|冒险|战斗|争霸|升级|系统流|签到流|任务系统|高武|灵气复苏|末世|赘婿|退婚流/;
 
 export function inferWorldBookAudience(book: WorldBook): WorldAudience | null {
   const text = [book.name, book.theme, book.description, ...book.tags].join(" ");

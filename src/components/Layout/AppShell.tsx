@@ -192,7 +192,7 @@ export function AppShell() {
         return true;
       }
       if (s.appPhase === "onboarding" && s.onboardingStep > 1) {
-        s.setOnboardingStep((s.onboardingStep - 1) as 1 | 2 | 3);
+        s.setOnboardingStep((s.onboardingStep - 1) as any);
         return true;
       }
       return false;

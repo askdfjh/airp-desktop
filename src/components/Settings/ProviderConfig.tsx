@@ -1342,11 +1342,11 @@ export function ProviderConfigPanel() {
           style={{ padding: "16px 24px 24px", flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}
         >
           <div style={{ width: "100%", maxWidth: activeTab === "models" ? 1040 : 760, margin: "0 auto", display: "flex", flexDirection: "column", gap: 12 }}>
+            <SectionContent activeTab={activeTab} />
             <ComplianceNotice>
               请仅在符合中国法律法规、平台规则且你有权使用的内容与数据上启用外联功能（第三方模型、网页搜索、MCP、云同步和文件导入）。
               不要用于违法、侵权、侵犯隐私或规避平台规则的用途。
             </ComplianceNotice>
-            <SectionContent activeTab={activeTab} />
           </div>
         </div>
       </div>

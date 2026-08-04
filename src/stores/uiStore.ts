@@ -1,8 +1,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { HotTropeId } from "@/lib/popularTropes";
 
 export type ThemeMode = "dark" | "light" | "system";
 export type MessageFontSize = "xs" | "sm" | "md" | "lg" | "xl";
+export type OnboardingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -19,14 +21,22 @@ interface UIState {
   notify: (msg: string, action?: "settings" | null) => void;
   // Onboarding state
   appPhase: "onboarding" | "dialogue";
-  onboardingStep: 1 | 2 | 3;
+  onboardingStep: OnboardingStep;
   selectedWorldId: string | null;
   selectedWorldName: string | null;
+  selectedTopicSchemeId: string | null;
+  selectedTopicSchemeName: string | null;
+  selectedMainEntryId: string | null;
+  selectedMainEntryName: string | null;
+  selectedStylePresetId: string | null;
+  selectedStylePresetName: string | null;
   selectedMode: "novel" | "player" | "custom" | null;
   selectedCharacterId: string | null;
   selectedCharacterName: string | null;
   selectedScenarioId: string | null;
   selectedScenarioName: string | null;
+  selectedTropeId: HotTropeId | null;
+  selectedTropeName: string | null;
   // 玩家主角名（开局第 3 步输入，未填时兜底「主角」；选角色卡时自动带入可改）
   playerName: string;
   // 开局自动发送标记：开始冒险后由 OnboardingFlow 写入，useChat 加载完成后消费
@@ -41,11 +51,15 @@ interface UIState {
   effectiveTheme: () => "dark" | "light";
   // Onboarding methods
   setAppPhase: (phase: "onboarding" | "dialogue") => void;
-  setOnboardingStep: (step: 1 | 2 | 3) => void;
+  setOnboardingStep: (step: OnboardingStep) => void;
   setSelectedWorld: (id: string | null, name: string | null) => void;
+  setSelectedTopicScheme: (id: string | null, name: string | null) => void;
+  setSelectedMainEntry: (id: string | null, name: string | null) => void;
+  setSelectedStylePreset: (id: string | null, name: string | null) => void;
   setSelectedMode: (mode: "novel" | "player" | "custom" | null) => void;
   setSelectedCharacter: (id: string | null, name: string | null) => void;
   setSelectedScenario: (id: string | null, name: string | null) => void;
+  setSelectedTrope: (id: HotTropeId | null, name: string | null) => void;
   setPlayerName: (name: string) => void;
   setPendingOpeningMessage: (msg: string | null) => void;
   resetOnboarding: () => void;
@@ -92,11 +106,19 @@ export const useUIStore = create<UIState>()(
       onboardingStep: 1,
       selectedWorldId: null,
       selectedWorldName: null,
+      selectedTopicSchemeId: null,
+      selectedTopicSchemeName: null,
+      selectedMainEntryId: null,
+      selectedMainEntryName: null,
+      selectedStylePresetId: null,
+      selectedStylePresetName: null,
       selectedMode: null,
       selectedCharacterId: null,
       selectedCharacterName: null,
       selectedScenarioId: null,
       selectedScenarioName: null,
+      selectedTropeId: null,
+      selectedTropeName: null,
       playerName: "",
       pendingOpeningMessage: null,
       // Existing methods
@@ -118,9 +140,13 @@ export const useUIStore = create<UIState>()(
       setAppPhase: (phase) => set({ appPhase: phase }),
       setOnboardingStep: (step) => set({ onboardingStep: step }),
       setSelectedWorld: (id, name) => set({ selectedWorldId: id, selectedWorldName: name }),
+      setSelectedTopicScheme: (id, name) => set({ selectedTopicSchemeId: id, selectedTopicSchemeName: name }),
+      setSelectedMainEntry: (id, name) => set({ selectedMainEntryId: id, selectedMainEntryName: name }),
+      setSelectedStylePreset: (id, name) => set({ selectedStylePresetId: id, selectedStylePresetName: name }),
       setSelectedMode: (mode) => set({ selectedMode: mode }),
       setSelectedCharacter: (id, name) => set({ selectedCharacterId: id, selectedCharacterName: name }),
       setSelectedScenario: (id, name) => set({ selectedScenarioId: id, selectedScenarioName: name }),
+      setSelectedTrope: (id, name) => set({ selectedTropeId: id, selectedTropeName: name }),
       setPlayerName: (name) => set({ playerName: name }),
       setPendingOpeningMessage: (msg) => set({ pendingOpeningMessage: msg }),
       resetOnboarding: () =>
@@ -128,11 +154,19 @@ export const useUIStore = create<UIState>()(
           onboardingStep: 1,
           selectedWorldId: null,
           selectedWorldName: null,
+          selectedTopicSchemeId: null,
+          selectedTopicSchemeName: null,
+          selectedMainEntryId: null,
+          selectedMainEntryName: null,
+          selectedStylePresetId: null,
+          selectedStylePresetName: null,
           selectedMode: null,
           selectedCharacterId: null,
           selectedCharacterName: null,
           selectedScenarioId: null,
           selectedScenarioName: null,
+          selectedTropeId: null,
+          selectedTropeName: null,
           playerName: "",
           pendingOpeningMessage: null,
         }),

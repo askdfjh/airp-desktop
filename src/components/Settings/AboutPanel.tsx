@@ -56,26 +56,22 @@ export function AboutPanel() {
         </div>
       </div>
 
-      <ComplianceNotice title="中国法律风险提示">
-        下列内容仅作使用提醒，不构成法律意见；如果用途涉及经营、公开发布、收费服务或处理敏感数据，请先自行核验合规要求。
-      </ComplianceNotice>
-
-      <div style={{ padding: 18, borderRadius: 20, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
-        <div style={{ fontSize: 14, fontWeight: 650, color: "var(--seed-fg)", marginBottom: 12 }}>使用时需要特别注意</div>
+      <div style={{ marginTop: 6, padding: "12px 14px", borderRadius: 16, background: "color-mix(in srgb, var(--seed-surface) 54%, transparent)", border: "1px solid color-mix(in srgb, var(--seed-border) 58%, transparent)", opacity: 0.86 }}>
+        <div style={{ fontSize: "var(--fs-11)", fontWeight: 550, color: "color-mix(in srgb, var(--seed-muted) 86%, transparent)", marginBottom: 10 }}>使用时需要特别注意</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {legalRiskItems.map((item, idx) => (
             <div key={item} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <span style={{ width: 20, height: 20, borderRadius: 999, background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-muted)", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, flexShrink: 0 }}>
+              <span style={{ width: 16, height: 16, borderRadius: 999, background: "transparent", border: "1px solid color-mix(in srgb, var(--seed-border) 50%, transparent)", color: "color-mix(in srgb, var(--seed-muted) 72%, transparent)", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "var(--fs-9)", flexShrink: 0 }}>
                 {idx + 1}
               </span>
-              <span style={{ fontSize: 12, lineHeight: 1.7, color: "var(--seed-muted)" }}>{item}</span>
+              <span style={{ fontSize: "var(--fs-10)", lineHeight: 1.65, color: "color-mix(in srgb, var(--seed-muted) 80%, transparent)" }}>{item}</span>
             </div>
           ))}
         </div>
       </div>
 
-      <div style={{ padding: 16, borderRadius: 18, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
-        <div style={{ fontSize: 13, fontWeight: 650, color: "var(--seed-fg)", marginBottom: 10 }}>参考法规</div>
+      <div style={{ padding: "10px 12px", borderRadius: 16, background: "transparent", border: "1px solid color-mix(in srgb, var(--seed-border) 45%, transparent)", opacity: 0.72 }}>
+        <div style={{ fontSize: "var(--fs-10)", fontWeight: 520, color: "color-mix(in srgb, var(--seed-muted) 86%, transparent)", marginBottom: 8 }}>参考法规</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {references.map((ref) => (
             <a
@@ -87,13 +83,13 @@ export function AboutPanel() {
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 6,
-                padding: "6px 10px",
+                padding: "4px 8px",
                 borderRadius: 999,
                 border: "1px solid var(--seed-border)",
-                background: "var(--seed-hover-bg)",
-                color: "var(--seed-muted)",
+                background: "transparent",
+                color: "color-mix(in srgb, var(--seed-muted) 82%, transparent)",
                 textDecoration: "none",
-                fontSize: 11,
+                fontSize: "var(--fs-9)",
               }}
             >
               {ref.label}
@@ -102,6 +98,10 @@ export function AboutPanel() {
           ))}
         </div>
       </div>
+
+      <ComplianceNotice title="中国法律风险提示">
+        下列内容仅作使用提醒，不构成法律意见；如果用途涉及经营、公开发布、收费服务或处理敏感数据，请先自行核验合规要求。
+      </ComplianceNotice>
     </div>
   );
 }
