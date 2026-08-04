@@ -58,7 +58,6 @@ export function StyleModeSelect() {
     <div>
       <nav className="seed-breadcrumb">
         <span className="seed-breadcrumb-pill">{selectedWorldName || "未知题材"}</span>
-        <button className="seed-breadcrumb-link" onClick={() => setOnboardingStep(1)} style={{ marginLeft: "auto" }}>更换题材</button>
       </nav>
 
       <div style={{ textAlign: "center", marginBottom: 42 }}>

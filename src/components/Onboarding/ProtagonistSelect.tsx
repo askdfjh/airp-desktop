@@ -21,7 +21,6 @@ export function ProtagonistSelect({ onComplete }: Props) {
     setPlayerName,
     setSelectedCharacter,
     setSelectedScenario,
-    setOnboardingStep,
   } = useUIStore();
   const effTheme = useUIStore((s) => s.effectiveTheme)();
   const characters = useCharacterStore((s) => s.characters);
@@ -97,7 +96,6 @@ export function ProtagonistSelect({ onComplete }: Props) {
         <span className="seed-breadcrumb-pill">{selectedTropeName || "自动题材"}</span>
         {selectedStylePresetName && <span className="seed-breadcrumb-pill">{selectedStylePresetName}</span>}
         <span className="seed-breadcrumb-pill">{selectedMode === "player" ? "玩家视角" : selectedMode === "custom" ? "自定义模式" : "小说视角"}</span>
-        <button className="seed-breadcrumb-link" onClick={() => setOnboardingStep(2)} style={{ marginLeft: "auto" }}>更换前一步</button>
       </nav>
 
       <div style={{ textAlign: "center", marginBottom: 42 }}>
