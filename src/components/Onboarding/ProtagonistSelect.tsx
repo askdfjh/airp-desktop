@@ -108,7 +108,7 @@ export function ProtagonistSelect({ onComplete }: Props) {
       </div>
 
       <div style={{ marginBottom: 38 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
+        <div data-onboarding-name-row style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
           <input
             value={playerName}
             onChange={(e) => setPlayerName(e.target.value.slice(0, 12))}

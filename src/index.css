@@ -1926,6 +1926,42 @@ mark.seed-hl {
   .hide-narrow {
     display: none !important;
   }
+  /* 开局流程：安全区避让（状态栏/挖孔 + 手势条） */
+  .seed-onboarding-content {
+    padding-top: max(60px, calc(env(safe-area-inset-top, 0px) + 24px)) !important;
+    padding-bottom: max(80px, calc(env(safe-area-inset-bottom, 0px) + 40px)) !important;
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+  }
+  /* 开局流程：标题/描述字号压缩，避免撑出横向溢出 */
+  .seed-onboarding-content h1 {
+    font-size: 28px !important;
+    line-height: 1.25 !important;
+  }
+  .seed-onboarding-content p {
+    font-size: 14px !important;
+  }
+  /* 开局流程：触屏下卡片去掉 hover 上浮，避免滚动/点按时跳动 */
+  .seed-card:hover {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  .seed-card:active {
+    background: color-mix(in srgb, var(--seed-accent) 10%, transparent) !important;
+  }
+  /* 主角名输入行：手机纵向堆叠（输入框 + 提示文字分行） */
+  [data-onboarding-name-row] {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  [data-onboarding-name-row] > input {
+    max-width: none !important;
+    width: 100% !important;
+  }
+  [data-onboarding-name-row] > span {
+    text-align: left !important;
+    padding-left: 4px;
+  }
 }
 
 /* 搴曟爮妯″瀷/鏈嶅姟閫夋嫨 chip锛堜笌鍔熻兘鎸夐挳鍚屼竴鎺掞級 */
