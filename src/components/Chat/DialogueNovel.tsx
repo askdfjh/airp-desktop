@@ -151,6 +151,12 @@ export function DialogueNovel() {
     }
   };
 
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => fitTextarea(el, 160));
+  }, [inputValue, activeSession?.id]);
+
   // Copy message content
   const handleCopy = (msg: typeof messages[0]) => {
     const parsed = parseSceneReply(msg.content);
@@ -672,7 +678,7 @@ export function DialogueNovel() {
               </button>
             )}
           </div>
-          <FunctionBar />
+          <FunctionBar mode={isBlank ? "blank" : "adventure"} />
         </div>
       </div>
 

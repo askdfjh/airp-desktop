@@ -4,6 +4,8 @@ import { useUIStore } from "@/stores/uiStore";
 import { useCharacterStore } from "@/stores/characterStore";
 import { useOnboardingStore } from "@/stores/onboardingStore";
 import { useGenerationStore } from "@/stores/generationStore";
+import { useWorldStore } from "@/stores/worldStore";
+import { buildWorldOpeningScenarios } from "@/lib/worldOpeningScenarios";
 interface Props {
   onComplete: () => void;
 }
@@ -20,6 +22,8 @@ export function CharacterOpeningSelect({ onComplete }: Props) {
   const getScenariosByTheme = useOnboardingStore((s) => s.getScenariosByTheme);
   const resolveTheme = useOnboardingStore((s) => s.resolveTheme);
   const { presets, activePresetId, setActivePreset } = useGenerationStore();
+  const books = useWorldStore((s) => s.books);
+  const activeBook = useWorldStore((s) => s.activeBook);
 
   const [selectedChar, setSelectedChar] = useState<string | null>(null);
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
@@ -28,7 +32,11 @@ export function CharacterOpeningSelect({ onComplete }: Props) {
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState("");
 
-  const scenarios = getScenariosByTheme(resolveTheme(selectedWorldId || "cultivation"));
+  const selectedBook = books.find((b) => b.id === selectedWorldId) || activeBook;
+  const builtinScenarios = getScenariosByTheme(resolveTheme(selectedWorldId || "cultivation"));
+  const generatedScenarios =
+    selectedBook && !selectedBook.isBuiltin ? buildWorldOpeningScenarios(selectedBook) : [];
+  const scenarios = builtinScenarios.length > 0 ? builtinScenarios : generatedScenarios;
 
   const modeLabel = selectedMode === "novel" ? "小说视角" : selectedMode === "player" ? "玩家视角" : "自定义模式";
 

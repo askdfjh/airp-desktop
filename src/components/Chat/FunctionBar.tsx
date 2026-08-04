@@ -16,7 +16,9 @@ import { registerBackHandler } from "@/lib/androidBack";
 
 type OpenMenu = "provider" | "model" | "style" | null;
 
-export function FunctionBar() {
+type FunctionBarMode = "adventure" | "blank";
+
+export function FunctionBar({ mode = "adventure" }: { mode?: FunctionBarMode }) {
   const { theme, setTheme, messageFontSize, setMessageFontSize, settingsOpen, setSettingsOpen, webSearchOn, setWebSearchOn, effectiveTheme, toast, toastAction, notify } = useUIStore();
   const { providers, activeProviderId, activeModel, setActiveProvider, setActiveModel, enabledProviders } = useProviderStore();
   const { presets, activePresetId, setActivePreset } = useGenerationStore();
@@ -50,6 +52,7 @@ export function FunctionBar() {
   );
   const models = activeProvider?.models || [];
   const thinkingEnabled = activeSession?.thinkingEnabled ?? false;
+  const isBlank = mode === "blank" || (activeSession?.kind ?? "adventure") === "blank";
 
   // 点击外部 / Esc 关闭下拉
   useEffect(() => {
@@ -152,6 +155,7 @@ export function FunctionBar() {
 
   // 文风预设切换（与设置面板同源，实时生效）
   const handleStyleSelect = (id: string) => {
+    if (isBlank) return;
     setActivePreset(activePresetId === id ? "none" : id);
     const next = presets.find((p) => p.id === id);
     showToast(activePresetId === id ? "文风已关闭" : `已切换文风：${next?.name ?? ""}`);
@@ -216,19 +220,21 @@ export function FunctionBar() {
           </button>
         </div>
 
-        {/* 文风切换 */}
-        <div ref={chipRefs.style} style={{ position: "relative" }}>
-          <button
-            className={"seed-func-chip" + (activePreset ? "" : " seed-func-chip--muted")}
-            disabled={compressing}
-            data-tooltip="输出文风预设"
-            onClick={() => setOpenMenu((m) => (m === "style" ? null : "style"))}
-          >
-            <Feather size={13} style={{ flexShrink: 0 }} />
-            <span>{activePreset ? activePreset.name : "文风"}</span>
-            <ChevronDown size={12} style={{ flexShrink: 0 }} />
-          </button>
-        </div>
+        {/* 文风切换：空白会话保持纯对话，不显示/注入文风预设 */}
+        {!isBlank && (
+          <div ref={chipRefs.style} style={{ position: "relative" }}>
+            <button
+              className={"seed-func-chip" + (activePreset ? "" : " seed-func-chip--muted")}
+              disabled={compressing}
+              data-tooltip="输出文风预设"
+              onClick={() => setOpenMenu((m) => (m === "style" ? null : "style"))}
+            >
+              <Feather size={13} style={{ flexShrink: 0 }} />
+              <span>{activePreset ? activePreset.name : "文风"}</span>
+              <ChevronDown size={12} style={{ flexShrink: 0 }} />
+            </button>
+          </div>
+        )}
 
         {/* 思考模式快捷开关 */}
         <button
@@ -298,23 +304,27 @@ export function FunctionBar() {
           <Search size={16} />
         </button>
 
-        {/* Compress story: 手动整理（压缩中变停止） */}
-        <button
-          className={"seed-func-btn" + (compressing ? " seed-compress-btn" : "")}
-          data-tooltip={compressing ? "停止整理（不保存任何变更）" : "整理故事（压缩上下文，提取角色）"}
-          onClick={compressing ? stopCompress : () => void runCompression()}
-        >
-          {compressing ? <Square size={16} fill="currentColor" /> : <WrapText size={16} />}
-        </button>
+        {/* Compress story: 仅冒险会话显示；空白会话不提取角色/故事脉络 */}
+        {!isBlank && (
+          <button
+            className={"seed-func-btn" + (compressing ? " seed-compress-btn" : "")}
+            data-tooltip={compressing ? "停止整理（不保存任何变更）" : "整理故事（压缩上下文，提取角色）"}
+            onClick={compressing ? stopCompress : () => void runCompression()}
+          >
+            {compressing ? <Square size={16} fill="currentColor" /> : <WrapText size={16} />}
+          </button>
+        )}
 
-        {/* World info */}
-        <button ref={worldBtnRef} className={"seed-func-btn" + (showWorldInfo ? " seed-func-btn--active" : "")} disabled={compressing} data-tooltip="世界信息" onClick={() => { setOpenMenu(null); setShowWorldInfo((v) => !v); }}>
-          <svg viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="2" y1="12" x2="22" y2="12" />
-            <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
-          </svg>
-        </button>
+        {/* World info：空白会话不显示世界规则入口 */}
+        {!isBlank && (
+          <button ref={worldBtnRef} className={"seed-func-btn" + (showWorldInfo ? " seed-func-btn--active" : "")} disabled={compressing} data-tooltip="世界信息" onClick={() => { setOpenMenu(null); setShowWorldInfo((v) => !v); }}>
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="2" y1="12" x2="22" y2="12" />
+              <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* 模型/服务/文风 下拉菜单：portal 到 body，fixed 定位，避免窄屏滚动栏裁剪 */}
@@ -371,7 +381,7 @@ export function FunctionBar() {
                 ))}
               </>
             )}
-            {openMenu === "style" && (
+            {openMenu === "style" && !isBlank && (
               <>
                 {presets.map((p) => {
                   const act = p.id === activePresetId;
@@ -447,7 +457,7 @@ export function FunctionBar() {
       )}
 
       {/* World info panel (read-only) */}
-      {showWorldInfo && createPortal(
+      {showWorldInfo && !isBlank && createPortal(
         <div className={`theme-${eff}`}>
           <WorldInfoPanel anchorRef={worldBtnRef} onClose={() => setShowWorldInfo(false)} />
         </div>,

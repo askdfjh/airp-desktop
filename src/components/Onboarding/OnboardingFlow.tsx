@@ -8,6 +8,14 @@ import { useGenerationStore } from "@/stores/generationStore";
 import { WorldSelect, PRESET_WORLDS, WORLD_BOOK_MAP } from "./WorldSelect";
 import { ModeSelect } from "./ModeSelect";
 import { CharacterOpeningSelect } from "./CharacterOpeningSelect";
+import { buildWorldOpeningScenarios, getWorldOpeningScenario } from "@/lib/worldOpeningScenarios";
+import {
+  buildProtagonistPrompt,
+  defaultPlayerNameForAudience,
+  inferWorldBookAudience,
+  type WorldAudience,
+  type WorldAudienceFilter,
+} from "@/lib/worldAudience";
 
 export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
   const { onboardingStep, setAppPhase, resetOnboarding, setPendingOpeningMessage } = useUIStore();
@@ -29,14 +37,35 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
     const selectedScenarioId = ui.selectedScenarioId;
     const selectedMode = ui.selectedMode;
     const selectedWorldName = ui.selectedWorldName;
+    const selectedWorldId = ui.selectedWorldId;
+    const worldState = useWorldStore.getState();
+    const selectedBook = worldState.activeBook || worldState.books.find((b) => b.id === selectedWorldId) || null;
+    const selectedPresetWorld = PRESET_WORLDS.find((w) => w.id === selectedWorldId);
+    const selectedAudience: WorldAudience | null =
+      selectedPresetWorld?.gender ?? (selectedBook ? inferWorldBookAudience(selectedBook) : null);
+    const selectedScenario = selectedScenarioId
+      ? useOnboardingStore.getState().getScenarioById(selectedScenarioId) ||
+        getWorldOpeningScenario(selectedBook, selectedScenarioId)
+      : undefined;
     // 主角名：第 3 步输入 > 所选角色名 > 兜底「主角」
-    const playerName = (ui.playerName || "").trim() || selectedCharacterName || "主角";
+    const typedPlayerName = (ui.playerName || "").trim();
+    const playerName = typedPlayerName || selectedCharacterName || defaultPlayerNameForAudience(selectedAudience);
     // 允许无角色/无场景/无模式直接开始：未选时用空 systemPrompt
     const isAIOpening = selectedScenarioId === "ai-random";
     const hasFullSetup = selectedCharacterId && selectedScenarioId && selectedMode;
     // AI 随机开局：不注入预设场景模板，只带叙事规则，开局由 AI 即兴生成
+    const modePrompt = buildModePrompt(selectedMode || "novel");
+    const protagonistPrompt = buildProtagonistPrompt({
+      playerName,
+      typedName: !!typedPlayerName || !!selectedCharacterName,
+      audience: selectedAudience,
+    });
     const systemPrompt = isAIOpening
-      ? buildModePrompt(selectedMode || "novel")
+      ? [modePrompt, protagonistPrompt].filter(Boolean).join("\n\n")
+      : selectedScenario && selectedMode
+        ? selectedScenario.systemPromptTemplate.replace("{characterName}", playerName) +
+          (modePrompt ? "\n\n" + modePrompt : "") +
+          "\n\n" + protagonistPrompt
       : hasFullSetup
         ? buildSystemPrompt(
             selectedScenarioId,
@@ -47,6 +76,8 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
     // 开局开场消息：选中开局场景时，按场景设定自动发送给 AI 作为第一条消息
     const openingMessage = isAIOpening
       ? buildAIOpeningMessage(selectedWorldName || "未知世界", playerName, selectedMode || "novel")
+      : selectedScenario
+        ? selectedScenario.openingMessage.replace("{characterName}", playerName)
       : selectedScenarioId
         ? buildOpeningMessage(selectedScenarioId, playerName)
         : "";
@@ -74,13 +105,16 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
     }
   };
 
-  const handleRandomStart = async () => {
+  const handleRandomStart = async (filter: WorldAudienceFilter = "all") => {
     // 1. 随机世界：预设世界 + 用户世界书
     const worldStore = useWorldStore.getState();
     const books = worldStore.books;
+    const customBooks = books.filter((b) => !b.isBuiltin);
+    const presetPool = PRESET_WORLDS.filter((w) => filter === "all" || w.gender === filter);
+    const customPool = customBooks.filter((b) => filter === "all" || inferWorldBookAudience(b) === filter);
     const pool = [
-      ...PRESET_WORLDS.map((w) => ({ id: w.id, name: w.name })),
-      ...books.map((b) => ({ id: b.theme || b.id, name: b.name })),
+      ...presetPool.map((w) => ({ id: w.id, name: w.name })),
+      ...customPool.map((b) => ({ id: b.id, name: b.name })),
     ];
     const pick = pool[Math.floor(Math.random() * pool.length)];
 
@@ -112,10 +146,15 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
     }
 
     // 4. 随机场景：该世界主题下随机；无匹配场景（如娱乐圈/末日等自定义主题书）则用 AI 随机开局兜底
+    const pickedBook = bookId ? books.find((b) => b.id === bookId) : undefined;
     const resolvedTheme = useOnboardingStore.getState().resolveTheme(pick.id);
     const scenarios = useOnboardingStore.getState().getScenariosByTheme(resolvedTheme);
     if (scenarios.length > 0) {
       const sc = scenarios[Math.floor(Math.random() * scenarios.length)];
+      ui.setSelectedScenario(sc.id, sc.name);
+    } else if (pickedBook) {
+      const generated = buildWorldOpeningScenarios(pickedBook);
+      const sc = generated[Math.floor(Math.random() * generated.length)];
       ui.setSelectedScenario(sc.id, sc.name);
     } else {
       ui.setSelectedScenario("ai-random", "AI 随机开局");
@@ -149,7 +188,7 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
           title="退出开局流程"
           style={{
             position: "fixed",
-            top: /Android/i.test(navigator.userAgent) ? 14 : 54,
+            top: /Android/i.test(navigator.userAgent) ? "calc(env(safe-area-inset-top, 0px) + 18px)" : 54,
             right: 16,
             zIndex: 300,
             display: "flex", alignItems: "center", gap: 5,

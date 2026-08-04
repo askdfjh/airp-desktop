@@ -116,6 +116,7 @@ export function useChat() {
         .filter(Boolean),
     [allInjections, activeModel],
   );
+  const isBlankSession = (activeSession?.kind ?? "adventure") === "blank";
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
@@ -174,10 +175,10 @@ export function useChat() {
         ? `\n\n${SCENE_TEMPLATE_PROMPT}`
         : "";
       // 模型提示词注入：已应用且绑定当前模型的注入词，合并注入到 system prompt 最开头
-      if (activeInjections.length > 0) {
+      if (!isBlankSession && activeInjections.length > 0) {
         result.push({ role: "system", content: activeInjections.join("\n\n") });
       }
-        const styleInstr = activeGenPreset?.outputStyle?.trim()
+        const styleInstr = !isBlankSession && activeGenPreset?.outputStyle?.trim()
           ? `\n\n【输出风格】${activeGenPreset.outputStyle.trim()}`
           : "";
         if (toolHint) {
@@ -196,7 +197,7 @@ export function useChat() {
           result.push({ role: "system", content: styleInstr.trim() + sceneTemplate });
         }
       // 长对话压缩：故事脉络摘要注入 + 历史截断（摘要点之后的消息才进入上下文）
-      if (activeSession?.contextSummary) {
+      if (!isBlankSession && activeSession?.contextSummary) {
         result.push({
           role: "system",
           content: `【故事脉络摘要】以下为早前对话的自动摘要（摘要之前的细节已省略，角色设定以角色卡为准，剧情以摘要为最新依据）：\n${activeSession.contextSummary}`,
@@ -207,7 +208,7 @@ export function useChat() {
           if (cutIdx >= 0) hist = hist.slice(cutIdx + 1);
         }
       }
-      if (activeWorldBook) {
+      if (!isBlankSession && activeWorldBook) {
         const recentContext = [
           ...hist.slice(-2).map((m) => m.content),
           lastUserContent,
@@ -218,7 +219,7 @@ export function useChat() {
         }
       }
       // 提取角色卡注入（世界书同机制）：角色出场触发词命中 → 注入；压缩后首条 forceAll 全量
-      if (sessionCards.length > 0) {
+      if (!isBlankSession && sessionCards.length > 0) {
         const charRecent = [
           ...hist.slice(-2).map((m) => m.content),
           lastUserContent,
@@ -246,7 +247,7 @@ export function useChat() {
       }
       return result;
     },
-    [activeSession, activeWorldBook, activeGenPreset, activeInjections, sessionCards],
+    [activeSession, activeWorldBook, activeGenPreset, activeInjections, sessionCards, isBlankSession],
   );
 
   const startStream = useCallback(
@@ -302,7 +303,7 @@ export function useChat() {
         (async () => {
           try {
             const genParams: Record<string, unknown> = {};
-            if (activeGenPreset) {
+            if (!isBlankSession && activeGenPreset) {
               const p = activeGenPreset;
               genParams.temperature = p.temperature;
               if (p.topP > 0) genParams.top_p = p.topP;
@@ -380,7 +381,7 @@ export function useChat() {
         })();
       });
     },
-    [activeModel, activeProvider, activeSession, activeGenPreset],
+    [activeModel, activeProvider, activeSession, activeGenPreset, isBlankSession],
   );
 
   const sendMessage = useCallback(
@@ -396,7 +397,7 @@ export function useChat() {
       activeSessionIdRef.current = sessionId;
 
       // 自动压缩触发检查：历史超阈值时弹确认框并拦截本次发送（确认后压缩，用户可再发送）
-      if (maybePromptCompress(sessionId, messagesRef.current)) return;
+      if (!isBlankSession && maybePromptCompress(sessionId, messagesRef.current)) return;
       if (useUIStore.getState().compressing) return;
 
       let finalContent = content;

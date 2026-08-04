@@ -2,7 +2,6 @@ import { useState, useCallback } from "react";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useProviderStore } from "@/stores/providerStore";
 import { useUIStore } from "@/stores/uiStore";
-import { useWorldStore } from "@/stores/worldStore";
 import {
   Plus,
   Trash2,
@@ -68,7 +67,7 @@ export function SessionList({ onDeleteRequest, onRemoveAllRequest }: { onDeleteR
   const {
     sessions,
     activeId,
-    add,
+    createBlankSession,
     remove,
     setActive,
     rename,
@@ -78,16 +77,13 @@ export function SessionList({ onDeleteRequest, onRemoveAllRequest }: { onDeleteR
     isFavorited,
     jumpToMessage,
   } = useSessionStore();
-  const { providers, activeProviderId, activeModel } = useProviderStore();
-  const { activeBook } = useWorldStore();
+  const { providers, activeModel } = useProviderStore();
   const { setSettingsOpen } = useUIStore();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [showFavorites, setShowFavorites] = useState(true);
   const [toast, setToast] = useState<{ msg: string; type: "warn" | "ok" } | null>(null);
   // search state moved to ChatPane header
-
-  const getDefaultProviderId = () => activeProviderId ?? providers[0]?.id ?? "";
 
   const showToast = useCallback((msg: string, type: "warn" | "ok" = "warn") => {
     setToast({ msg, type });
@@ -294,17 +290,7 @@ export function SessionList({ onDeleteRequest, onRemoveAllRequest }: { onDeleteR
           </button>
           <button
             onClick={() => {
-              const pid = getDefaultProviderId();
-              add({
-                id: crypto.randomUUID(),
-                title: "新对话 " + (sessions.length + 1),
-                systemPrompt: activeBook ? "【世界观：" + activeBook.name + "】\n" + activeBook.entries.map(e => e.content).join("\n") + "\n\n" : "",
-                providerId: pid,
-                model: activeModel,
-                thinkingEnabled: true,
-                createdAt: Date.now(),
-                updatedAt: Date.now(),
-              });
+              createBlankSession();
             }}
             className="btn-ghost"
             title="新建会话"

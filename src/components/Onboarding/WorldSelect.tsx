@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useUIStore } from "@/stores/uiStore";
 import { useWorldStore } from "@/stores/worldStore";
+import { audienceLabel, inferWorldBookAudience, type WorldAudienceFilter } from "@/lib/worldAudience";
 
 // 预设世界 → 内置世界书 id 映射（没有内置书的世界不注入任何条目）
 export const WORLD_BOOK_MAP: Record<string, string> = {
@@ -194,17 +195,24 @@ export const PRESET_WORLDS = [
   },
 ];
 
-export function WorldSelect({ onRandomStart }: { onRandomStart?: () => void }) {
+export function WorldSelect({ onRandomStart }: { onRandomStart?: (filter: WorldAudienceFilter) => void }) {
   const { setSelectedWorld, setOnboardingStep } = useUIStore();
   const [selected, setSelected] = useState<string | null>(null);
-  const [gender, setGender] = useState<"male" | "female">("male");
+  const [audienceFilter, setAudienceFilter] = useState<WorldAudienceFilter>("all");
   const [showCustom, setShowCustom] = useState(false);
   const books = useWorldStore((s) => s.books);
   const setActiveBook = useWorldStore((s) => s.setActiveBook);
   const deactivateAllBooks = useWorldStore((s) => s.deactivateAllBooks);
 
   const customBooks = books.filter((b) => !b.isBuiltin);
-  const filteredWorlds = PRESET_WORLDS.filter((w) => w.gender === gender);
+  const filteredWorlds =
+    audienceFilter === "all"
+      ? PRESET_WORLDS
+      : PRESET_WORLDS.filter((w) => w.gender === audienceFilter);
+  const filteredCustomBooks =
+    audienceFilter === "all"
+      ? customBooks
+      : customBooks.filter((b) => inferWorldBookAudience(b) === audienceFilter);
 
   const handleSelect = async (id: string, name: string) => {
     setSelected(id);
@@ -259,14 +267,16 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: () => void }) {
       {/* 男频 / 女频 分组 tab */}
       <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 28 }}>
         {([
+          { key: "all", label: "全部", icon: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a15 15 0 010 18M12 3a15 15 0 000 18" /></> },
           { key: "male", label: "男频", icon: <path d="M14.5 2l-5 9h3l-2 7 7-10h-3.5L17 2z" /> },
           { key: "female", label: "女频", icon: <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /> },
         ] as const).map((t) => {
-          const active = gender === t.key;
+          const active = audienceFilter === t.key;
+          const count = t.key === "all" ? PRESET_WORLDS.length : PRESET_WORLDS.filter((w) => w.gender === t.key).length;
           return (
             <button
               key={t.key}
-              onClick={() => setGender(t.key)}
+              onClick={() => setAudienceFilter(t.key)}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -285,7 +295,7 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: () => void }) {
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{t.icon}</svg>
               {t.label}
-              <span style={{ fontSize: 11, opacity: 0.75 }}>{PRESET_WORLDS.filter((w) => w.gender === t.key).length}</span>
+              <span style={{ fontSize: 11, opacity: 0.75 }}>{count}</span>
             </button>
           );
         })}
@@ -361,7 +371,7 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: () => void }) {
             </div>
           ) : (
             <div data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 20, justifyContent: "center", maxWidth: 900, margin: "0 auto", width: "100%" }}>
-              {customBooks.map((b) => (
+              {filteredCustomBooks.map((b) => (
                 <div
                   key={b.id}
                   className={`seed-card ${selected === b.id ? "seed-card--selected" : ""}`}
@@ -393,7 +403,7 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: () => void }) {
       <div data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 20, justifyContent: "center", maxWidth: 900, marginLeft: "auto", marginRight: "auto", width: "100%" }}>
         <div
           className="seed-card seed-card--custom"
-          onClick={onRandomStart}
+          onClick={() => onRandomStart?.(audienceFilter)}
           style={{
             border: "1px solid color-mix(in srgb, var(--seed-accent) 30%, transparent)",
             background: "color-mix(in srgb, var(--seed-accent) 8%, transparent)",
