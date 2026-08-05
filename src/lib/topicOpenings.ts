@@ -11,23 +11,26 @@ export function getTopicOpeningScenarios(
   if (!topic) return [];
   const base = worldBaseId ?? topic.worldBaseId;
   const worldLabel = worldFoundationLabel(base);
-  // 优先级：底座+频道都匹配 → 频道匹配（全底座） → 底座匹配（中性） → 全通用；取前 3
+  // 优先级：底座+频道都匹配 → 底座匹配（中性） → 全底座频道匹配 → 全通用
+  // 全部 tab（audience=all/未传）：频道不限，底座匹配的全部开局都展示（男女频混合）
   const matchBase = (seed: TopicOpeningSeed) => (seed.bases as string[] | undefined)?.includes(base) ?? false;
-  const matchAud = (seed: TopicOpeningSeed) => (seed.audiences as string[] | undefined)?.includes(audience ?? "") ?? false;
+  const matchAud = (seed: TopicOpeningSeed) =>
+    !audience || audience === "all" || ((seed.audiences as string[] | undefined)?.includes(audience) ?? false);
   const neutral = (seed: TopicOpeningSeed) => !seed.audiences;
   const ranked = topic.openingSeeds
     .map((seed) => ({
       seed,
       score:
-        (matchBase(seed) && (audience ? matchAud(seed) : neutral(seed)) ? 3 : 0) +
+        (matchBase(seed) && matchAud(seed) ? 3 : 0) +
         (matchBase(seed) && neutral(seed) ? 2 : 0) +
-        (!(seed.bases?.length) && (audience ? matchAud(seed) : neutral(seed)) ? 1 : 0),
+        (!(seed.bases?.length) && matchAud(seed) ? 1 : 0),
     }))
     .sort((a, b) => b.score - a.score)
-    .map((r) => r.seed)
-    .slice(0, 3);
+    .map((r) => r.seed);
+  // 全部 tab（audience=all/未传）：按底座过滤 + 频道不限（男女频混合），跨底座的不混入
+  const seeds = audience && audience !== "all" ? ranked.slice(0, 3) : ranked.filter((s) => matchBase(s) || !s.bases?.length);
 
-  return ranked.map((seed) => ({
+  return seeds.map((seed) => ({
     id: `topic:${topic.id}:${seed.id}`,
     name: seed.name,
     description: seed.focus,

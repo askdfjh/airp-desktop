@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getTropeById } from "@/lib/popularTropes";
 import { getTopicSchemesByAudience, type TopicScheme } from "@/lib/topicSchemes";
 import { getWorldFoundation, worldFoundationLabel } from "@/lib/worldFoundations";
@@ -26,8 +26,21 @@ export function TopicSelect() {
   const deactivateAllBooks = useWorldStore((s) => s.deactivateAllBooks);
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedBase, setSelectedBase] = useState<string | null>(null);
+  const [labelLock, setLabelLock] = useState(false);
+  const [gridMaxH, setGridMaxH] = useState<string>("6000px");
+  const selectedCardRef = useRef<HTMLDivElement | null>(null);
   const [audienceFilter, setAudienceFilter] = useState<WorldAudienceFilter>("all");
   const topics = getTopicSchemesByAudience(audienceFilter);
+
+  // 标签锁定（隐藏其他题材）时：网格高度收缩到选中卡片，让确认按钮平滑上移
+  useEffect(() => {
+    if (labelLock && selectedCardRef.current) {
+      const h = selectedCardRef.current.offsetHeight + 16;
+      requestAnimationFrame(() => setGridMaxH(`${h}px`));
+    } else {
+      setGridMaxH("6000px");
+    }
+  }, [labelLock, selected]);
 
   const chooseTopic = async (topic: TopicScheme, baseId?: string) => {
     const worldBaseId = baseId && (topic.expandableWorldBaseIds as string[]).includes(baseId) ? baseId : topic.worldBaseId;
@@ -127,9 +140,9 @@ export function TopicSelect() {
         })}
       </div>
 
-      <div data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16 }}>
+      <div data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: "hidden", transition: "max-height 0.35s ease" }}>
         <div
-          className="seed-card seed-card--custom"
+          className={`seed-card seed-card--custom ${labelLock ? "seed-card--collapsed" : ""}`}
           onClick={randomTopic}
           style={{
             padding: "22px 20px",
@@ -147,11 +160,17 @@ export function TopicSelect() {
         {topics.map((topic) => {
           const trope = getTropeById(topic.tropeId);
           const baseOptions = [topic.worldBaseId, ...topic.expandableWorldBaseIds];
+          const isSelectedCard = selected === topic.id;
+          const hidden = labelLock && !isSelectedCard;
           return (
             <div
               key={topic.id}
-              className={`seed-card ${selected === topic.id ? "seed-card--selected" : ""}`}
-              onClick={() => void chooseTopic(topic)}
+              ref={isSelectedCard ? selectedCardRef : undefined}
+              className={`seed-card ${isSelectedCard ? "seed-card--selected" : ""} ${hidden ? "seed-card--collapsed" : ""}`}
+              onClick={() => {
+                setLabelLock(false);
+                void chooseTopic(topic);
+              }}
               style={{ padding: "22px 20px", cursor: "pointer" }}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
@@ -163,12 +182,20 @@ export function TopicSelect() {
               <div className="seed-card-desc" style={{ marginBottom: 12 }}>{topic.description}</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {baseOptions.map((baseId) => {
-                  const isSelected = selected === topic.id && selectedBase === baseId;
+                  const isSelected = isSelectedCard && selectedBase === baseId;
+                  const isLocked = isSelectedCard && labelLock && selectedBase === baseId;
                   return (
                     <button
                       key={baseId}
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (isLocked) {
+                          setSelected(null);
+                          setSelectedBase(null);
+                          setLabelLock(false);
+                          return;
+                        }
+                        setLabelLock(true);
                         void chooseTopic(topic, baseId);
                       }}
                       style={{

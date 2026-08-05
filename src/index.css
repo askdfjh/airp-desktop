@@ -668,6 +668,13 @@ button.ghost:hover { color:var(--seed-accent); }
   border-color: var(--seed-accent);
   box-shadow: 0 0 0 1px var(--seed-accent), 0 8px 32px -8px var(--seed-accent-glow);
 }
+/* 选题页：标签锁定后隐藏其他题材卡片（淡出动画） */
+.seed-card--collapsed {
+  opacity: 0;
+  transform: scale(0.96);
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
 
 .seed-card-icon {
   width: 44px;
