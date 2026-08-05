@@ -686,20 +686,6 @@ button.ghost:hover { color:var(--seed-accent); }
   border-color: var(--seed-accent);
   box-shadow: 0 0 0 2px var(--seed-accent), 0 8px 24px -8px var(--seed-accent-glow);
 }
-/* 锁定后选中卡片回位动画（其他卡移除后从上方滑入第一行，掩盖布局跳变） */
-.seed-card--settling {
-  animation: seed-card-settle 0.5s cubic-bezier(0.22, 1, 0.36, 1);
-}
-@keyframes seed-card-settle {
-  from {
-    transform: translateY(-24px) scale(0.96);
-    opacity: 0.3;
-  }
-  to {
-    transform: translateY(0) scale(1);
-    opacity: 1;
-  }
-}
 
 .seed-card-icon {
   width: 44px;
