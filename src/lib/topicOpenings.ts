@@ -2,17 +2,20 @@ import type { OpeningScenario } from "@/stores/onboardingStore";
 import { getTopicScheme } from "@/lib/topicSchemes";
 import { worldFoundationLabel } from "@/lib/worldFoundations";
 
-export function getTopicOpeningScenarios(topicSchemeId: string | null | undefined): OpeningScenario[] {
+export function getTopicOpeningScenarios(
+  topicSchemeId: string | null | undefined,
+  worldBaseId?: string | null,
+): OpeningScenario[] {
   const topic = getTopicScheme(topicSchemeId);
   if (!topic) return [];
-  const worldLabel = worldFoundationLabel(topic.worldBaseId);
+  const worldLabel = worldFoundationLabel(worldBaseId ?? topic.worldBaseId);
 
   return topic.openingSeeds.map((seed) => ({
     id: `topic:${topic.id}:${seed.id}`,
     name: seed.name,
     description: seed.focus,
     keywords: [topic.label, worldLabel, ...seed.tags].slice(0, 4),
-    theme: topic.worldBaseId,
+    theme: worldBaseId ?? topic.worldBaseId,
     systemPromptTemplate:
       `你正在写一部发生在「${worldLabel}」中的沉浸式故事。题材是「${topic.label}」。` +
       `\n题材基础：${topic.description}` +
@@ -27,6 +30,10 @@ export function getTopicOpeningScenarios(topicSchemeId: string | null | undefine
   }));
 }
 
-export function getTopicOpeningScenario(topicSchemeId: string | null | undefined, scenarioId: string | null | undefined) {
-  return getTopicOpeningScenarios(topicSchemeId).find((scenario) => scenario.id === scenarioId);
+export function getTopicOpeningScenario(
+  topicSchemeId: string | null | undefined,
+  scenarioId: string | null | undefined,
+  worldBaseId?: string | null,
+) {
+  return getTopicOpeningScenarios(topicSchemeId, worldBaseId).find((scenario) => scenario.id === scenarioId);
 }

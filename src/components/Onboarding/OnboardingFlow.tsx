@@ -14,7 +14,7 @@ import { getWorldFoundation } from "@/lib/worldFoundations";
 import { TopicSelect } from "./TopicSelect";
 import { StyleModeSelect } from "./StyleModeSelect";
 import { ProtagonistSelect } from "./ProtagonistSelect";
-import { pickMainEntries } from "./onboardingHelpers";
+import { pickMainEntries, worldviewIdForBase } from "./onboardingHelpers";
 import {
   buildProtagonistPrompt,
   defaultPlayerNameForAudience,
@@ -52,11 +52,16 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
     const worldState = useWorldStore.getState();
     const selectedBook = worldState.activeBook || worldState.books.find((b) => b.id === selectedWorldId) || null;
     const selectedPresetWorld = PRESET_WORLDS.find((w) => w.id === selectedWorldId);
-    const worldviewId = selectedPresetWorld?.id || selectedBook?.theme || selectedWorldId || "custom";
+    const worldviewId =
+      selectedPresetWorld?.id ||
+      selectedBook?.theme ||
+      worldviewIdForBase(selectedWorldId) ||
+      selectedWorldId ||
+      "custom";
     const selectedAudience: WorldAudience | null =
       selectedPresetWorld?.gender ?? (selectedBook ? inferWorldBookAudience(selectedBook) : null);
     const selectedScenario = selectedScenarioId
-      ? getTopicOpeningScenario(selectedTopicSchemeId, selectedScenarioId) ||
+      ? getTopicOpeningScenario(selectedTopicSchemeId, selectedScenarioId, selectedWorldId) ||
         useOnboardingStore.getState().getScenarioById(selectedScenarioId) ||
         getWorldOpeningScenario(selectedBook, selectedScenarioId)
       : undefined;
@@ -167,8 +172,10 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
     const topic = topicPool[Math.floor(Math.random() * topicPool.length)];
     if (!topic) return;
 
-    const foundation = getWorldFoundation(topic.worldBaseId);
-    const bookId = foundation.builtinBookId || books.find((b) => b.id === topic.worldBaseId || b.theme === topic.worldBaseId)?.id;
+    const basePool = [topic.worldBaseId, ...topic.expandableWorldBaseIds];
+    const worldBaseId = basePool[Math.floor(Math.random() * basePool.length)];
+    const foundation = getWorldFoundation(worldBaseId);
+    const bookId = foundation.builtinBookId || books.find((b) => b.id === worldBaseId || b.theme === worldBaseId)?.id;
     if (bookId) {
       await worldStore.setActiveBook(bookId);
     } else {
@@ -177,7 +184,7 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
 
     const ui = useUIStore.getState();
     ui.setSelectedTopicScheme(topic.id, topic.label);
-    ui.setSelectedWorld(topic.worldBaseId, foundation.label);
+    ui.setSelectedWorld(worldBaseId, foundation.label);
     ui.setSelectedTrope(topic.tropeId, topic.label);
 
     const mode = (["novel", "player", "custom"] as const)[Math.floor(Math.random() * 3)];
@@ -208,7 +215,7 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
       ui.setSelectedStylePreset(pickedStyle.id, pickedStyle.name);
     }
 
-    const scenarios = getTopicOpeningScenarios(topic.id);
+    const scenarios = getTopicOpeningScenarios(topic.id, worldBaseId);
     const sc = scenarios[Math.floor(Math.random() * scenarios.length)];
     ui.setSelectedScenario(sc?.id ?? "ai-random", sc?.name ?? "AI 随机开局");
 

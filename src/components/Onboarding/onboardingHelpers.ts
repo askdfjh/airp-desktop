@@ -1,6 +1,19 @@
 import { inferWorldBookAudience, type WorldAudience } from "@/lib/worldAudience";
 import type { WorldBook, WorldBookEntry } from "@/types";
-import { PRESET_WORLDS } from "./WorldSelect";
+import { PRESET_WORLDS, WORLD_BOOK_MAP } from "./WorldSelect";
+import { getWorldFoundation } from "@/lib/worldFoundations";
+
+// 世界底座 ID（modern/ancient/cultivation/...）→ 预设世界观 ID（urban/palace/cultivation/...）
+// 通过底座对应的内置世界书 id 反查 WORLD_BOOK_MAP；匹配不到时原样返回
+export function worldviewIdForBase(baseId: string | null | undefined) {
+  if (!baseId) return "custom";
+  const bookId = getWorldFoundation(baseId).builtinBookId;
+  if (bookId) {
+    const hit = Object.entries(WORLD_BOOK_MAP).find(([, v]) => v === bookId);
+    if (hit) return hit[0];
+  }
+  return baseId;
+}
 
 export function resolveOnboardingContext(params: {
   selectedWorldId: string | null;

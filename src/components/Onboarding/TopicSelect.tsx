@@ -27,16 +27,17 @@ export function TopicSelect() {
   const [audienceFilter, setAudienceFilter] = useState<WorldAudienceFilter>("all");
   const topics = getTopicSchemesByAudience(audienceFilter);
 
-  const chooseTopic = async (topic: TopicScheme) => {
+  const chooseTopic = async (topic: TopicScheme, baseId?: string) => {
+    const worldBaseId = baseId && (topic.expandableWorldBaseIds as string[]).includes(baseId) ? baseId : topic.worldBaseId;
     setSelected(topic.id);
-    const foundation = getWorldFoundation(topic.worldBaseId);
-    const bookId = foundation.builtinBookId || books.find((b) => b.id === topic.worldBaseId || b.theme === topic.worldBaseId)?.id;
+    const foundation = getWorldFoundation(worldBaseId);
+    const bookId = foundation.builtinBookId || books.find((b) => b.id === worldBaseId || b.theme === worldBaseId)?.id;
     const selectedBook = bookId ? books.find((b) => b.id === bookId) || null : null;
     const mainEntry = pickMainEntries(selectedBook)[0] || null;
 
     setSelectedTopicScheme(topic.id, topic.label);
     setSelectedTrope(topic.tropeId, topic.label);
-    setSelectedWorld(topic.worldBaseId, foundation.label);
+    setSelectedWorld(worldBaseId, foundation.label);
     setSelectedMainEntry(mainEntry?.id ?? null, mainEntry?.title ?? null);
     setSelectedScenario(null, null);
     setSelectedStylePreset(null, null);
@@ -137,6 +138,7 @@ export function TopicSelect() {
 
         {topics.map((topic) => {
           const trope = getTropeById(topic.tropeId);
+          const baseOptions = [topic.worldBaseId, ...topic.expandableWorldBaseIds];
           return (
             <div
               key={topic.id}
@@ -150,9 +152,34 @@ export function TopicSelect() {
               </div>
               <div className="seed-card-desc" style={{ marginBottom: 12 }}>{topic.description}</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 999, background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-muted)" }}>
-                  {worldFoundationLabel(topic.worldBaseId)}
-                </span>
+                {baseOptions.map((baseId) => {
+                  const isDefault = baseId === topic.worldBaseId;
+                  return (
+                    <button
+                      key={baseId}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void chooseTopic(topic, baseId);
+                      }}
+                      style={{
+                        fontSize: 11,
+                        padding: "6px 12px",
+                        borderRadius: 999,
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        lineHeight: 1,
+                        background: isDefault ? "var(--seed-accent-bg)" : "var(--seed-hover-bg)",
+                        border: isDefault
+                          ? "1px solid color-mix(in srgb, var(--seed-accent) 40%, transparent)"
+                          : "1px solid var(--seed-border)",
+                        color: isDefault ? "var(--seed-accent)" : "var(--seed-muted)",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      {worldFoundationLabel(baseId)}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           );

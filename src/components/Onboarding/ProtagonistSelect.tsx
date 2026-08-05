@@ -34,7 +34,7 @@ export function ProtagonistSelect({ onComplete }: Props) {
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState("");
 
-  const scenarios = getTopicOpeningScenarios(selectedTopicSchemeId);
+  const scenarios = getTopicOpeningScenarios(selectedTopicSchemeId, selectedWorldId);
 
   useEffect(() => {
     if (selectedMode === "player" && activePresetId !== "player-control") {
