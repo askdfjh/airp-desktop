@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { getTropeById } from "@/lib/popularTropes";
 import { getTopicSchemesByAudience, type TopicScheme } from "@/lib/topicSchemes";
 import { getWorldFoundation, worldFoundationLabel } from "@/lib/worldFoundations";
@@ -34,6 +34,7 @@ export function TopicSelect() {
   const selectedCardRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const contractTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flipPosRef = useRef<{ x: number; y: number } | null>(null);
   const [audienceFilter, setAudienceFilter] = useState<WorldAudienceFilter>("all");
   const topics = getTopicSchemesByAudience(audienceFilter);
 
@@ -43,7 +44,31 @@ export function TopicSelect() {
     ? [topics.find((t) => t.id === selected)!, ...topics.filter((t) => t.id !== selected)]
     : topics;
 
-  // 标签锁定：其他卡片淡出（collapsed），淡出完成后网格收缩（contracted），选中卡始终在首位
+  // FLIP：DOM 排序重排后，先把选中卡瞬间位移回旧位置（无过渡），
+  // 淡出完成后（contracted）再平滑滑动到新位置（第一行第二列，随机卡旁）
+  useLayoutEffect(() => {
+    if (sorted && labelLock && selectedCardRef.current && flipPosRef.current) {
+      const card = selectedCardRef.current;
+      const r = card.getBoundingClientRect();
+      const dx = flipPosRef.current.x - r.left;
+      const dy = flipPosRef.current.y - r.top;
+      card.style.transition = "none";
+      card.style.transform = `translate(${dx}px, ${dy}px)`;
+      flipPosRef.current = null;
+      void card.offsetWidth; // 强制回流，确保初始位移立即生效
+    }
+  }, [sorted, labelLock]);
+
+  // 收缩时：选中卡平滑滑到新位置（与网格收缩同步）
+  useEffect(() => {
+    if (contracted && selectedCardRef.current) {
+      const card = selectedCardRef.current;
+      card.style.transition = "transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)";
+      card.style.transform = "translate(0px, 0px)";
+    }
+  }, [contracted]);
+
+  // 标签锁定：其他卡片淡出（collapsed），淡出完成后网格收缩（contracted），选中卡滑动归位
   const prevLockRef = useRef(false);
   useEffect(() => {
     const ob = document.querySelector(".seed-onboarding");
@@ -51,7 +76,7 @@ export function TopicSelect() {
     prevLockRef.current = !!labelLock;
     if (labelLock && contracted && selectedCardRef.current) {
       setGridOverflow("hidden");
-      // 布局高 + 顶部 padding 8 + 底部 26px 阴影余量
+      // 一行高度（随机卡占第一格，选中卡第二格同行）+ 顶部 padding 8 + 底部 26px 阴影余量
       const h = selectedCardRef.current.offsetHeight + 34;
       requestAnimationFrame(() => setGridMaxH(`${h}px`));
       ob?.scrollTo({ top: 0, behavior: "smooth" });
@@ -107,7 +132,12 @@ export function TopicSelect() {
       void chooseTopic(topic, baseId);
       return;
     }
-    // 锁定：选中卡排序到随机题材卡之后的第一位，其他卡片淡出，淡出完成后（460ms）网格收缩
+    // 锁定：记录被点卡片旧位置 → 选中卡排序到随机题材卡之后的第一位（DOM 重排）→ FLIP 平滑滑动归位
+    const cardEl = gridRef.current?.querySelector(`[data-topic="${topic.id}"]`) as HTMLElement | null;
+    if (cardEl) {
+      const r = cardEl.getBoundingClientRect();
+      flipPosRef.current = { x: r.left, y: r.top };
+    }
     setContracted(false);
     setSorted(true);
     setLabelLock(true);
@@ -191,24 +221,22 @@ export function TopicSelect() {
       </div>
 
       <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: gridOverflow, transition: "max-height 0.5s ease", paddingTop: labelLock ? 8 : 0, paddingBottom: labelLock ? 26 : 0, paddingLeft: labelLock ? 4 : 0, paddingRight: labelLock ? 4 : 0, marginTop: labelLock ? -8 : 0, marginLeft: labelLock ? -4 : 0, marginRight: labelLock ? -4 : 0 }}>
-        {/* 随机题材卡固定第一位；仅收缩时隐藏（选中卡前移占位） */}
-        {!contracted && (
-          <div
-            className={`seed-card seed-card--custom ${labelLock ? "seed-card--collapsed" : ""}`}
-            onClick={randomTopic}
-            style={{
-              padding: "22px 20px",
-              cursor: "pointer",
-              border: "1px dashed color-mix(in srgb, var(--seed-accent) 45%, transparent)",
-              background: "color-mix(in srgb, var(--seed-accent) 6%, transparent)",
-            }}
-          >
-            <div className="seed-card-title" style={{ marginBottom: 8 }}>随机题材</div>
-            <div className="seed-card-desc">
-              {audienceFilter === "all" ? "从全部题材里随机" : audienceFilter === "male" ? "只从男频题材里随机" : "只从女频题材里随机"}
-            </div>
+        {/* 随机题材卡固定第一位（收缩时以 collapsed 占位，选中卡与其同行） */}
+        <div
+          className={`seed-card seed-card--custom ${labelLock ? "seed-card--collapsed" : ""}`}
+          onClick={randomTopic}
+          style={{
+            padding: "22px 20px",
+            cursor: "pointer",
+            border: "1px dashed color-mix(in srgb, var(--seed-accent) 45%, transparent)",
+            background: "color-mix(in srgb, var(--seed-accent) 6%, transparent)",
+          }}
+        >
+          <div className="seed-card-title" style={{ marginBottom: 8 }}>随机题材</div>
+          <div className="seed-card-desc">
+            {audienceFilter === "all" ? "从全部题材里随机" : audienceFilter === "male" ? "只从男频题材里随机" : "只从女频题材里随机"}
           </div>
-        )}
+        </div>
 
         {sortedTopics.map((topic) => {
           const trope = getTropeById(topic.tropeId);
@@ -218,6 +246,7 @@ export function TopicSelect() {
           return (
             <div
               key={topic.id}
+              data-topic={topic.id}
               ref={isSelectedCard ? selectedCardRef : undefined}
               className={`seed-card ${isSelectedCard ? "seed-card--selected" : ""} ${hidden ? "seed-card--collapsed" : ""} ${labelLock && isSelectedCard ? "seed-card--locked" : ""}`}
               onClick={() => {
