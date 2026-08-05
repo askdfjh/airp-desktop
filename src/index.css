@@ -662,6 +662,12 @@ button.ghost:hover { color:var(--seed-accent); }
   border-color: var(--seed-accent);
   box-shadow: 0 0 0 1px var(--seed-accent), 0 8px 32px -8px var(--seed-accent-glow);
 }
+/* 选中卡片在 hover 时保持选中框线（否则 hover 样式优先级更高会盖住框选） */
+.seed-card--selected:hover,
+.seed-card--custom.seed-card--selected:hover {
+  border-color: var(--seed-accent);
+  box-shadow: 0 0 0 1px var(--seed-accent), 0 8px 32px -8px var(--seed-accent-glow);
+}
 
 .seed-card-icon {
   width: 44px;
@@ -1945,6 +1951,11 @@ mark.seed-hl {
   .seed-card:hover {
     transform: none !important;
     box-shadow: none !important;
+  }
+  /* 触屏粘性 hover：点击后卡片保持 :hover，选中框线需显式保持 */
+  .seed-card--selected:hover {
+    border-color: var(--seed-accent) !important;
+    box-shadow: 0 0 0 1px var(--seed-accent) !important;
   }
   .seed-card:active {
     background: color-mix(in srgb, var(--seed-accent) 10%, transparent) !important;
