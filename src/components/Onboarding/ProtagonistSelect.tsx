@@ -21,6 +21,7 @@ export function ProtagonistSelect({ onComplete }: Props) {
     setPlayerName,
     setSelectedCharacter,
     setSelectedScenario,
+    onboardingAudience,
   } = useUIStore();
   const effTheme = useUIStore((s) => s.effectiveTheme)();
   const characters = useCharacterStore((s) => s.characters);
@@ -35,7 +36,7 @@ export function ProtagonistSelect({ onComplete }: Props) {
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState("");
 
-  const scenarios = getTopicOpeningScenarios(selectedTopicSchemeId, selectedWorldId);
+  const scenarios = getTopicOpeningScenarios(selectedTopicSchemeId, selectedWorldId, onboardingAudience);
   const randomResult = scenarios.find((s) => s.id === selectedScenario) || null;
 
   useEffect(() => {

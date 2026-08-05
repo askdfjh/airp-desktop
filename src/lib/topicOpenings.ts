@@ -1,21 +1,33 @@
 import type { OpeningScenario } from "@/stores/onboardingStore";
-import { getTopicScheme } from "@/lib/topicSchemes";
+import { getTopicScheme, type TopicAudience, type TopicOpeningSeed } from "@/lib/topicSchemes";
 import { worldFoundationLabel } from "@/lib/worldFoundations";
 
 export function getTopicOpeningScenarios(
   topicSchemeId: string | null | undefined,
   worldBaseId?: string | null,
+  audience?: TopicAudience,
 ): OpeningScenario[] {
   const topic = getTopicScheme(topicSchemeId);
   if (!topic) return [];
   const base = worldBaseId ?? topic.worldBaseId;
   const worldLabel = worldFoundationLabel(base);
-  // 底座专属 seeds 优先，通用 seeds（无 bases）兜底补位，保证最多 3 条
-  const specific = topic.openingSeeds.filter((seed) => (seed.bases as string[] | undefined)?.includes(base));
-  const generic = topic.openingSeeds.filter((seed) => !seed.bases);
-  const seeds = [...specific, ...generic].slice(0, 3);
+  // 优先级：底座+频道都匹配 → 频道匹配（全底座） → 底座匹配（中性） → 全通用；取前 3
+  const matchBase = (seed: TopicOpeningSeed) => (seed.bases as string[] | undefined)?.includes(base) ?? false;
+  const matchAud = (seed: TopicOpeningSeed) => (seed.audiences as string[] | undefined)?.includes(audience ?? "") ?? false;
+  const neutral = (seed: TopicOpeningSeed) => !seed.audiences;
+  const ranked = topic.openingSeeds
+    .map((seed) => ({
+      seed,
+      score:
+        (matchBase(seed) && (audience ? matchAud(seed) : neutral(seed)) ? 3 : 0) +
+        (matchBase(seed) && neutral(seed) ? 2 : 0) +
+        (!(seed.bases?.length) && (audience ? matchAud(seed) : neutral(seed)) ? 1 : 0),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .map((r) => r.seed)
+    .slice(0, 3);
 
-  return seeds.map((seed) => ({
+  return ranked.map((seed) => ({
     id: `topic:${topic.id}:${seed.id}`,
     name: seed.name,
     description: seed.focus,
@@ -39,6 +51,7 @@ export function getTopicOpeningScenario(
   topicSchemeId: string | null | undefined,
   scenarioId: string | null | undefined,
   worldBaseId?: string | null,
+  audience?: TopicAudience,
 ) {
-  return getTopicOpeningScenarios(topicSchemeId, worldBaseId).find((scenario) => scenario.id === scenarioId);
+  return getTopicOpeningScenarios(topicSchemeId, worldBaseId, audience).find((scenario) => scenario.id === scenarioId);
 }

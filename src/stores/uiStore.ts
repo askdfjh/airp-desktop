@@ -39,6 +39,8 @@ interface UIState {
   selectedTropeName: string | null;
   // 玩家主角名（开局第 3 步输入，未填时兜底「主角」；选角色卡时自动带入可改）
   playerName: string;
+  // 开局进入的频道 tab（全部/男频/女频），用于按频道区分开局文案
+  onboardingAudience: "all" | "male" | "female";
   // 开局自动发送标记：开始冒险后由 OnboardingFlow 写入，useChat 加载完成后消费
   pendingOpeningMessage: string | null;
   // Existing methods
@@ -61,6 +63,7 @@ interface UIState {
   setSelectedScenario: (id: string | null, name: string | null) => void;
   setSelectedTrope: (id: HotTropeId | null, name: string | null) => void;
   setPlayerName: (name: string) => void;
+  setOnboardingAudience: (a: "all" | "male" | "female") => void;
   setPendingOpeningMessage: (msg: string | null) => void;
   resetOnboarding: () => void;
   // 长对话压缩：全局锁 + 阶段 + 自动确认框
@@ -120,6 +123,7 @@ export const useUIStore = create<UIState>()(
       selectedTropeId: null,
       selectedTropeName: null,
       playerName: "",
+      onboardingAudience: "all",
       pendingOpeningMessage: null,
       // Existing methods
       setSidebarOpen: (v) => set({ sidebarOpen: v }),
@@ -148,6 +152,7 @@ export const useUIStore = create<UIState>()(
       setSelectedScenario: (id, name) => set({ selectedScenarioId: id, selectedScenarioName: name }),
       setSelectedTrope: (id, name) => set({ selectedTropeId: id, selectedTropeName: name }),
       setPlayerName: (name) => set({ playerName: name }),
+      setOnboardingAudience: (a) => set({ onboardingAudience: a }),
       setPendingOpeningMessage: (msg) => set({ pendingOpeningMessage: msg }),
       resetOnboarding: () =>
         set({

@@ -19,6 +19,7 @@ export function TopicSelect() {
     setSelectedMode,
     setSelectedCharacter,
     setPlayerName,
+    setOnboardingAudience,
   } = useUIStore();
   const books = useWorldStore((s) => s.books);
   const setActiveBook = useWorldStore((s) => s.setActiveBook);
@@ -32,6 +33,7 @@ export function TopicSelect() {
     const worldBaseId = baseId && (topic.expandableWorldBaseIds as string[]).includes(baseId) ? baseId : topic.worldBaseId;
     setSelected(topic.id);
     setSelectedBase(worldBaseId);
+    setOnboardingAudience(audienceFilter);
     const foundation = getWorldFoundation(worldBaseId);
     const bookId = foundation.builtinBookId || books.find((b) => b.id === worldBaseId || b.theme === worldBaseId)?.id;
     const selectedBook = bookId ? books.find((b) => b.id === bookId) || null : null;
@@ -154,7 +156,9 @@ export function TopicSelect() {
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
                 <div className="seed-card-title">{topic.label}</div>
-                <span style={{ fontSize: 11, color: "var(--seed-muted)" }}>{trope?.category}</span>
+                <span style={{ fontSize: 11, color: "var(--seed-muted)" }}>
+                  {audienceFilter === "all" ? trope?.category : audienceFilter === "male" ? "男频" : "女频"}
+                </span>
               </div>
               <div className="seed-card-desc" style={{ marginBottom: 12 }}>{topic.description}</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>

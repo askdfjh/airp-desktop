@@ -11,6 +11,8 @@ export interface TopicOpeningSeed {
   tags: string[];
   /** 限定可用的世界底座；缺省 = 通用（任意底座可用，作为兜底池） */
   bases?: Exclude<WorldBaseId, "custom">[];
+  /** 限定可用的频道；缺省 = 通用（男女频均可，作为兜底池） */
+  audiences?: TopicAudience[];
 }
 
 export interface TopicScheme {
@@ -45,6 +47,9 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "tribulation", name: "渡劫前夜重生", focus: "回到天劫降临前夜，前世他在此灰飞烟灭，这一次境界未破，他却已知道劫云之下藏着什么。", tags: ["渡劫", "先机"], bases: ["cultivation"] },
       { id: "outerdoor", name: "外门藏宝地", focus: "重生回宗门收徒那日，前世无人问津的外门杂役如今在他眼里是一处藏着大机缘的地方。", tags: ["机缘", "抢先"], bases: ["cultivation"] },
       { id: "danfang", name: "丹方之争", focus: "前世害死师父的丹方之争即将开炉，他带着记忆提前落子，这次要在众目睽睽下翻盘。", tags: ["丹方", "复仇"], bases: ["cultivation"] },
+      { id: "wedding", name: "婚礼前夜重生", focus: "重生回婚礼前夜，上一世婚后的每一步她都记得，而新郎正等着她说「我愿意」。", tags: ["婚礼", "改写"], bases: ["modern"], audiences: ["female"] },
+      { id: "bestie", name: "闺蜜的提醒", focus: "重生后第一个电话来自上一世害她的闺蜜，这一次她笑着接起了电话。", tags: ["闺蜜", "反击"], bases: ["modern"], audiences: ["female"] },
+      { id: "campus", name: "错过的心意", focus: "回到大学入学那年，她决定不再错过那个上一世被她推开的人。", tags: ["校园", "感情"], bases: ["modern"], audiences: ["female"] },
     ],
   },
   {
@@ -69,6 +74,9 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "livefail", name: "直播事故现场", focus: "穿成网红公司新签的十八线艺人，开播前一小时经纪人把一份会翻车的台本拍在她面前。", tags: ["直播", "危机"], bases: ["modern"] },
       { id: "coverjob", name: "顶替入职", focus: "穿成替亲戚顶班进大厂的临时工，第一天晨会就撞见原身欠下的烂账。", tags: ["职场", "身份"], bases: ["modern"] },
       { id: "erroom", name: "手术室门外", focus: "穿成急诊科新医生，第一台手术前的病历上写着她完全陌生的术语。", tags: ["医疗", "身份危机"], bases: ["modern"] },
+      { id: "paoguang", name: "穿成炮灰小姐", focus: "穿成话本里活不过三章的炮灰小姐，退婚宴上她按着原剧情把婚书砸了回去。", tags: ["炮灰", "自救"], bases: ["ancient"], audiences: ["female"] },
+      { id: "debts", name: "原主烂账", focus: "醒来先面对原主欠下的脂粉钱和一屋子等着看笑话的亲戚。", tags: ["身份", "家宅"], bases: ["ancient"], audiences: ["female"] },
+      { id: "stepmother", name: "继母请安", focus: "穿来第一日就要去给继母请安，原身跪了十年，她决定今天先站起来。", tags: ["继母", "立威"], bases: ["ancient"], audiences: ["female"] },
     ],
   },
   {
@@ -93,6 +101,9 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "mage", name: "法师塔签到", focus: "系统让他以零阶法师的身份走进法师塔签到，每一层塔主都在等一个学徒犯错。", tags: ["法师塔", "任务"], bases: ["otherworld"] },
       { id: "bounty", name: "王国悬赏", focus: "系统发布悬赏：活捉边境的独角兽，赏金足够还清原身的债。", tags: ["悬赏", "任务"], bases: ["otherworld"] },
       { id: "blackcard", name: "拍卖行黑卡", focus: "系统送他一张没有余额的黑卡，并警告：用错一次就永久解绑。", tags: ["拍卖", "限制"], bases: ["otherworld"] },
+      { id: "dorm", name: "面板落在宗门", focus: "系统在宗门女弟子寮房上线，第一任务是三天内找到一件丢了的法器，而师姐们都在试探她。", tags: ["任务", "宗门"], bases: ["cultivation"], audiences: ["female"] },
+      { id: "lingshan", name: "灵膳任务", focus: "系统要求她做出让掌门满意的灵膳，第一份食材就被厨房管事掉包。", tags: ["灵膳", "任务"], bases: ["cultivation"], audiences: ["female"] },
+      { id: "dantest", name: "炼丹考核", focus: "女弟子炼丹考核，系统提示她丹方里有一味药被换成了毒草。", tags: ["炼丹", "危机"], bases: ["cultivation"], audiences: ["female"] },
     ],
   },
   {
@@ -114,6 +125,9 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "lingqi", name: "灵气倒灌第一夜", focus: "灵气倒灌淹没城市，第一夜整栋楼的人在停电中听见窗外传来诵经声和兽吼。", tags: ["灵气", "灾变"], bases: ["cultivation"] },
       { id: "corpse", name: "宗门尸潮围山", focus: "山门被尸潮围困，护山大阵只剩最后一层，守山长老把最后一块灵石交到他手里。", tags: ["尸潮", "守山"], bases: ["cultivation"] },
       { id: "danzha", name: "丹炉炸裂后的求生", focus: "灵气复苏之夜，他炸了师父的丹炉，炉灰里爬出来的东西正在追杀全城修士。", tags: ["丹炉", "求生"], bases: ["cultivation"] },
+      { id: "rooftop", name: "楼顶求生", focus: "末世第一夜，她把整栋楼的物资清点成册，隔壁太太的丈夫想抢她的钥匙。", tags: ["物资", "邻人"], bases: ["modern"], audiences: ["female"] },
+      { id: "teamsplit", name: "小队分歧", focus: "避难小队因一个伤员分裂，她站出来给出了第一套分配方案。", tags: ["队伍", "抉择"], bases: ["modern"], audiences: ["female"] },
+      { id: "supermarket", name: "超市奇遇", focus: "末日超市里她捡到一部还能用的手机，屏幕上是陌生人发来的求救信号。", tags: ["超市", "信号"], bases: ["modern"], audiences: ["female"] },
     ],
   },
   {
@@ -129,6 +143,9 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "countdown", name: "倒计时开始", focus: "陌生空间亮起倒计时，任务目标出现，周围玩家还没意识到规则的危险。", tags: ["倒计时", "任务"] },
       { id: "team", name: "临时队伍成形", focus: "副本刚开场，幸存者被迫组队，但每个人都隐瞒着自己的身份和能力。", tags: ["队伍", "信任"] },
       { id: "reward", name: "首个奖励诱饵", focus: "副本展示第一件奖励，所有人都知道它重要，却没人知道拿到它要付出什么。", tags: ["奖励", "争夺"] },
+      { id: "camp", name: "副本第一夜", focus: "副本里队友各自为战，她在休息区搭好营地，第一个回来的人是浑身是血的他。", tags: ["副本", "羁绊"], bases: ["infinite"], audiences: ["female"] },
+      { id: "medic", name: "身份牌", focus: "她抽到的身份牌是「队医」，而副本规则禁止治疗任何队友。", tags: ["身份", "规则"], bases: ["infinite"], audiences: ["female"] },
+      { id: "timemis", name: "倒计时误会", focus: "倒计时只剩十分钟，队友却在为一句误会争执，她必须做出选择。", tags: ["倒计时", "选择"], bases: ["infinite"], audiences: ["female"] },
     ],
   },
   {
@@ -147,6 +164,9 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "note2", name: "副本规则纸条", focus: "进入副本的第一张纸条写着「不要相信任何同伴」，而他的队友正热情地伸来援手。", tags: ["纸条", "副本"], bases: ["infinite"] },
       { id: "floor", name: "午夜楼层变更", focus: "午夜一到，副本楼层重新排列，他记住的安全出口整层消失了。", tags: ["午夜", "副本"], bases: ["infinite"] },
       { id: "trap", name: "通关奖励陷阱", focus: "副本给出诱人奖励，规则却注明「奖励会在结算时向你索取代价」。", tags: ["奖励", "代价"], bases: ["infinite"] },
+      { id: "roommates", name: "合租规则", focus: "合租房的墙上贴着五条室友规则，第三条写着「晚上十点后不要应门」。", tags: ["合租", "规则"], bases: ["modern"], audiences: ["female"] },
+      { id: "friend", name: "闺蜜的异常", focus: "闺蜜从密室回来后人变了，她记下闺蜜所有反常的细节。", tags: ["闺蜜", "异常"], bases: ["modern"], audiences: ["female"] },
+      { id: "goodnight", name: "晚安短信", focus: "每晚十一点的「晚安」短信准时到来，今天的内容变成了「门没锁」。", tags: ["短信", "异常"], bases: ["modern"], audiences: ["female"] },
     ],
   },
   {
@@ -171,6 +191,9 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "bordertown", name: "边境荒镇", focus: "帝国边境的荒镇归他管辖，第一夜兽人斥候在镇口留下了一根燃烧的箭。", tags: ["荒镇", "边境"], bases: ["otherworld"] },
       { id: "mine", name: "矿脉契约", focus: "一张无人认领的废弃矿脉契约，他花光积蓄买下，矿工们都在等着看笑话。", tags: ["矿脉", "契约"], bases: ["otherworld"] },
       { id: "tavern", name: "冒险者酒馆", focus: "接手倒闭的冒险者酒馆，第一位客人是浑身是伤、悬赏满身的赏金猎人。", tags: ["酒馆", "冒险者"], bases: ["otherworld"] },
+      { id: "familyfeud", name: "婆家分家", focus: "分家第一日，她只分到半亩薄田和一间柴房，而她手里攥着娘家陪嫁的秘方。", tags: ["分家", "逆袭"], bases: ["ancient"], audiences: ["female"] },
+      { id: "embroiderybet", name: "绣庄对赌", focus: "隔壁绣庄老板娘当众拿她的绣品打赌，输了要交出铺子，赢了能得对方十年客源。", tags: ["绣庄", "对赌"], bases: ["ancient"], audiences: ["female"] },
+      { id: "farmledger", name: "田庄账本", focus: "接手夫家田庄的第一本账，她发现每年都有一笔说不清的银子流向庄外。", tags: ["账本", "家业"], bases: ["ancient"], audiences: ["female"] },
     ],
   },
   {
@@ -189,6 +212,9 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "wildvillage", name: "荒村借宿", focus: "赶考途中借宿荒村，村民反复叮嘱夜里听见更声不要睁眼。", tags: ["荒村", "禁忌"], bases: ["ancient"] },
       { id: "ancestral", name: "祠堂守夜", focus: "族长点名让他守祠堂第一夜，牌位背后的机关在子时自己转动了。", tags: ["祠堂", "机关"], bases: ["ancient"] },
       { id: "oldtroupe", name: "旧戏班", focus: "接手父亲留下的旧戏班，第一场戏的戏台底下埋着一口没钉死的棺材。", tags: ["戏班", "棺材"], bases: ["ancient"] },
+      { id: "grandma", name: "外婆的遗物", focus: "外婆去世后留下一间老屋和一句叮嘱：阁楼的东西别碰。", tags: ["遗物", "老屋"], bases: ["modern"], audiences: ["female"] },
+      { id: "ancestralhall", name: "祠堂直播", focus: "她为流量直播老家祠堂，镜头里出现了一个不该出现的人影。", tags: ["直播", "祠堂"], bases: ["modern"], audiences: ["female"] },
+      { id: "weddingdress", name: "旧嫁衣", focus: "老家衣橱里有一件从没人穿过的旧嫁衣，母亲说那是她姑姑的。", tags: ["嫁衣", "旧事"], bases: ["modern"], audiences: ["female"] },
     ],
   },
   {

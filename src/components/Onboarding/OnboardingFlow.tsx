@@ -61,7 +61,7 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
     const selectedAudience: WorldAudience | null =
       selectedPresetWorld?.gender ?? (selectedBook ? inferWorldBookAudience(selectedBook) : null);
     const selectedScenario = selectedScenarioId
-      ? getTopicOpeningScenario(selectedTopicSchemeId, selectedScenarioId, selectedWorldId) ||
+      ? getTopicOpeningScenario(selectedTopicSchemeId, selectedScenarioId, selectedWorldId, ui.onboardingAudience) ||
         useOnboardingStore.getState().getScenarioById(selectedScenarioId) ||
         getWorldOpeningScenario(selectedBook, selectedScenarioId)
       : undefined;
@@ -215,7 +215,7 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
       ui.setSelectedStylePreset(pickedStyle.id, pickedStyle.name);
     }
 
-    const scenarios = getTopicOpeningScenarios(topic.id, worldBaseId);
+    const scenarios = getTopicOpeningScenarios(topic.id, worldBaseId, filter);
     const sc = scenarios[Math.floor(Math.random() * scenarios.length)];
     ui.setSelectedScenario(sc?.id ?? "ai-random", sc?.name ?? "AI 随机开局");
 
