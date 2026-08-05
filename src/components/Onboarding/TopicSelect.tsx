@@ -29,16 +29,22 @@ export function TopicSelect() {
   const [labelLock, setLabelLock] = useState(false);
   const [gridMaxH, setGridMaxH] = useState<string>("6000px");
   const selectedCardRef = useRef<HTMLDivElement | null>(null);
+  const gridRef = useRef<HTMLDivElement | null>(null);
   const [audienceFilter, setAudienceFilter] = useState<WorldAudienceFilter>("all");
   const topics = getTopicSchemesByAudience(audienceFilter);
 
   // 标签锁定（隐藏其他题材）时：网格高度收缩到选中卡片，让确认按钮平滑上移
+  // 取消时：展开到网格实际内容高度（与收缩动画对称）
   useEffect(() => {
+    const ob = document.querySelector(".seed-onboarding");
     if (labelLock && selectedCardRef.current) {
       const h = selectedCardRef.current.offsetHeight + 16;
       requestAnimationFrame(() => setGridMaxH(`${h}px`));
-    } else {
-      setGridMaxH("6000px");
+      ob?.scrollTo({ top: 0, behavior: "smooth" });
+    } else if (gridRef.current) {
+      const h = gridRef.current.scrollHeight;
+      requestAnimationFrame(() => setGridMaxH(`${h}px`));
+      ob?.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [labelLock, selected]);
 
@@ -140,7 +146,7 @@ export function TopicSelect() {
         })}
       </div>
 
-      <div data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: "hidden", transition: "max-height 0.35s ease" }}>
+      <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: "hidden", transition: "max-height 0.35s ease" }}>
         <div
           className={`seed-card seed-card--custom ${labelLock ? "seed-card--collapsed" : ""}`}
           onClick={randomTopic}
