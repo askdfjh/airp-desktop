@@ -42,7 +42,10 @@ export function TopicSelect() {
   // 仅在点标签（锁定）后排序：排序列表跟随 sortedTopicId（点卡片主体只改高亮，不改排序，避免跳回原位）
   // 随机题材卡始终固定渲染在网格第一位
   const sortedTopics = sorted && sortedTopicId
-    ? [topics.find((t) => t.id === sortedTopicId)!, ...topics.filter((t) => t.id !== sortedTopicId)]
+    ? (() => {
+        const sel = topics.find((t) => t.id === sortedTopicId);
+        return sel ? [sel, ...topics.filter((t) => t.id !== sortedTopicId)] : topics;
+      })()
     : topics;
 
   // FLIP：DOM 排序重排后，先把选中卡瞬间位移回旧位置（无过渡），
@@ -238,7 +241,18 @@ export function TopicSelect() {
           return (
             <button
               key={tab.key}
-              onClick={() => setAudienceFilter(tab.key)}
+              onClick={() => {
+                // 切换频道 tab：重置锁定/排序/选中状态（不同频道的题材列表不同，避免排序引用失效）
+                if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
+                setContracted(false);
+                setSorted(false);
+                setSortedTopicId(null);
+                setLabelLock(false);
+                setSelected(null);
+                setSelectedBase(null);
+                clearCardTransforms();
+                setAudienceFilter(tab.key);
+              }}
               style={{
                 padding: "9px 24px",
                 borderRadius: 999,
