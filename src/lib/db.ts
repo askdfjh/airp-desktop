@@ -903,8 +903,8 @@ export async function initBuiltinCharacters(): Promise<void> {
       );
     } else {
       await getDb().execute(
-        "UPDATE characters SET name=$1, appearance=$2, personality=$3, background=$4, tags=$5, isBuiltin=1, updatedAt=$6 WHERE id=$7;",
-        [preset.name, preset.appearance, preset.personality, preset.background, JSON.stringify(preset.tags), now, preset.id]
+        "UPDATE characters SET name=$1, appearance=$2, personality=$3, background=$4, tags=$5, isBuiltin=1 WHERE id=$6;",
+        [preset.name, preset.appearance, preset.personality, preset.background, JSON.stringify(preset.tags), preset.id]
       );
     }
   }
@@ -928,8 +928,8 @@ export async function restoreDefaultCharacters(): Promise<void> {
     const defs = { name: preset.name, appearance: preset.appearance, personality: preset.personality, background: preset.background, tags: preset.tags };
     if (existingIds.has(preset.id)) {
       await getDb().execute(
-        "UPDATE characters SET name=$1, appearance=$2, personality=$3, background=$4, tags=$5, updatedAt=$6 WHERE id=$7;",
-        [defs.name, defs.appearance, defs.personality, defs.background, JSON.stringify(defs.tags), now, preset.id]
+        "UPDATE characters SET name=$1, appearance=$2, personality=$3, background=$4, tags=$5 WHERE id=$6;",
+        [defs.name, defs.appearance, defs.personality, defs.background, JSON.stringify(defs.tags), preset.id]
       );
     } else {
       await getDb().execute(
