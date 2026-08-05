@@ -38,8 +38,11 @@ export function TopicSelect() {
 
   // 标签锁定：其他卡片先淡出（0.45s），完成后选中卡片再平滑滑到第一排第一个（slideApplied），
   // 同时网格高度收缩；取消时先滑回原位，再淡入其他卡片并展开网格
+  const prevLockRef = useRef(false);
   useEffect(() => {
     const ob = document.querySelector(".seed-onboarding");
+    const wasLocked = prevLockRef.current;
+    prevLockRef.current = !!labelLock;
     if (labelLock && slideApplied && selectedCardRef.current) {
       setGridOverflow("hidden");
       // 布局高 + 顶部 padding 8 + 底部 26px 阴影余量
@@ -52,7 +55,8 @@ export function TopicSelect() {
       setGridOverflow("visible");
       const h = gridRef.current.scrollHeight;
       requestAnimationFrame(() => setGridMaxH(`${h}px`));
-      ob?.scrollTo({ top: 0, behavior: "smooth" });
+      // 仅从锁定状态恢复时才滚回顶部；点卡片主体（未锁定）不改变滚动位置
+      if (wasLocked) ob?.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [labelLock, slideApplied, selected]);
 
@@ -96,13 +100,12 @@ export function TopicSelect() {
       return;
     }
     if (slideTimerRef.current) clearTimeout(slideTimerRef.current);
-    if (selected === topic.id) {
-      // 同一卡片切换底座：保持锁定与滑动位置，仅更新底座，不重播动画
-      setLabelLock(true);
+    if (selected === topic.id && labelLock) {
+      // 锁定中切换底座：保持锁定与滑动位置，仅更新底座，不重播动画
       void chooseTopic(topic, baseId);
       return;
     }
-    // 锁定新卡片：其他卡片先淡出，淡出完成后（460ms）选中卡片再滑动归位
+    // 锁定卡片：其他卡片先淡出，淡出完成后（460ms）选中卡片再滑动归位
     setSlideApplied(false);
     setLabelLock(true);
     void chooseTopic(topic, baseId);
