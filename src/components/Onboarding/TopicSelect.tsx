@@ -58,7 +58,7 @@ export function TopicSelect() {
       flipPosRef.current = null;
       void card.offsetWidth; // 强制回流，确保初始位移立即生效
     }
-  }, [sorted, labelLock]);
+  }, [sorted, labelLock, sortedTopicId]);
 
   // 收缩时：选中卡平滑滑到新位置（与网格收缩同步）
   useEffect(() => {
@@ -68,6 +68,15 @@ export function TopicSelect() {
       card.style.transform = "translate(0px, 0px)";
     }
   }, [contracted]);
+
+  // 切换卡片前清理所有卡片的 transform 残留（防止旧卡位移与新区块重叠）
+  const clearCardTransforms = () => {
+    gridRef.current?.querySelectorAll(".seed-card").forEach((c) => {
+      const el = c as HTMLElement;
+      el.style.transform = "";
+      el.style.transition = "";
+    });
+  };
 
   // 标签锁定：其他卡片淡出（collapsed），淡出完成后网格收缩（contracted），选中卡滑动归位
   const prevLockRef = useRef(false);
@@ -80,7 +89,8 @@ export function TopicSelect() {
       // 一行高度（随机卡占第一格，选中卡第二格同行）+ 顶部 padding 8 + 底部 26px 阴影余量
       const h = selectedCardRef.current.offsetHeight + 34;
       requestAnimationFrame(() => setGridMaxH(`${h}px`));
-      ob?.scrollTo({ top: 0, behavior: "smooth" });
+      // 瞬间滚回顶部（与收缩动画同步执行，避免 smooth 滚动与 maxHeight 过渡竞争导致底部截断）
+      ob?.scrollTo({ top: 0 });
     } else if (labelLock && !contracted) {
       setGridOverflow("hidden");
     } else if (gridRef.current) {
@@ -139,7 +149,17 @@ export function TopicSelect() {
       void chooseTopic(topic, baseId);
       return;
     }
-    // 锁定：记录被点卡片旧位置 → 选中卡排序到随机题材卡之后的第一位（DOM 重排）→ FLIP 平滑滑动归位
+    // 锁定/切换卡片：清理旧卡 transform 残留 → 记录被点卡片旧位置 → 排序到随机题材卡之后的第一位（DOM 重排）→ FLIP 平滑滑动归位
+    const wasLocked = labelLock;
+    clearCardTransforms();
+    if (wasLocked && selected) {
+      // 锁定中切到其他卡：旧选中卡立即隐藏（避免与滑动中的新卡重叠）
+      const oldCard = gridRef.current?.querySelector(`[data-topic="${selected}"]`) as HTMLElement | null;
+      if (oldCard) {
+        oldCard.style.transition = "none";
+        oldCard.style.opacity = "0";
+      }
+    }
     const cardEl = gridRef.current?.querySelector(`[data-topic="${topic.id}"]`) as HTMLElement | null;
     if (cardEl) {
       const r = cardEl.getBoundingClientRect();
@@ -150,7 +170,12 @@ export function TopicSelect() {
     setSortedTopicId(topic.id);
     setLabelLock(true);
     void chooseTopic(topic, baseId);
-    contractTimerRef.current = setTimeout(() => setContracted(true), 460);
+    if (wasLocked) {
+      // 切换卡片：下一帧直接收缩 + 新卡滑动（旧卡已瞬隐，无需等待淡出）
+      requestAnimationFrame(() => setContracted(true));
+    } else {
+      contractTimerRef.current = setTimeout(() => setContracted(true), 460);
+    }
   };
 
   const randomTopic = () => {
