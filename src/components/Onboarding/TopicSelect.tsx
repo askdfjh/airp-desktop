@@ -69,12 +69,13 @@ export function TopicSelect() {
     }
   }, [contracted]);
 
-  // 切换卡片前清理所有卡片的 transform 残留（防止旧卡位移与新区块重叠）
+  // 清理所有卡片的 transform/transition/opacity inline 残留（防重叠与空白残留）
   const clearCardTransforms = () => {
     gridRef.current?.querySelectorAll(".seed-card").forEach((c) => {
       const el = c as HTMLElement;
       el.style.transform = "";
       el.style.transition = "";
+      el.style.opacity = "";
     });
   };
 
@@ -97,6 +98,8 @@ export function TopicSelect() {
       setGridOverflow("visible");
       const h = gridRef.current.scrollHeight;
       requestAnimationFrame(() => setGridMaxH(`${h}px`));
+      // 展开时清理所有 inline 残留（切换标签时旧卡被手动置 0 的 opacity 需恢复，避免空白格）
+      clearCardTransforms();
       // 仅从锁定状态恢复时才滚回顶部；点卡片主体（未锁定）不改变滚动位置
       if (wasLocked) ob?.scrollTo({ top: 0, behavior: "smooth" });
     }
