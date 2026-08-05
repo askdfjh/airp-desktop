@@ -8,6 +8,8 @@ export interface OpeningScenario {
   description: string;
   keywords: string[];
   theme: string; // which world theme this belongs to
+  /** 开局所属频道（男频/女频向开局标记；缺省 = 中性/按当前频道语境） */
+  audience?: WorldAudience;
   systemPromptTemplate: string; // template with {characterName} placeholder
   openingMessage: string; // 开局开场消息，模板含 {characterName} 占位符
 }

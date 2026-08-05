@@ -207,7 +207,25 @@ export function ProtagonistSelect({ onComplete }: Props) {
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                 </svg>
               </div>
-              <div className="seed-card-title" style={{ marginBottom: 8 }}>{scenario.name}</div>
+              <div className="seed-card-title" style={{ marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <span>{scenario.name}</span>
+                {(scenario.audience || (onboardingAudience !== "all" ? onboardingAudience : null)) && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, padding: "3px 8px", borderRadius: 999, flexShrink: 0,
+                    background: scenario.audience === "female" || (!scenario.audience && onboardingAudience === "female")
+                      ? "color-mix(in srgb, var(--seed-accent) 14%, transparent)"
+                      : "color-mix(in srgb, #4fc3f7 14%, transparent)",
+                    border: scenario.audience === "female" || (!scenario.audience && onboardingAudience === "female")
+                      ? "1px solid color-mix(in srgb, var(--seed-accent) 35%, transparent)"
+                      : "1px solid color-mix(in srgb, #4fc3f7 35%, transparent)",
+                    color: scenario.audience === "female" || (!scenario.audience && onboardingAudience === "female")
+                      ? "var(--seed-accent)"
+                      : "#4fc3f7",
+                  }}>
+                    {scenario.audience === "female" || (!scenario.audience && onboardingAudience === "female") ? "女频" : "男频"}
+                  </span>
+                )}
+              </div>
               <div className="seed-card-desc" style={{ marginBottom: 14 }}>{scenario.description}</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {scenario.keywords.map((kw) => (

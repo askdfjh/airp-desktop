@@ -36,6 +36,7 @@ export function getTopicOpeningScenarios(
     description: seed.focus,
     keywords: [topic.label, worldLabel, ...seed.tags].slice(0, 4),
     theme: base,
+    audience: (seed.audiences as string[] | undefined)?.length ? ((seed.audiences as string[])[0] as "male" | "female") : undefined,
     systemPromptTemplate:
       `你正在写一部发生在「${worldLabel}」中的沉浸式故事。题材是「${topic.label}」。` +
       `\n题材基础：${topic.description}` +

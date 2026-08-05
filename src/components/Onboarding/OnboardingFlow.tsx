@@ -59,7 +59,9 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
       selectedWorldId ||
       "custom";
     const selectedAudience: WorldAudience | null =
-      selectedPresetWorld?.gender ?? (selectedBook ? inferWorldBookAudience(selectedBook) : null);
+      ui.onboardingAudience === "male" || ui.onboardingAudience === "female"
+        ? ui.onboardingAudience
+        : selectedPresetWorld?.gender ?? (selectedBook ? inferWorldBookAudience(selectedBook) : null);
     const selectedScenario = selectedScenarioId
       ? getTopicOpeningScenario(selectedTopicSchemeId, selectedScenarioId, selectedWorldId, ui.onboardingAudience) ||
         useOnboardingStore.getState().getScenarioById(selectedScenarioId) ||
@@ -186,6 +188,7 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
     ui.setSelectedTopicScheme(topic.id, topic.label);
     ui.setSelectedWorld(worldBaseId, foundation.label);
     ui.setSelectedTrope(topic.tropeId, topic.label);
+    ui.setOnboardingAudience(filter);
 
     const mode = (["novel", "player", "custom"] as const)[Math.floor(Math.random() * 3)];
     ui.setSelectedMode(mode);
