@@ -24,7 +24,8 @@ __patch_*.js
 *development-log*.md
 
 # 开发临时脚本
-fix_*.cjs
+temp_*
+fix_*
 find_block.cjs
 inject_cookie.*
 append_log.ps1
