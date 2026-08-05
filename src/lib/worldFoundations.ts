@@ -32,7 +32,7 @@ export const WORLD_FOUNDATIONS: WorldFoundation[] = [
   },
   {
     id: "cultivation",
-    label: "修炼",
+    label: "修仙",
     description: "灵气、境界、宗门、法宝与超凡因果的通用底座。",
     builtinBookId: "wb-builtin-xianxia",
     aliases: ["修仙", "仙侠", "玄幻", "修炼"],
