@@ -115,8 +115,8 @@ export function TopicSelect() {
       setGridOverflow("hidden");
     } else if (gridRef.current) {
       setGridOverflow("visible");
-      const h = gridRef.current.scrollHeight;
-      setGridMaxH(`${h}px`);
+      // 展开：直接移除 max-height 限制（瞬时，避免 max-height 过渡中间值小于内容高度导致 grid 行被压缩成细条）
+      setGridMaxH("none");
       // 展开时清理所有 inline 残留（切换标签时旧卡被手动置 0 的 opacity 需恢复，避免空白格）
       clearCardTransforms();
       // 仅从锁定状态恢复时才滚回顶部；点卡片主体（未锁定）不改变滚动位置
@@ -268,15 +268,17 @@ export function TopicSelect() {
             <button
               key={tab.key}
               onClick={() => {
-                // 切换频道 tab：重置锁定/排序/选中状态（不同频道的题材列表不同，避免排序引用失效）
+                // 切换频道 tab：重置锁定/排序/选中/隐藏状态（不同频道的题材列表不同，避免排序引用失效与卡片被过滤）
                 if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
                 setContracted(false);
+                setHideOthers(false);
                 setSorted(false);
                 setSortedTopicId(null);
                 setLabelLock(false);
                 setSelected(null);
                 setSelectedBase(null);
                 clearCardTransforms();
+                setGridMaxH("6000px");
                 setAudienceFilter(tab.key);
               }}
               style={{
