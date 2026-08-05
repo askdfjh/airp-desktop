@@ -30,6 +30,7 @@ export function TopicSelect() {
   const [sorted, setSorted] = useState(false);
   const [sortedTopicId, setSortedTopicId] = useState<string | null>(null);
   const [contracted, setContracted] = useState(false);
+  const [hideOthers, setHideOthers] = useState(false);
   const [gridMaxH, setGridMaxH] = useState<string>("6000px");
   const [gridOverflow, setGridOverflow] = useState<"visible" | "hidden">("visible");
   const selectedCardRef = useRef<HTMLDivElement | null>(null);
@@ -98,12 +99,15 @@ export function TopicSelect() {
     const ob = document.querySelector(".seed-onboarding");
     const wasLocked = prevLockRef.current;
     prevLockRef.current = !!labelLock;
-    if (labelLock && contracted && selectedCardRef.current) {
+    if (labelLock && contracted && selectedCardRef.current && gridRef.current) {
       setGridOverflow("hidden");
-      // 一行高度（随机卡占第一格，选中卡第二格同行）+ 顶部 padding 8 + 底部 26px 阴影余量
-      // 防御：offsetHeight 异常（安卓 WebView 布局未就绪时为 0）时兜底卡片高度，避免网格裁成细条
+      // 高度 = 实际行数 × 卡高（随机卡+选中卡：多列同行 1 行；单列上下 2 行）+ gap + 上下余量。
+      // 避免单列布局下 grid 行被 maxHeight 压缩成细条
       const cardH = selectedCardRef.current.offsetHeight;
-      const h = Math.max(Number.isFinite(cardH) ? cardH : 0, 120) + 34;
+      const gridW = gridRef.current.clientWidth;
+      const cols = Math.max(1, Math.floor((gridW + 16) / 236));
+      const rows = cols > 1 ? 1 : 2;
+      const h = Math.max(Number.isFinite(cardH) ? cardH : 120, 120) * rows + (rows > 1 ? 16 : 0) + 34;
       setGridMaxH(`${h}px`);
       // 瞬间滚回顶部（与收缩动画同步执行，避免 smooth 滚动与 maxHeight 过渡竞争导致底部截断）
       ob?.scrollTo({ top: 0 });
@@ -152,6 +156,7 @@ export function TopicSelect() {
     if (selected === topic.id && labelLock && selectedBase === baseId) {
       if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
       setContracted(false);
+      setHideOthers(false);
       setLabelLock(false);
       // 若滑动动画未完成（transform 位移残留），平滑归零到 DOM 位置
       if (selectedCardRef.current) {
@@ -184,15 +189,23 @@ export function TopicSelect() {
       flipPosRef.current = { x: r.left, y: r.top };
     }
     setContracted(false);
+    setHideOthers(false);
     setSorted(true);
     setSortedTopicId(topic.id);
     setLabelLock(true);
     void chooseTopic(topic, baseId);
     if (wasLocked) {
-      // 切换卡片：下一帧直接收缩 + 新卡滑动（旧卡已瞬隐，无需等待淡出）
-      requestAnimationFrame(() => setContracted(true));
+      // 切换卡片：下一帧直接收缩 + 移除其他卡 + 新卡滑动（旧卡已瞬隐，无需等待淡出）
+      requestAnimationFrame(() => {
+        setContracted(true);
+        setHideOthers(true);
+      });
     } else {
-      contractTimerRef.current = setTimeout(() => setContracted(true), 460);
+      // 锁定：先淡出其他卡（0.45s），完成后移除其他卡并收缩（避免单列布局下 grid 行被 maxHeight 压缩）
+      contractTimerRef.current = setTimeout(() => {
+        setContracted(true);
+        setHideOthers(true);
+      }, 460);
     }
   };
 
@@ -201,6 +214,7 @@ export function TopicSelect() {
     const topic = pool[Math.floor(Math.random() * pool.length)];
     if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
     setContracted(false);
+    setHideOthers(false);
     setSorted(false);
     setSortedTopicId(null);
     setLabelLock(false);
@@ -283,7 +297,7 @@ export function TopicSelect() {
         })}
       </div>
 
-      <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: gridOverflow, transition: "max-height 0.5s ease", paddingTop: labelLock ? 8 : 0, paddingBottom: labelLock ? 26 : 0, paddingLeft: labelLock ? 4 : 0, paddingRight: labelLock ? 4 : 0, marginTop: labelLock ? -8 : 0, marginLeft: labelLock ? -4 : 0, marginRight: labelLock ? -4 : 0 }}>
+      <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: gridOverflow, transition: "max-height 0.5s ease", alignContent: labelLock ? "start" : undefined, paddingTop: labelLock ? 8 : 0, paddingBottom: labelLock ? 26 : 0, paddingLeft: labelLock ? 4 : 0, paddingRight: labelLock ? 4 : 0, marginTop: labelLock ? -8 : 0, marginLeft: labelLock ? -4 : 0, marginRight: labelLock ? -4 : 0 }}>
         {/* 随机题材卡固定第一位，锁定收缩时保持可见（与选中卡同行） */}
         <div
           className="seed-card seed-card--custom"
@@ -302,6 +316,8 @@ export function TopicSelect() {
         </div>
 
         {sortedTopics.map((topic) => {
+          // 淡出完成后移除其他卡（网格只剩随机卡+选中卡一行，避免单列布局下 grid 行被 maxHeight 压缩）
+          if (hideOthers && selected !== topic.id) return null;
           const trope = getTropeById(topic.tropeId);
           const baseOptions = [topic.worldBaseId, ...topic.expandableWorldBaseIds];
           const isSelectedCard = selected === topic.id;
@@ -313,13 +329,14 @@ export function TopicSelect() {
               ref={isSelectedCard ? selectedCardRef : undefined}
               className={`seed-card ${isSelectedCard ? "seed-card--selected" : ""} ${hidden ? "seed-card--collapsed" : ""} ${labelLock && isSelectedCard ? "seed-card--locked" : ""}`}
               onClick={() => {
+                if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
+                setContracted(false);
+                setHideOthers(false);
                 // 单底座题材（无其他标签）：点击主体即选择（走锁定流程）
                 if (topic.expandableWorldBaseIds.length === 0) {
                   pickBase(topic, topic.worldBaseId);
                   return;
                 }
-                if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
-                setContracted(false);
                 setLabelLock(false);
                 void chooseTopic(topic);
               }}
