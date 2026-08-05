@@ -54,8 +54,18 @@ export function TopicSelect() {
     if (sorted && labelLock && selectedCardRef.current && flipPosRef.current) {
       const card = selectedCardRef.current;
       const r = card.getBoundingClientRect();
+      // 防御：布局未就绪（rect 为 0/异常，如安卓 WebView 初始视口）或位移异常时跳过 FLIP，
+      // 卡片直接定位，避免被推离可视区导致"缩小成圆角矩形"
+      if (r.width <= 0 || r.height <= 0 || !Number.isFinite(r.left) || !Number.isFinite(r.top)) {
+        flipPosRef.current = null;
+        return;
+      }
       const dx = flipPosRef.current.x - r.left;
       const dy = flipPosRef.current.y - r.top;
+      if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.abs(dx) > 5000 || Math.abs(dy) > 5000) {
+        flipPosRef.current = null;
+        return;
+      }
       card.style.transition = "none";
       card.style.transform = `translate(${dx}px, ${dy}px)`;
       flipPosRef.current = null;
@@ -91,7 +101,9 @@ export function TopicSelect() {
     if (labelLock && contracted && selectedCardRef.current) {
       setGridOverflow("hidden");
       // 一行高度（随机卡占第一格，选中卡第二格同行）+ 顶部 padding 8 + 底部 26px 阴影余量
-      const h = selectedCardRef.current.offsetHeight + 34;
+      // 防御：offsetHeight 异常（安卓 WebView 布局未就绪时为 0）时兜底卡片高度，避免网格裁成细条
+      const cardH = selectedCardRef.current.offsetHeight;
+      const h = Math.max(Number.isFinite(cardH) ? cardH : 0, 120) + 34;
       setGridMaxH(`${h}px`);
       // 瞬间滚回顶部（与收缩动画同步执行，避免 smooth 滚动与 maxHeight 过渡竞争导致底部截断）
       ob?.scrollTo({ top: 0 });
