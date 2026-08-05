@@ -27,23 +27,27 @@ export function TopicSelect() {
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedBase, setSelectedBase] = useState<string | null>(null);
   const [labelLock, setLabelLock] = useState(false);
+  const [hideOthers, setHideOthers] = useState(false);
   const [gridMaxH, setGridMaxH] = useState<string>("6000px");
   const [gridOverflow, setGridOverflow] = useState<"visible" | "hidden">("visible");
   const selectedCardRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [audienceFilter, setAudienceFilter] = useState<WorldAudienceFilter>("all");
   const topics = getTopicSchemesByAudience(audienceFilter);
 
-  // 标签锁定（隐藏其他题材）时：网格高度收缩到选中卡片，让确认按钮平滑上移
-  // 取消时：展开到网格实际内容高度（与收缩动画对称）
-  // overflow 仅在锁定时 hidden（裁切隐藏卡片）；展开态 visible，避免卡片 hover 阴影被裁
+  // 标签锁定：先淡出其他卡片（collapsed 占位），动画完成后真正移除（unmount），
+  // 让选中卡片回到网格第一行，再收缩高度 —— 修复第二排以下卡片选中后被顶到裁切区外的问题
   useEffect(() => {
     const ob = document.querySelector(".seed-onboarding");
-    if (labelLock && selectedCardRef.current) {
+    if (labelLock && hideOthers && selectedCardRef.current) {
       setGridOverflow("hidden");
-      // 立即收缩：布局高 + 底部 24px 阴影余量（无 transform，无需延迟测量）
-      const h = selectedCardRef.current.offsetHeight + 24;
+      // 布局高 + 顶部 padding 8 + 底部 26px 阴影余量
+      const h = selectedCardRef.current.offsetHeight + 34;
       requestAnimationFrame(() => setGridMaxH(`${h}px`));
+      ob?.scrollTo({ top: 0, behavior: "smooth" });
+    } else if (labelLock && !hideOthers) {
+      setGridOverflow("hidden");
       ob?.scrollTo({ top: 0, behavior: "smooth" });
     } else if (gridRef.current) {
       setGridOverflow("visible");
@@ -51,7 +55,7 @@ export function TopicSelect() {
       requestAnimationFrame(() => setGridMaxH(`${h}px`));
       ob?.scrollTo({ top: 0, behavior: "smooth" });
     }
-  }, [labelLock, selected]);
+  }, [labelLock, hideOthers, selected]);
 
   const chooseTopic = async (topic: TopicScheme, baseId?: string) => {
     const worldBaseId = baseId && (topic.expandableWorldBaseIds as string[]).includes(baseId) ? baseId : topic.worldBaseId;
@@ -78,6 +82,24 @@ export function TopicSelect() {
     } else {
       await deactivateAllBooks();
     }
+  };
+
+  const pickBase = (topic: TopicScheme, baseId: string) => {
+    // 再点同一标签 → 取消选择，恢复全部卡片
+    if (selected === topic.id && labelLock && selectedBase === baseId) {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      setHideOthers(false);
+      setSelected(null);
+      setSelectedBase(null);
+      setLabelLock(false);
+      return;
+    }
+    // 锁定：先淡出其他卡片，动画完成后真正移除（选中卡回到第一行）
+    setHideOthers(false);
+    setLabelLock(true);
+    void chooseTopic(topic, baseId);
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => setHideOthers(true), 460);
   };
 
   const randomTopic = () => {
@@ -151,24 +173,27 @@ export function TopicSelect() {
         })}
       </div>
 
-      <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: gridOverflow, transition: "max-height 0.5s ease", paddingTop: labelLock ? 8 : 0, marginTop: labelLock ? -8 : 0 }}>
-        <div
-          className={`seed-card seed-card--custom ${labelLock ? "seed-card--collapsed" : ""}`}
-          onClick={randomTopic}
-          style={{
-            padding: "22px 20px",
-            cursor: "pointer",
-            border: "1px dashed color-mix(in srgb, var(--seed-accent) 45%, transparent)",
-            background: "color-mix(in srgb, var(--seed-accent) 6%, transparent)",
-          }}
-        >
-          <div className="seed-card-title" style={{ marginBottom: 8 }}>随机题材</div>
-          <div className="seed-card-desc">
-            {audienceFilter === "all" ? "从全部题材里随机" : audienceFilter === "male" ? "只从男频题材里随机" : "只从女频题材里随机"}
+      <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: gridOverflow, transition: "max-height 0.5s ease", paddingTop: labelLock ? 8 : 0, paddingBottom: labelLock ? 26 : 0, marginTop: labelLock ? -8 : 0 }}>
+        {!hideOthers && (
+          <div
+            className={`seed-card seed-card--custom ${labelLock ? "seed-card--collapsed" : ""}`}
+            onClick={randomTopic}
+            style={{
+              padding: "22px 20px",
+              cursor: "pointer",
+              border: "1px dashed color-mix(in srgb, var(--seed-accent) 45%, transparent)",
+              background: "color-mix(in srgb, var(--seed-accent) 6%, transparent)",
+            }}
+          >
+            <div className="seed-card-title" style={{ marginBottom: 8 }}>随机题材</div>
+            <div className="seed-card-desc">
+              {audienceFilter === "all" ? "从全部题材里随机" : audienceFilter === "male" ? "只从男频题材里随机" : "只从女频题材里随机"}
+            </div>
           </div>
-        </div>
+        )}
 
         {topics.map((topic) => {
+          if (hideOthers && selected !== topic.id) return null;
           const trope = getTropeById(topic.tropeId);
           const baseOptions = [topic.worldBaseId, ...topic.expandableWorldBaseIds];
           const isSelectedCard = selected === topic.id;
@@ -179,6 +204,8 @@ export function TopicSelect() {
               ref={isSelectedCard ? selectedCardRef : undefined}
               className={`seed-card ${isSelectedCard ? "seed-card--selected" : ""} ${hidden ? "seed-card--collapsed" : ""} ${labelLock && isSelectedCard ? "seed-card--locked" : ""}`}
               onClick={() => {
+                if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+                setHideOthers(false);
                 setLabelLock(false);
                 void chooseTopic(topic);
               }}
@@ -194,20 +221,12 @@ export function TopicSelect() {
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {baseOptions.map((baseId) => {
                   const isSelected = isSelectedCard && selectedBase === baseId;
-                  const isLocked = isSelectedCard && labelLock && selectedBase === baseId;
                   return (
                     <button
                       key={baseId}
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (isLocked) {
-                          setSelected(null);
-                          setSelectedBase(null);
-                          setLabelLock(false);
-                          return;
-                        }
-                        setLabelLock(true);
-                        void chooseTopic(topic, baseId);
+                        pickBase(topic, baseId);
                       }}
                       style={{
                         fontSize: 12,
