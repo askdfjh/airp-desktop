@@ -92,7 +92,7 @@ export function TopicSelect() {
       setGridOverflow("hidden");
       // 一行高度（随机卡占第一格，选中卡第二格同行）+ 顶部 padding 8 + 底部 26px 阴影余量
       const h = selectedCardRef.current.offsetHeight + 34;
-      requestAnimationFrame(() => setGridMaxH(`${h}px`));
+      setGridMaxH(`${h}px`);
       // 瞬间滚回顶部（与收缩动画同步执行，避免 smooth 滚动与 maxHeight 过渡竞争导致底部截断）
       ob?.scrollTo({ top: 0 });
     } else if (labelLock && !contracted) {
@@ -100,7 +100,7 @@ export function TopicSelect() {
     } else if (gridRef.current) {
       setGridOverflow("visible");
       const h = gridRef.current.scrollHeight;
-      requestAnimationFrame(() => setGridMaxH(`${h}px`));
+      setGridMaxH(`${h}px`);
       // 展开时清理所有 inline 残留（切换标签时旧卡被手动置 0 的 opacity 需恢复，避免空白格）
       clearCardTransforms();
       // 仅从锁定状态恢复时才滚回顶部；点卡片主体（未锁定）不改变滚动位置
