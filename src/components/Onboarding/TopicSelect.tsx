@@ -151,7 +151,7 @@ export function TopicSelect() {
         })}
       </div>
 
-      <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: gridOverflow, transition: "max-height 0.5s ease" }}>
+      <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: gridOverflow, transition: "max-height 0.5s ease", paddingTop: labelLock ? 8 : 0, marginTop: labelLock ? -8 : 0 }}>
         <div
           className={`seed-card seed-card--custom ${labelLock ? "seed-card--collapsed" : ""}`}
           onClick={randomTopic}
