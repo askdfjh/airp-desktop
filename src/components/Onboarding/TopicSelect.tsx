@@ -84,17 +84,25 @@ export function TopicSelect() {
   };
 
   const pickBase = (topic: TopicScheme, baseId: string) => {
-    // 再点同一标签 → 取消选择，恢复全部卡片（先滑回，再淡入展开）
+    // 再点同一标签 → 取消选择：先平滑滑回原位，再淡入展开
     if (selected === topic.id && labelLock && selectedBase === baseId) {
       if (slideTimerRef.current) clearTimeout(slideTimerRef.current);
       setSlideApplied(false);
-      setSelected(null);
-      setSelectedBase(null);
-      setLabelLock(false);
+      slideTimerRef.current = setTimeout(() => {
+        setSelected(null);
+        setSelectedBase(null);
+        setLabelLock(false);
+      }, 520);
       return;
     }
-    // 锁定：其他卡片先淡出，淡出完成后（460ms）选中卡片再滑动归位
     if (slideTimerRef.current) clearTimeout(slideTimerRef.current);
+    if (selected === topic.id) {
+      // 同一卡片切换底座：保持锁定与滑动位置，仅更新底座，不重播动画
+      setLabelLock(true);
+      void chooseTopic(topic, baseId);
+      return;
+    }
+    // 锁定新卡片：其他卡片先淡出，淡出完成后（460ms）选中卡片再滑动归位
     setSlideApplied(false);
     setLabelLock(true);
     void chooseTopic(topic, baseId);
@@ -227,7 +235,7 @@ export function TopicSelect() {
                 padding: "22px 20px",
                 cursor: "pointer",
                 transform: slideTransform,
-                transition: slideTransform
+                transition: labelLock && isSelectedCard
                   ? "transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.45s ease, box-shadow 0.45s ease"
                   : undefined,
               }}
