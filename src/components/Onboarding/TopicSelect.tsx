@@ -173,7 +173,7 @@ export function TopicSelect() {
         })}
       </div>
 
-      <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: gridOverflow, transition: "max-height 0.5s ease", paddingTop: labelLock ? 8 : 0, paddingBottom: labelLock ? 26 : 0, marginTop: labelLock ? -8 : 0 }}>
+      <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: gridOverflow, transition: "max-height 0.5s ease", paddingTop: labelLock ? 8 : 0, paddingBottom: labelLock ? 26 : 0, paddingLeft: labelLock ? 4 : 0, marginTop: labelLock ? -8 : 0, marginLeft: labelLock ? -4 : 0 }}>
         {!hideOthers && (
           <div
             className={`seed-card seed-card--custom ${labelLock ? "seed-card--collapsed" : ""}`}
@@ -200,9 +200,9 @@ export function TopicSelect() {
           const hidden = labelLock && !isSelectedCard;
           return (
             <div
-              key={topic.id}
+              key={isSelectedCard && hideOthers ? `${topic.id}-settled` : topic.id}
               ref={isSelectedCard ? selectedCardRef : undefined}
-              className={`seed-card ${isSelectedCard ? "seed-card--selected" : ""} ${hidden ? "seed-card--collapsed" : ""} ${labelLock && isSelectedCard ? "seed-card--locked" : ""}`}
+              className={`seed-card ${isSelectedCard ? "seed-card--selected" : ""} ${hidden ? "seed-card--collapsed" : ""} ${labelLock && isSelectedCard ? "seed-card--locked" : ""} ${hideOthers && isSelectedCard ? "seed-card--settling" : ""}`}
               onClick={() => {
                 if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
                 setHideOthers(false);
