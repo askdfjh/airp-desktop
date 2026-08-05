@@ -30,3 +30,6 @@ find_block.cjs
 inject_cookie.*
 append_log.ps1
 _fix_bar.js
+
+# Release APK 产物（本地保存，不入库）
+releases/
