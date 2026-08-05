@@ -24,12 +24,14 @@ export function TopicSelect() {
   const setActiveBook = useWorldStore((s) => s.setActiveBook);
   const deactivateAllBooks = useWorldStore((s) => s.deactivateAllBooks);
   const [selected, setSelected] = useState<string | null>(null);
+  const [selectedBase, setSelectedBase] = useState<string | null>(null);
   const [audienceFilter, setAudienceFilter] = useState<WorldAudienceFilter>("all");
   const topics = getTopicSchemesByAudience(audienceFilter);
 
   const chooseTopic = async (topic: TopicScheme, baseId?: string) => {
     const worldBaseId = baseId && (topic.expandableWorldBaseIds as string[]).includes(baseId) ? baseId : topic.worldBaseId;
     setSelected(topic.id);
+    setSelectedBase(worldBaseId);
     const foundation = getWorldFoundation(worldBaseId);
     const bookId = foundation.builtinBookId || books.find((b) => b.id === worldBaseId || b.theme === worldBaseId)?.id;
     const selectedBook = bookId ? books.find((b) => b.id === bookId) || null : null;
@@ -50,8 +52,6 @@ export function TopicSelect() {
     } else {
       await deactivateAllBooks();
     }
-
-    setTimeout(() => setOnboardingStep(2), 450);
   };
 
   const randomTopic = () => {
@@ -59,6 +59,12 @@ export function TopicSelect() {
     const topic = pool[Math.floor(Math.random() * pool.length)];
     if (topic) void chooseTopic(topic);
   };
+
+  const confirmTopic = () => {
+    if (selected) setOnboardingStep(2);
+  };
+
+  const selectedTopic = selected ? topics.find((t) => t.id === selected) || null : null;
 
   return (
     <div>
@@ -153,7 +159,7 @@ export function TopicSelect() {
               <div className="seed-card-desc" style={{ marginBottom: 12 }}>{topic.description}</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {baseOptions.map((baseId) => {
-                  const isDefault = baseId === topic.worldBaseId;
+                  const isSelected = selected === topic.id && selectedBase === baseId;
                   return (
                     <button
                       key={baseId}
@@ -162,17 +168,19 @@ export function TopicSelect() {
                         void chooseTopic(topic, baseId);
                       }}
                       style={{
-                        fontSize: 11,
-                        padding: "6px 12px",
+                        fontSize: 12,
+                        padding: "8px 14px",
                         borderRadius: 999,
                         cursor: "pointer",
                         fontFamily: "inherit",
-                        lineHeight: 1,
-                        background: isDefault ? "var(--seed-accent-bg)" : "var(--seed-hover-bg)",
-                        border: isDefault
-                          ? "1px solid color-mix(in srgb, var(--seed-accent) 40%, transparent)"
+                        lineHeight: 1.2,
+                        minHeight: 32,
+                        background: isSelected ? "var(--seed-accent-bg)" : "var(--seed-hover-bg)",
+                        border: isSelected
+                          ? "1px solid color-mix(in srgb, var(--seed-accent) 55%, transparent)"
                           : "1px solid var(--seed-border)",
-                        color: isDefault ? "var(--seed-accent)" : "var(--seed-muted)",
+                        color: isSelected ? "var(--seed-accent)" : "var(--seed-muted)",
+                        fontWeight: isSelected ? 600 : 400,
                         transition: "all 0.15s",
                       }}
                     >
@@ -186,8 +194,23 @@ export function TopicSelect() {
         })}
       </div>
 
-      <div style={{ textAlign: "center", marginTop: 24, fontSize: 13, color: "var(--seed-muted)", letterSpacing: "0.08em", fontWeight: 500 }}>
-        1 <span style={{ opacity: 0.4 }}>/ 3</span>
+      <div style={{ textAlign: "center", marginTop: 28 }}>
+        {selectedTopic ? (
+          <button
+            className="seed-cta"
+            onClick={confirmTopic}
+            style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: 15, height: 15 }}>
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
+            开始 · {selectedTopic.label}（{worldFoundationLabel(selectedBase)}）
+          </button>
+        ) : (
+          <div style={{ fontSize: 13, color: "var(--seed-muted)", letterSpacing: "0.08em", fontWeight: 500 }}>
+            1 <span style={{ opacity: 0.4 }}>/ 3</span>
+          </div>
+        )}
       </div>
     </div>
   );
