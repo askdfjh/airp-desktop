@@ -28,6 +28,7 @@ export function TopicSelect() {
   const [selectedBase, setSelectedBase] = useState<string | null>(null);
   const [labelLock, setLabelLock] = useState(false);
   const [sorted, setSorted] = useState(false);
+  const [sortedTopicId, setSortedTopicId] = useState<string | null>(null);
   const [contracted, setContracted] = useState(false);
   const [gridMaxH, setGridMaxH] = useState<string>("6000px");
   const [gridOverflow, setGridOverflow] = useState<"visible" | "hidden">("visible");
@@ -38,10 +39,10 @@ export function TopicSelect() {
   const [audienceFilter, setAudienceFilter] = useState<WorldAudienceFilter>("all");
   const topics = getTopicSchemesByAudience(audienceFilter);
 
-  // 仅在点标签（锁定）后排序：选中卡排到随机题材卡之后的第一个位置；点卡片主体不排序（不跳位）
+  // 仅在点标签（锁定）后排序：排序列表跟随 sortedTopicId（点卡片主体只改高亮，不改排序，避免跳回原位）
   // 随机题材卡始终固定渲染在网格第一位
-  const sortedTopics = sorted && selected
-    ? [topics.find((t) => t.id === selected)!, ...topics.filter((t) => t.id !== selected)]
+  const sortedTopics = sorted && sortedTopicId
+    ? [topics.find((t) => t.id === sortedTopicId)!, ...topics.filter((t) => t.id !== sortedTopicId)]
     : topics;
 
   // FLIP：DOM 排序重排后，先把选中卡瞬间位移回旧位置（无过渡），
@@ -124,6 +125,12 @@ export function TopicSelect() {
       if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
       setContracted(false);
       setLabelLock(false);
+      // 若滑动动画未完成（transform 位移残留），平滑归零到 DOM 位置
+      if (selectedCardRef.current) {
+        const card = selectedCardRef.current;
+        card.style.transition = "transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)";
+        card.style.transform = "translate(0px, 0px)";
+      }
       return;
     }
     if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
@@ -140,6 +147,7 @@ export function TopicSelect() {
     }
     setContracted(false);
     setSorted(true);
+    setSortedTopicId(topic.id);
     setLabelLock(true);
     void chooseTopic(topic, baseId);
     contractTimerRef.current = setTimeout(() => setContracted(true), 460);
@@ -151,6 +159,7 @@ export function TopicSelect() {
     if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
     setContracted(false);
     setSorted(false);
+    setSortedTopicId(null);
     setLabelLock(false);
     if (topic) void chooseTopic(topic);
   };
@@ -221,9 +230,9 @@ export function TopicSelect() {
       </div>
 
       <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: gridOverflow, transition: "max-height 0.5s ease", paddingTop: labelLock ? 8 : 0, paddingBottom: labelLock ? 26 : 0, paddingLeft: labelLock ? 4 : 0, paddingRight: labelLock ? 4 : 0, marginTop: labelLock ? -8 : 0, marginLeft: labelLock ? -4 : 0, marginRight: labelLock ? -4 : 0 }}>
-        {/* 随机题材卡固定第一位（收缩时以 collapsed 占位，选中卡与其同行） */}
+        {/* 随机题材卡固定第一位，锁定收缩时保持可见（与选中卡同行） */}
         <div
-          className={`seed-card seed-card--custom ${labelLock ? "seed-card--collapsed" : ""}`}
+          className="seed-card seed-card--custom"
           onClick={randomTopic}
           style={{
             padding: "22px 20px",
@@ -252,7 +261,6 @@ export function TopicSelect() {
               onClick={() => {
                 if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
                 setContracted(false);
-                setSorted(false);
                 setLabelLock(false);
                 void chooseTopic(topic);
               }}
