@@ -8,14 +8,19 @@ export function getTopicOpeningScenarios(
 ): OpeningScenario[] {
   const topic = getTopicScheme(topicSchemeId);
   if (!topic) return [];
-  const worldLabel = worldFoundationLabel(worldBaseId ?? topic.worldBaseId);
+  const base = worldBaseId ?? topic.worldBaseId;
+  const worldLabel = worldFoundationLabel(base);
+  // 底座专属 seeds 优先，通用 seeds（无 bases）兜底补位，保证最多 3 条
+  const specific = topic.openingSeeds.filter((seed) => (seed.bases as string[] | undefined)?.includes(base));
+  const generic = topic.openingSeeds.filter((seed) => !seed.bases);
+  const seeds = [...specific, ...generic].slice(0, 3);
 
-  return topic.openingSeeds.map((seed) => ({
+  return seeds.map((seed) => ({
     id: `topic:${topic.id}:${seed.id}`,
     name: seed.name,
     description: seed.focus,
     keywords: [topic.label, worldLabel, ...seed.tags].slice(0, 4),
-    theme: worldBaseId ?? topic.worldBaseId,
+    theme: base,
     systemPromptTemplate:
       `你正在写一部发生在「${worldLabel}」中的沉浸式故事。题材是「${topic.label}」。` +
       `\n题材基础：${topic.description}` +

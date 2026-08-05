@@ -4,6 +4,15 @@ import type { WorldAudienceFilter } from "@/lib/worldAudience";
 
 export type TopicAudience = "all" | "male" | "female";
 
+export interface TopicOpeningSeed {
+  id: string;
+  name: string;
+  focus: string;
+  tags: string[];
+  /** 限定可用的世界底座；缺省 = 通用（任意底座可用，作为兜底池） */
+  bases?: Exclude<WorldBaseId, "custom">[];
+}
+
 export interface TopicScheme {
   id: string;
   audience: TopicAudience;
@@ -13,12 +22,7 @@ export interface TopicScheme {
   tropeId: Exclude<HotTropeId, "none">;
   description: string;
   entryHints: string[];
-  openingSeeds: Array<{
-    id: string;
-    name: string;
-    focus: string;
-    tags: string[];
-  }>;
+  openingSeeds: TopicOpeningSeed[];
 }
 
 export const TOPIC_SCHEMES: TopicScheme[] = [
@@ -35,6 +39,12 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "node", name: "回到关键节点", focus: "主角醒来发现自己回到命运转折发生前，必须马上做出和上一世不同的选择。", tags: ["记忆", "选择"] },
       { id: "mistake", name: "错误即将重演", focus: "上一世导致长期失败的错误正在眼前重演，主角知道后果，却还没有足够筹码说服别人。", tags: ["避坑", "压力"] },
       { id: "chance", name: "先机窗口打开", focus: "一个上一世后来才被证明极重要的机会提前出现，主角必须决定是否押上现有资源。", tags: ["资源", "先机"] },
+      { id: "evict", name: "抄家前夜重生", focus: "回到满门获罪前夜，前世记忆里抄家队伍正在开进府门，这一次他要先一步改写全家命运。", tags: ["记忆", "抄家", "改命"], bases: ["ancient"] },
+      { id: "banquet", name: "宫宴失仪真相", focus: "重生回一场决定前程的宫宴，前世他在这里失仪被贬，如今他清楚每一双眼睛背后的算计。", tags: ["宫宴", "朝局"], bases: ["ancient"] },
+      { id: "spy", name: "旧奴告密", focus: "上一世害他倾家荡产的旧奴正在向对家递话，这一世他提前按住了那只手。", tags: ["背叛", "反击"], bases: ["ancient"] },
+      { id: "tribulation", name: "渡劫前夜重生", focus: "回到天劫降临前夜，前世他在此灰飞烟灭，这一次境界未破，他却已知道劫云之下藏着什么。", tags: ["渡劫", "先机"], bases: ["cultivation"] },
+      { id: "outerdoor", name: "外门藏宝地", focus: "重生回宗门收徒那日，前世无人问津的外门杂役如今在他眼里是一处藏着大机缘的地方。", tags: ["机缘", "抢先"], bases: ["cultivation"] },
+      { id: "danfang", name: "丹方之争", focus: "前世害死师父的丹方之争即将开炉，他带着记忆提前落子，这次要在众目睽睽下翻盘。", tags: ["丹方", "复仇"], bases: ["cultivation"] },
     ],
   },
   {
@@ -50,6 +60,15 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "wake", name: "醒来换了身份", focus: "主角醒来发现自己有了新的身份，周围人都默认他/她知道这里的规矩。", tags: ["身份", "适应"] },
       { id: "plot", name: "剧情节点逼近", focus: "主角刚弄清处境，就发现原本会让自己倒霉的剧情节点已经开始。", tags: ["剧情", "自救"] },
       { id: "public", name: "众目睽睽露馅", focus: "主角在公开场合被迫应对陌生身份，稍有差错就会引来怀疑。", tags: ["危机", "伪装"] },
+      { id: "danlu", name: "醒来已是废丹炉", focus: "穿越成宗门炼丹房打杂的记名弟子，原身昨夜偷服丹药暴毙，此刻炉火正燃，门外师兄已在盘问。", tags: ["身份", "炼丹"], bases: ["cultivation"] },
+      { id: "sectlist", name: "宗门大比名单", focus: "穿越第一天就撞上宗门大比抽签，原身是被点名的炮灰，而他知道规则里有一个从没人试过的漏洞。", tags: ["大比", "规则"], bases: ["cultivation"] },
+      { id: "soulcheck", name: "夺舍疑云", focus: "醒来时自己正被按在问心石前验魂，长老怀疑他换了芯子，每一句回答都决定生死。", tags: ["验魂", "危机"], bases: ["cultivation"] },
+      { id: "noble", name: "贵族晚宴露馅", focus: "穿越成异世界落魄贵族之子，晚宴上主人递来一杯他根本叫不出名字的魔法酒。", tags: ["身份", "异世界"], bases: ["otherworld"] },
+      { id: "tower", name: "魔导塔实习", focus: "学院魔导塔招实习生，原身连最基础的法阵都画错，而塔里的古魔导书正等着他翻开。", tags: ["魔法", "学院"], bases: ["otherworld"] },
+      { id: "beasttide", name: "兽潮压境", focus: "穿越第二天，城外兽潮来袭，王城征兵令贴到门上，原身的名字赫然在列。", tags: ["兽潮", "危机"], bases: ["otherworld"] },
+      { id: "livefail", name: "直播事故现场", focus: "穿成网红公司新签的十八线艺人，开播前一小时经纪人把一份会翻车的台本拍在她面前。", tags: ["直播", "危机"], bases: ["modern"] },
+      { id: "coverjob", name: "顶替入职", focus: "穿成替亲戚顶班进大厂的临时工，第一天晨会就撞见原身欠下的烂账。", tags: ["职场", "身份"], bases: ["modern"] },
+      { id: "erroom", name: "手术室门外", focus: "穿成急诊科新医生，第一台手术前的病历上写着她完全陌生的术语。", tags: ["医疗", "身份危机"], bases: ["modern"] },
     ],
   },
   {
@@ -65,6 +84,15 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "panel", name: "系统面板弹出", focus: "系统第一次出现，给出奖励诱人的任务，同时标明失败代价。", tags: ["任务", "代价"] },
       { id: "choice", name: "新手任务二选一", focus: "系统同时给出稳妥和冒险两条路线，主角必须选择第一步。", tags: ["选择", "奖励"] },
       { id: "penalty", name: "违规惩罚触发", focus: "主角还没摸清系统规则，就因为一次小动作触发了惩罚提示。", tags: ["规则", "危机"] },
+      { id: "metro", name: "早高峰面板", focus: "系统面板在早高峰地铁上弹出，第一任务要求三站内找到一位「有缘人」，失败代价是倒霉一天。", tags: ["任务", "地铁"], bases: ["modern"] },
+      { id: "takeout", name: "外卖第一单", focus: "系统给他一个路边摊和一笔外卖订单，赚到第一桶金才有下一步权限。", tags: ["创业", "任务"], bases: ["modern"] },
+      { id: "fans", name: "涨粉任务", focus: "系统要求他三小时内涨粉一万，而他手里只有一个手机和一段黑料。", tags: ["涨粉", "任务"], bases: ["modern"] },
+      { id: "books", name: "账房亏空", focus: "系统在当铺账房上线，第一任务：从烂账里找出亏空，三天内追回银两。", tags: ["账房", "任务"], bases: ["ancient"] },
+      { id: "keju", name: "科举指控", focus: "系统任务要求他在殿试前保住功名，而有人已经把作弊证据递进了大理寺。", tags: ["科举", "危机"], bases: ["ancient"] },
+      { id: "escort", name: "镖局第一单", focus: "系统让他接下没人敢接的押镖单，酬劳翻倍，代价是路上的三拨劫匪。", tags: ["镖局", "任务"], bases: ["ancient"] },
+      { id: "mage", name: "法师塔签到", focus: "系统让他以零阶法师的身份走进法师塔签到，每一层塔主都在等一个学徒犯错。", tags: ["法师塔", "任务"], bases: ["otherworld"] },
+      { id: "bounty", name: "王国悬赏", focus: "系统发布悬赏：活捉边境的独角兽，赏金足够还清原身的债。", tags: ["悬赏", "任务"], bases: ["otherworld"] },
+      { id: "blackcard", name: "拍卖行黑卡", focus: "系统送他一张没有余额的黑卡，并警告：用错一次就永久解绑。", tags: ["拍卖", "限制"], bases: ["otherworld"] },
     ],
   },
   {
@@ -80,6 +108,12 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "blackout", name: "停电第一夜", focus: "城市突然停电，通讯开始中断，主角听见楼道里传来第一声异常动静。", tags: ["断电", "异常"] },
       { id: "market", name: "超市物资争夺", focus: "主角赶到超市时，货架前已经聚起人群，恐慌和争抢马上失控。", tags: ["物资", "冲突"] },
       { id: "shelter", name: "避难所门口", focus: "避难所只剩最后名额，主角带着有限物资站在门口，必须决定带谁进去。", tags: ["避难所", "选择"] },
+      { id: "spacecity", name: "断电的太空城", focus: "太空城核心区突然断电，AI 管家声称一切正常，而舱门正在一间间打开。", tags: ["太空", "异常"], bases: ["future"] },
+      { id: "cyber", name: "义体回收站", focus: "末世废土上，义体回收站是他的栖身地，今天回收箱里多了一具还会动的旧型号。", tags: ["义体", "废土"], bases: ["future"] },
+      { id: "clone", name: "克隆城警报", focus: "克隆城拉响生化警报，所有复制体开始自检，只有他知道自己那份基因档案是伪造的。", tags: ["克隆", "警报"], bases: ["future"] },
+      { id: "lingqi", name: "灵气倒灌第一夜", focus: "灵气倒灌淹没城市，第一夜整栋楼的人在停电中听见窗外传来诵经声和兽吼。", tags: ["灵气", "灾变"], bases: ["cultivation"] },
+      { id: "corpse", name: "宗门尸潮围山", focus: "山门被尸潮围困，护山大阵只剩最后一层，守山长老把最后一块灵石交到他手里。", tags: ["尸潮", "守山"], bases: ["cultivation"] },
+      { id: "danzha", name: "丹炉炸裂后的求生", focus: "灵气复苏之夜，他炸了师父的丹炉，炉灰里爬出来的东西正在追杀全城修士。", tags: ["丹炉", "求生"], bases: ["cultivation"] },
     ],
   },
   {
@@ -110,6 +144,9 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "note", name: "墙上的纸条", focus: "主角在陌生空间醒来，墙上贴着几条互相矛盾的规则。", tags: ["纸条", "规则"] },
       { id: "neighbor", name: "邻居违反禁忌", focus: "主角还在读规则，隔壁已经有人违反禁忌，异常反应立刻发生。", tags: ["禁忌", "目击"] },
       { id: "hour", name: "午夜规则变更", focus: "午夜一到，原本安全的规则突然改写，主角必须重新判断什么还能相信。", tags: ["午夜", "变更"] },
+      { id: "note2", name: "副本规则纸条", focus: "进入副本的第一张纸条写着「不要相信任何同伴」，而他的队友正热情地伸来援手。", tags: ["纸条", "副本"], bases: ["infinite"] },
+      { id: "floor", name: "午夜楼层变更", focus: "午夜一到，副本楼层重新排列，他记住的安全出口整层消失了。", tags: ["午夜", "副本"], bases: ["infinite"] },
+      { id: "trap", name: "通关奖励陷阱", focus: "副本给出诱人奖励，规则却注明「奖励会在结算时向你索取代价」。", tags: ["奖励", "代价"], bases: ["infinite"] },
     ],
   },
   {
@@ -125,6 +162,15 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "shop", name: "第一间铺子", focus: "主角接手一间快倒闭的小铺，账本亏空，第一位客人却带来转机。", tags: ["店铺", "账本"] },
       { id: "land", name: "荒地到手", focus: "主角拿到一块没人看好的荒地，所有人都觉得这是赔本买卖。", tags: ["田产", "资源"] },
       { id: "order", name: "第一笔订单", focus: "主角刚开始经营，就接到一笔能力之外的大订单，成败会决定第一批口碑。", tags: ["订单", "机会"] },
+      { id: "cityshop", name: "城中村旧货店", focus: "接手城中村一家快倒闭的旧货店，账本亏空，第一位客人却点名要一件仓库里不存在的货。", tags: ["开店", "账本"], bases: ["modern"] },
+      { id: "nightmarket", name: "夜市摊位", focus: "夜市摊位的租约只剩三天，他靠一手祖传手艺在城管眼皮底下挣出第一笔钱。", tags: ["夜市", "手艺"], bases: ["modern"] },
+      { id: "farmlive", name: "直播间农货", focus: "滞销的农产品堆满仓库，他打开直播，第一单来自一个从不买菜的邻居。", tags: ["直播", "农货"], bases: ["modern"] },
+      { id: "lingtian", name: "荒废灵田", focus: "分到手的灵田荒废了三十年，邻居都当赔钱货，他却知道地底埋着一条废弃的灵脉。", tags: ["灵田", "灵脉"], bases: ["cultivation"] },
+      { id: "fangshi", name: "坊市小铺", focus: "坊市角落里一间积灰的小铺，第一单生意是给重伤的剑修赊一炉养伤丹。", tags: ["坊市", "丹铺"], bases: ["cultivation"] },
+      { id: "zayi", name: "杂役房账目", focus: "接手杂役房后他发现账上多了一笔不该有的灵石开支，顺着查下去是一张阴谋的网。", tags: ["杂役", "账目"], bases: ["cultivation"] },
+      { id: "bordertown", name: "边境荒镇", focus: "帝国边境的荒镇归他管辖，第一夜兽人斥候在镇口留下了一根燃烧的箭。", tags: ["荒镇", "边境"], bases: ["otherworld"] },
+      { id: "mine", name: "矿脉契约", focus: "一张无人认领的废弃矿脉契约，他花光积蓄买下，矿工们都在等着看笑话。", tags: ["矿脉", "契约"], bases: ["otherworld"] },
+      { id: "tavern", name: "冒险者酒馆", focus: "接手倒闭的冒险者酒馆，第一位客人是浑身是伤、悬赏满身的赏金猎人。", tags: ["酒馆", "冒险者"], bases: ["otherworld"] },
     ],
   },
   {
@@ -140,6 +186,9 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "village", name: "进村第一晚", focus: "主角因事进村借宿，村民反复提醒夜里听见敲门不要答应。", tags: ["乡村", "禁忌"] },
       { id: "ritual", name: "仪式被打断", focus: "一场地方仪式突然中断，所有人都看向主角，仿佛他/她不该出现在这里。", tags: ["仪式", "异常"] },
       { id: "inherit", name: "接下旧行当", focus: "主角继承一门民间行当，第一单生意就牵出多年旧事。", tags: ["传承", "旧事"] },
+      { id: "wildvillage", name: "荒村借宿", focus: "赶考途中借宿荒村，村民反复叮嘱夜里听见更声不要睁眼。", tags: ["荒村", "禁忌"], bases: ["ancient"] },
+      { id: "ancestral", name: "祠堂守夜", focus: "族长点名让他守祠堂第一夜，牌位背后的机关在子时自己转动了。", tags: ["祠堂", "机关"], bases: ["ancient"] },
+      { id: "oldtroupe", name: "旧戏班", focus: "接手父亲留下的旧戏班，第一场戏的戏台底下埋着一口没钉死的棺材。", tags: ["戏班", "棺材"], bases: ["ancient"] },
     ],
   },
   {
@@ -155,6 +204,12 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "test", name: "资质测试被低看", focus: "测试结果让众人嘲笑，主角却发现自己真正的力量不在常规体系里。", tags: ["测试", "逆袭"] },
       { id: "resource", name: "资源名额被抢", focus: "原本属于主角的资源名额被人强行夺走，第一场反击必须当场开始。", tags: ["资源", "反击"] },
       { id: "challenge", name: "越级挑战上门", focus: "比主角高一阶的人当众逼战，所有人都等着看他出丑。", tags: ["挑战", "战力"] },
+      { id: "kungfu", name: "武馆踢馆", focus: "武馆开业第一天就有人上门踢馆，他站出来时所有人都在等他出丑。", tags: ["踢馆", "反击"], bases: ["modern"] },
+      { id: "check", name: "武者考核", focus: "灵气复苏后的武者考核，测试官当众给他评了个不合格，而他知道下一场会有变故。", tags: ["考核", "逆袭"], bases: ["modern"] },
+      { id: "underground", name: "地下擂台", focus: "为救家人他站上地下擂台，对手是蝉联三届的擂主，押注的人全在笑话他。", tags: ["擂台", "翻身"], bases: ["modern"] },
+      { id: "servant", name: "将军府杂役", focus: "将军府最底层杂役，被当众罚跪时，他看见自己腰间的剑鞘亮了一瞬。", tags: ["杂役", "觉醒"], bases: ["ancient"] },
+      { id: "apprentice", name: "镖局学徒", focus: "镖局学徒第一趟镖就遇上山匪，他攥着师父给的半卷刀谱站到了最前面。", tags: ["学徒", "镖局"], bases: ["ancient"] },
+      { id: "wuju", name: "科举武试", focus: "武举考试第一轮就遇上主考官的刁难，他必须在一炷香里证明自己。", tags: ["武举", "证明"], bases: ["ancient"] },
     ],
   },
   {
@@ -170,6 +225,12 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "weak", name: "被当成弱者", focus: "主角被安排到最弱位置，旁人不知他早已看穿全局。", tags: ["装弱", "碾压"] },
       { id: "return", name: "故地重回", focus: "主角回到曾经离开的地方，旧人仍以旧眼光看他。", tags: ["归来", "旧人"] },
       { id: "casual", name: "随手解决危机", focus: "众人束手无策的危机，主角只是随手处理，却引来新的怀疑。", tags: ["隐藏", "危机"] },
+      { id: "sealtower", name: "封印塔新生", focus: "以「不会魔法」闻名的新生入学，而学院地底的封印塔在深夜亮起了他的印记。", tags: ["学院", "封印"], bases: ["otherworld"] },
+      { id: "mercenary", name: "佣兵榜菜鸟", focus: "佣兵榜上排名最后的菜鸟，接下赏金最高的任务，所有人都在赌他活不过三天。", tags: ["佣兵", "装弱"], bases: ["otherworld"] },
+      { id: "arena", name: "王城斗兽场", focus: "被推进王城斗兽场时，国王身边的占星师突然脸色大变。", tags: ["斗兽场", "隐藏"], bases: ["otherworld"] },
+      { id: "fortune", name: "天桥下算命摊", focus: "天桥下摆摊算命的年轻人，第一单算出客人三日后有血光之灾，客人转头叫来了一队人。", tags: ["算命", "隐藏"], bases: ["modern"] },
+      { id: "guard", name: "保安队长", focus: "全公司最没存在感的保安队长，直到大厦停电那夜，监控拍到他在顶楼徒手制服入侵者。", tags: ["隐藏", "碾压"], bases: ["modern"] },
+      { id: "bookshop", name: "旧书店老板", focus: "巷口旧书店老板被邻居当普通人使唤，直到一场拍卖会上他随手举牌买下失传的古卷。", tags: ["旧书店", "深藏"], bases: ["modern"] },
     ],
   },
   {
@@ -185,6 +246,12 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "hide", name: "测灵现场藏拙", focus: "主角明明能拿高评价，却故意压低表现，只求不被盯上。", tags: ["藏拙", "低调"] },
       { id: "list", name: "秘境名单被点名", focus: "主角最想避开的危险名单上突然出现自己的名字。", tags: ["避险", "秘境"] },
       { id: "stock", name: "大劫前夜囤丹药", focus: "主角知道灾劫将至，悄悄囤资源时被熟人撞见。", tags: ["囤资源", "大劫"] },
+      { id: "square", name: "测灵广场藏拙", focus: "灵气复苏广场测试，他明明觉醒高阶天赋，却故意报了个低阶。", tags: ["藏拙", "低调"], bases: ["modern"] },
+      { id: "hoard", name: "小区囤货", focus: "末日谣言四起，他连夜囤货时被邻居撞见，只能装成「跟风买打折米」。", tags: ["囤货", "掩饰"], bases: ["modern"] },
+      { id: "rollcall", name: "名单点名", focus: "官方觉醒者名单公示，他最怕出现的名字赫然在列，只能连夜收拾行李搬去城中村。", tags: ["名单", "避险"], bases: ["modern"] },
+      { id: "firstround", name: "副本首轮装弱", focus: "无限副本第一轮，他假装手忙脚乱，实际在记每个人的技能和弱点。", tags: ["装弱", "观察"], bases: ["infinite"] },
+      { id: "stockup", name: "安全区抢购", focus: "副本结算后安全区物价飞涨，他趁别人还没反应过来先囤够下轮物资。", tags: ["囤货", "先机"], bases: ["infinite"] },
+      { id: "highrisk", name: "高危房间", focus: "新副本地图标出三个高危房间，他主动选了最不起眼的那个。", tags: ["避险", "副本"], bases: ["infinite"] },
     ],
   },
   {
@@ -200,6 +267,12 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "proxy", name: "代理人第一次出手", focus: "主角不露面，只让代理人执行第一步布局。", tags: ["代理", "布局"] },
       { id: "rumor", name: "一条消息引爆局势", focus: "主角放出一条看似普通的信息，暗中推动多方反应。", tags: ["信息差", "操盘"] },
       { id: "board", name: "棋盘刚刚摆开", focus: "各方都以为自己在主动，只有主角知道第一枚棋子已经落位。", tags: ["幕后", "棋局"] },
+      { id: "teahouse", name: "茶楼听墙", focus: "不起眼的茶楼里，他每天听各路消息贩子闲谈，第一条布局就从一句闲话开始。", tags: ["情报", "布局"], bases: ["ancient"] },
+      { id: "intercept", name: "线人送信被截", focus: "他布的线人第一次送信就被截了，截信的人正等着他自投罗网。", tags: ["线人", "棋局"], bases: ["ancient"] },
+      { id: "bait", name: "赌坊放饵", focus: "在赌坊放出一枚假消息当饵，三股势力连夜动了手，而他只是添了一壶茶。", tags: ["放饵", "操盘"], bases: ["ancient"] },
+      { id: "ledger", name: "执事房算账", focus: "宗门执事房里最不起眼的记账弟子，从一笔错账里看出有人在掏空库房。", tags: ["账目", "宗门"], bases: ["cultivation"] },
+      { id: "winds", name: "坊市风向", focus: "坊市暗流涌动，他提前放出丹药涨价的消息，两天后所有目光都聚集到那间小铺。", tags: ["坊市", "操盘"], bases: ["cultivation"] },
+      { id: "outerchess", name: "外门棋局", focus: "外门弟子间的争斗被他用一封匿名信搅动，而真正的目标在长老院。", tags: ["外门", "布局"], bases: ["cultivation"] },
     ],
   },
   {
@@ -215,6 +288,12 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "order", name: "兵权被夺前夜", focus: "主角收到调令，知道一旦交出兵权就再无翻身机会。", tags: ["兵权", "朝局"] },
       { id: "court", name: "朝堂逼问", focus: "朝堂上多方围攻，主角必须在一句话里保住第一块筹码。", tags: ["朝堂", "博弈"] },
       { id: "border", name: "边关急报", focus: "边关突发急报，朝廷想把危局变成主角的罪名。", tags: ["边关", "危局"] },
+      { id: "sectpower", name: "宗门夺权夜", focus: "老宗主闭死关前夜，三峰长老各自站队，他手里握着一卷没人知道来历的传位诏书。", tags: ["宗门", "夺权"], bases: ["cultivation"] },
+      { id: "tax", name: "灵石税之争", focus: "新上任的灵石税官是他的人，第一道税令下去，整个坊市都炸了锅。", tags: ["税收", "朝局"], bases: ["cultivation"] },
+      { id: "borderlord", name: "边境小宗门", focus: "边境小宗门的少宗主，第一道命令就是砍掉向大派进贡的灵石车。", tags: ["边境", "立威"], bases: ["cultivation"] },
+      { id: "throne", name: "王位悬空", focus: "老国王驾崩，七位继承人各握兵权，他作为第八顺位只想活着，却被一封密信推上前台。", tags: ["王位", "密信"], bases: ["otherworld"] },
+      { id: "armory", name: "铁匠铺军械", focus: "接手王室铁匠铺，第一份订单是给王城卫队换装，而有人送来了掺了毒的图纸。", tags: ["军械", "阴谋"], bases: ["otherworld"] },
+      { id: "envoy", name: "外族使节", focus: "边境外族使节到访，他在欢迎宴上被安排坐最末席，却听见了使节和权臣的暗语。", tags: ["使节", "权谋"], bases: ["otherworld"] },
     ],
   },
   {
@@ -275,6 +354,9 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "contract", name: "协议关系开始", focus: "双方签下协议，各有目的，却都没想到关系会从第一天失控。", tags: ["契约", "关系"] },
       { id: "reunion", name: "多年后重逢", focus: "女主在最不适合的场合遇见旧人，彼此都带着没说完的话。", tags: ["破镜", "重逢"] },
       { id: "help", name: "一次意外援手", focus: "女主陷入尴尬处境，对方出手相助，却让两人的关系变得更复杂。", tags: ["救赎", "暧昧"] },
+      { id: "decree", name: "御赐赐婚", focus: "御赐婚约砸下来，新郎是出了名的浪荡子，她接旨时却看见他眼底一闪而过的清明。", tags: ["赐婚", "契约"], bases: ["ancient"] },
+      { id: "villa", name: "别庄重逢", focus: "别庄避暑时重逢旧人，他已是侯府新贵，她身份低微却必须与他同桌用膳。", tags: ["重逢", "身份"], bases: ["ancient"] },
+      { id: "divorce", name: "和离书", focus: "她递上和离书那天，夫君破天荒踏进她的院子，问了一句：为什么。", tags: ["和离", "转机"], bases: ["ancient"] },
     ],
   },
   {
@@ -305,6 +387,9 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "meeting", name: "会议室被抢功", focus: "女主准备的方案被同事抢先汇报，所有人都等她沉默。", tags: ["职场", "能力"] },
       { id: "deadline", name: "最后期限", focus: "一个几乎不可能完成的项目落到女主手里。", tags: ["项目", "翻盘"] },
       { id: "interview", name: "关键面试", focus: "女主走进面试现场，发现主考官正是曾否定过她的人。", tags: ["证明", "机会"] },
+      { id: "shopkeeper", name: "女掌柜接印", focus: "父亲病倒，她不得不以女子之身接下绸缎庄，第一笔生意就被同行联手做局。", tags: ["绸缎庄", "做局"], bases: ["ancient"] },
+      { id: "clinic", name: "女子坐堂", focus: "女子坐堂行医第一天，病人排成长队却没人敢让她看诊，直到一位老妇掀开帘子。", tags: ["医馆", "证明"], bases: ["ancient"] },
+      { id: "poetry", name: "诗会露锋芒", focus: "女扮男装混进诗会，一首诗被当众传阅，引来京城贵人的注意。", tags: ["诗会", "才华"], bases: ["ancient"] },
     ],
   },
   {
@@ -320,6 +405,9 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "yard", name: "小院第一天", focus: "女主搬进旧小院，修第一扇门时遇见第一个会改变生活的人。", tags: ["小院", "治愈"] },
       { id: "breakfast", name: "早餐摊开张", focus: "早餐摊第一天开张，第一位客人的反应决定她能不能继续做下去。", tags: ["开店", "生活"] },
       { id: "neighbor", name: "邻里误会", focus: "一场小误会让女主和邻里关系紧张，也给了修复关系的机会。", tags: ["关系", "日常"] },
+      { id: "oldyard", name: "小院开张", focus: "搬进城外小院第一天，她修好漏水的屋顶，隔壁大娘送来一碗热汤。", tags: ["小院", "邻里"], bases: ["ancient"] },
+      { id: "stall", name: "集市摆摊", focus: "集市上支起第一张摊，卖的是家里祖传的蜜饯方子，第一位客人是个嘴馋的小童。", tags: ["集市", "蜜饯"], bases: ["ancient"] },
+      { id: "congee", name: "晨粥铺子", focus: "巷口的粥铺开张，第一锅粥还没熟，昨晚帮她挑水的木匠已经坐在了桌边。", tags: ["粥铺", "温暖"], bases: ["ancient"] },
     ],
   },
   {
@@ -335,6 +423,9 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
       { id: "refuse", name: "第一次拒绝", focus: "女主面对熟悉的要求，第一次没有顺从。", tags: ["拒绝", "自我"] },
       { id: "family", name: "家庭期待压来", focus: "家人把原本不属于她的责任推过来，女主必须重新划清边界。", tags: ["家庭", "边界"] },
       { id: "choice", name: "重新选择人生", focus: "一个看似稳定的机会摆在面前，女主决定不再走别人安排好的路。", tags: ["改命", "选择"] },
+      { id: "norefuse", name: "拒婚第一日", focus: "母亲再次提起那门让她委屈的亲事，这一次她当众说了不。", tags: ["拒绝", "自我"], bases: ["ancient"] },
+      { id: "familypower", name: "掌家权之争", focus: "继母把管家的烂摊子推给她，账本缺口三成，她第一次把账本拍在桌上。", tags: ["掌家", "边界"], bases: ["ancient"] },
+      { id: "embroidery", name: "绣坊自立", focus: "绣坊老板娘讥笑她出身，她把自己绣的帕子挂上柜台，当晚就有人来问价。", tags: ["自立", "证明"], bases: ["ancient"] },
     ],
   },
 ];

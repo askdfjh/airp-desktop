@@ -29,12 +29,14 @@ export function ProtagonistSelect({ onComplete }: Props) {
 
   const [selectedChar, setSelectedChar] = useState<string | null>(null);
   const [selectedScenario, setSelectedScenarioLocal] = useState<string | null>(null);
+  const [randomPicked, setRandomPicked] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState({ name: "", appearance: "", personality: "", background: "", tags: "" });
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState("");
 
   const scenarios = getTopicOpeningScenarios(selectedTopicSchemeId, selectedWorldId);
+  const randomResult = scenarios.find((s) => s.id === selectedScenario) || null;
 
   useEffect(() => {
     if (selectedMode === "player" && activePresetId !== "player-control") {
@@ -78,6 +80,7 @@ export function ProtagonistSelect({ onComplete }: Props) {
   };
 
   const selectScenario = (id: string, name: string) => {
+    setRandomPicked(false);
     setSelectedScenarioLocal(id);
     setSelectedScenario(id, name);
   };
@@ -85,7 +88,11 @@ export function ProtagonistSelect({ onComplete }: Props) {
   const randomScenario = () => {
     const pool = scenarios.length > 0 ? scenarios : [];
     const scenario = pool[Math.floor(Math.random() * pool.length)];
-    if (scenario) selectScenario(scenario.id, scenario.name);
+    if (scenario) {
+      setRandomPicked(true);
+      setSelectedScenarioLocal(scenario.id);
+      setSelectedScenario(scenario.id, scenario.name);
+    }
   };
 
   const canStart = !!selectedScenario;
@@ -160,7 +167,7 @@ export function ProtagonistSelect({ onComplete }: Props) {
         <div style={{ fontSize: 14, fontWeight: 600, color: "var(--seed-muted)", marginBottom: 14 }}>开局场景</div>
         <div data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
           <div
-            className={`seed-card ${selectedScenario === "ai-random" ? "seed-card--selected" : ""}`}
+            className={`seed-card ${selectedScenario === "ai-random" || randomPicked ? "seed-card--selected" : ""}`}
             onClick={randomScenario}
             style={{
               padding: "28px 22px 24px",
@@ -179,14 +186,18 @@ export function ProtagonistSelect({ onComplete }: Props) {
                 <circle cx="12" cy="12" r="1.2" />
               </svg>
             </div>
-            <div className="seed-card-title" style={{ marginBottom: 8 }}>随机一个开局</div>
-            <div className="seed-card-desc" style={{ marginBottom: 14 }}>只在当前题材的 3 个开局里随机，不会更改已选题材。</div>
+            <div className="seed-card-title" style={{ marginBottom: 8 }}>
+              {randomPicked && randomResult ? `已随机：${randomResult.name}` : "随机一个开局"}
+            </div>
+            <div className="seed-card-desc" style={{ marginBottom: 14 }}>
+              {randomPicked && randomResult ? randomResult.description : "在当前题材与背景的组合开局里随机。"}
+            </div>
           </div>
 
           {scenarios.map((scenario) => (
             <div
               key={scenario.id}
-              className={`seed-card ${selectedScenario === scenario.id ? "seed-card--selected" : ""}`}
+              className={`seed-card ${selectedScenario === scenario.id && !randomPicked ? "seed-card--selected" : ""}`}
               onClick={() => selectScenario(scenario.id, scenario.name)}
               style={{ padding: "28px 22px 24px", cursor: "pointer" }}
             >
