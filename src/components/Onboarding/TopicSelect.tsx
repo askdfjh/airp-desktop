@@ -27,30 +27,34 @@ export function TopicSelect() {
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedBase, setSelectedBase] = useState<string | null>(null);
   const [labelLock, setLabelLock] = useState(false);
+  const [slideApplied, setSlideApplied] = useState(false);
   const [gridMaxH, setGridMaxH] = useState<string>("6000px");
   const [gridOverflow, setGridOverflow] = useState<"visible" | "hidden">("visible");
   const selectedCardRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
+  const slideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [audienceFilter, setAudienceFilter] = useState<WorldAudienceFilter>("all");
   const topics = getTopicSchemesByAudience(audienceFilter);
 
-  // 标签锁定：其他卡片淡出（collapsed 占位保持布局）+ 选中卡片 transform 平移到第一行 + 网格高度收缩，
-  // 三者动画同时进行；取消时反向恢复
+  // 标签锁定：其他卡片先淡出（0.45s），完成后选中卡片再平滑滑到第一排第一个（slideApplied），
+  // 同时网格高度收缩；取消时先滑回原位，再淡入其他卡片并展开网格
   useEffect(() => {
     const ob = document.querySelector(".seed-onboarding");
-    if (labelLock && selectedCardRef.current) {
+    if (labelLock && slideApplied && selectedCardRef.current) {
       setGridOverflow("hidden");
       // 布局高 + 顶部 padding 8 + 底部 26px 阴影余量
       const h = selectedCardRef.current.offsetHeight + 34;
       requestAnimationFrame(() => setGridMaxH(`${h}px`));
       ob?.scrollTo({ top: 0, behavior: "smooth" });
+    } else if (labelLock && !slideApplied) {
+      setGridOverflow("hidden");
     } else if (gridRef.current) {
       setGridOverflow("visible");
       const h = gridRef.current.scrollHeight;
       requestAnimationFrame(() => setGridMaxH(`${h}px`));
       ob?.scrollTo({ top: 0, behavior: "smooth" });
     }
-  }, [labelLock, selected]);
+  }, [labelLock, slideApplied, selected]);
 
   const chooseTopic = async (topic: TopicScheme, baseId?: string) => {
     const worldBaseId = baseId && (topic.expandableWorldBaseIds as string[]).includes(baseId) ? baseId : topic.worldBaseId;
@@ -80,21 +84,29 @@ export function TopicSelect() {
   };
 
   const pickBase = (topic: TopicScheme, baseId: string) => {
-    // 再点同一标签 → 取消选择，恢复全部卡片
+    // 再点同一标签 → 取消选择，恢复全部卡片（先滑回，再淡入展开）
     if (selected === topic.id && labelLock && selectedBase === baseId) {
+      if (slideTimerRef.current) clearTimeout(slideTimerRef.current);
+      setSlideApplied(false);
       setSelected(null);
       setSelectedBase(null);
       setLabelLock(false);
       return;
     }
-    // 锁定：其他卡片淡出 + 选中卡片平滑滑到第一行（transform 过渡），同步进行
+    // 锁定：其他卡片先淡出，淡出完成后（460ms）选中卡片再滑动归位
+    if (slideTimerRef.current) clearTimeout(slideTimerRef.current);
+    setSlideApplied(false);
     setLabelLock(true);
     void chooseTopic(topic, baseId);
+    slideTimerRef.current = setTimeout(() => setSlideApplied(true), 460);
   };
 
   const randomTopic = () => {
     const pool = topics.length > 0 ? topics : getTopicSchemesByAudience("all");
     const topic = pool[Math.floor(Math.random() * pool.length)];
+    if (slideTimerRef.current) clearTimeout(slideTimerRef.current);
+    setSlideApplied(false);
+    setLabelLock(false);
     if (topic) void chooseTopic(topic);
   };
 
@@ -163,7 +175,7 @@ export function TopicSelect() {
         })}
       </div>
 
-      <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: gridOverflow, transition: "max-height 0.5s ease", paddingTop: labelLock ? 8 : 0, paddingBottom: labelLock ? 26 : 0, paddingLeft: labelLock ? 4 : 0, marginTop: labelLock ? -8 : 0, marginLeft: labelLock ? -4 : 0 }}>
+      <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: gridOverflow, transition: "max-height 0.5s ease", paddingTop: labelLock ? 8 : 0, paddingBottom: labelLock ? 26 : 0, paddingLeft: labelLock ? 4 : 0, paddingRight: labelLock ? 4 : 0, marginTop: labelLock ? -8 : 0, marginLeft: labelLock ? -4 : 0, marginRight: labelLock ? -4 : 0 }}>
         <div
           className={`seed-card seed-card--custom ${labelLock ? "seed-card--collapsed" : ""}`}
           onClick={randomTopic}
@@ -185,15 +197,20 @@ export function TopicSelect() {
           const baseOptions = [topic.worldBaseId, ...topic.expandableWorldBaseIds];
           const isSelectedCard = selected === topic.id;
           const hidden = labelLock && !isSelectedCard;
-          // 锁定后：选中卡片从所在行平移到第一行（transform 过渡，与淡出同时进行）
-          let slideOffset = 0;
-          if (labelLock && isSelectedCard && gridRef.current) {
+          // 淡出完成后：选中卡片从所在行列平移到第一排第一个（transform 行列都算）
+          let slideTransform: string | undefined;
+          if (slideApplied && isSelectedCard && gridRef.current) {
             const gridW = gridRef.current.clientWidth;
             const cols = Math.max(1, Math.floor((gridW + 16) / 236));
             const idx = 1 + topics.findIndex((t) => t.id === topic.id);
             const row = Math.floor(idx / cols);
-            const rowH = ((gridRef.current.children[0] as HTMLElement | undefined)?.offsetHeight ?? 148) + 16;
-            slideOffset = row * rowH;
+            const col = idx % cols;
+            const card = gridRef.current.children[0] as HTMLElement | undefined;
+            const colW = (card?.offsetWidth ?? 295) + 16;
+            const rowH = (card?.offsetHeight ?? 148) + 16;
+            if (row > 0 || col > 0) {
+              slideTransform = `translate(${-col * colW}px, ${-row * rowH}px)`;
+            }
           }
           return (
             <div
@@ -201,14 +218,16 @@ export function TopicSelect() {
               ref={isSelectedCard ? selectedCardRef : undefined}
               className={`seed-card ${isSelectedCard ? "seed-card--selected" : ""} ${hidden ? "seed-card--collapsed" : ""} ${labelLock && isSelectedCard ? "seed-card--locked" : ""}`}
               onClick={() => {
+                if (slideTimerRef.current) clearTimeout(slideTimerRef.current);
+                setSlideApplied(false);
                 setLabelLock(false);
                 void chooseTopic(topic);
               }}
               style={{
                 padding: "22px 20px",
                 cursor: "pointer",
-                transform: labelLock && isSelectedCard ? `translateY(${-slideOffset}px)` : undefined,
-                transition: labelLock && isSelectedCard
+                transform: slideTransform,
+                transition: slideTransform
                   ? "transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.45s ease, box-shadow 0.45s ease"
                   : undefined,
               }}
