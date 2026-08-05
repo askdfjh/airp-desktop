@@ -259,6 +259,11 @@ export function TopicSelect() {
               ref={isSelectedCard ? selectedCardRef : undefined}
               className={`seed-card ${isSelectedCard ? "seed-card--selected" : ""} ${hidden ? "seed-card--collapsed" : ""} ${labelLock && isSelectedCard ? "seed-card--locked" : ""}`}
               onClick={() => {
+                // 单底座题材（无其他标签）：点击主体即选择（走锁定流程）
+                if (topic.expandableWorldBaseIds.length === 0) {
+                  pickBase(topic, topic.worldBaseId);
+                  return;
+                }
                 if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
                 setContracted(false);
                 setLabelLock(false);
