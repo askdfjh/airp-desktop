@@ -27,29 +27,31 @@ export function TopicSelect() {
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedBase, setSelectedBase] = useState<string | null>(null);
   const [labelLock, setLabelLock] = useState(false);
-  const [slideApplied, setSlideApplied] = useState(false);
+  const [contracted, setContracted] = useState(false);
   const [gridMaxH, setGridMaxH] = useState<string>("6000px");
   const [gridOverflow, setGridOverflow] = useState<"visible" | "hidden">("visible");
   const selectedCardRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
-  const slideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const contractTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [audienceFilter, setAudienceFilter] = useState<WorldAudienceFilter>("all");
   const topics = getTopicSchemesByAudience(audienceFilter);
 
-  // 标签锁定：其他卡片先淡出（0.45s），完成后选中卡片再平滑滑到第一排第一个（slideApplied），
-  // 同时网格高度收缩；取消时先滑回原位，再淡入其他卡片并展开网格
+  // 选中卡片直接排序到网格第一位（点击即排位，取消时保持不弹回）
+  const sortedTopics = selected ? [topics.find((t) => t.id === selected)!, ...topics.filter((t) => t.id !== selected)] : topics;
+
+  // 标签锁定：其他卡片淡出（collapsed），淡出完成后网格收缩（contracted），选中卡始终在第一位
   const prevLockRef = useRef(false);
   useEffect(() => {
     const ob = document.querySelector(".seed-onboarding");
     const wasLocked = prevLockRef.current;
     prevLockRef.current = !!labelLock;
-    if (labelLock && slideApplied && selectedCardRef.current) {
+    if (labelLock && contracted && selectedCardRef.current) {
       setGridOverflow("hidden");
       // 布局高 + 顶部 padding 8 + 底部 26px 阴影余量
       const h = selectedCardRef.current.offsetHeight + 34;
       requestAnimationFrame(() => setGridMaxH(`${h}px`));
       ob?.scrollTo({ top: 0, behavior: "smooth" });
-    } else if (labelLock && !slideApplied) {
+    } else if (labelLock && !contracted) {
       setGridOverflow("hidden");
     } else if (gridRef.current) {
       setGridOverflow("visible");
@@ -58,7 +60,7 @@ export function TopicSelect() {
       // 仅从锁定状态恢复时才滚回顶部；点卡片主体（未锁定）不改变滚动位置
       if (wasLocked) ob?.scrollTo({ top: 0, behavior: "smooth" });
     }
-  }, [labelLock, slideApplied, selected]);
+  }, [labelLock, contracted, selected]);
 
   const chooseTopic = async (topic: TopicScheme, baseId?: string) => {
     const worldBaseId = baseId && (topic.expandableWorldBaseIds as string[]).includes(baseId) ? baseId : topic.worldBaseId;
@@ -88,35 +90,31 @@ export function TopicSelect() {
   };
 
   const pickBase = (topic: TopicScheme, baseId: string) => {
-    // 再点同一标签 → 取消选择：先平滑滑回原位，再淡入展开
+    // 再点同一标签 → 取消锁定：展开全部卡片，选中卡保持在第一位（不弹回）
     if (selected === topic.id && labelLock && selectedBase === baseId) {
-      if (slideTimerRef.current) clearTimeout(slideTimerRef.current);
-      setSlideApplied(false);
-      slideTimerRef.current = setTimeout(() => {
-        setSelected(null);
-        setSelectedBase(null);
-        setLabelLock(false);
-      }, 520);
+      if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
+      setContracted(false);
+      setLabelLock(false);
       return;
     }
-    if (slideTimerRef.current) clearTimeout(slideTimerRef.current);
+    if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
     if (selected === topic.id && labelLock) {
-      // 锁定中切换底座：保持锁定与滑动位置，仅更新底座，不重播动画
+      // 锁定中切换底座：保持锁定，仅更新底座
       void chooseTopic(topic, baseId);
       return;
     }
-    // 锁定卡片：其他卡片先淡出，淡出完成后（460ms）选中卡片再滑动归位
-    setSlideApplied(false);
+    // 锁定：选中卡排序到第一位（立即），其他卡片淡出，淡出完成后（460ms）网格收缩
+    setContracted(false);
     setLabelLock(true);
     void chooseTopic(topic, baseId);
-    slideTimerRef.current = setTimeout(() => setSlideApplied(true), 460);
+    contractTimerRef.current = setTimeout(() => setContracted(true), 460);
   };
 
   const randomTopic = () => {
     const pool = topics.length > 0 ? topics : getTopicSchemesByAudience("all");
     const topic = pool[Math.floor(Math.random() * pool.length)];
-    if (slideTimerRef.current) clearTimeout(slideTimerRef.current);
-    setSlideApplied(false);
+    if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
+    setContracted(false);
     setLabelLock(false);
     if (topic) void chooseTopic(topic);
   };
@@ -187,61 +185,41 @@ export function TopicSelect() {
       </div>
 
       <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: gridOverflow, transition: "max-height 0.5s ease", paddingTop: labelLock ? 8 : 0, paddingBottom: labelLock ? 26 : 0, paddingLeft: labelLock ? 4 : 0, paddingRight: labelLock ? 4 : 0, marginTop: labelLock ? -8 : 0, marginLeft: labelLock ? -4 : 0, marginRight: labelLock ? -4 : 0 }}>
-        <div
-          className={`seed-card seed-card--custom ${labelLock ? "seed-card--collapsed" : ""}`}
-          onClick={randomTopic}
-          style={{
-            padding: "22px 20px",
-            cursor: "pointer",
-            border: "1px dashed color-mix(in srgb, var(--seed-accent) 45%, transparent)",
-            background: "color-mix(in srgb, var(--seed-accent) 6%, transparent)",
-          }}
-        >
-          <div className="seed-card-title" style={{ marginBottom: 8 }}>随机题材</div>
-          <div className="seed-card-desc">
-            {audienceFilter === "all" ? "从全部题材里随机" : audienceFilter === "male" ? "只从男频题材里随机" : "只从女频题材里随机"}
+        {!selected && (
+          <div
+            className={`seed-card seed-card--custom ${labelLock ? "seed-card--collapsed" : ""}`}
+            onClick={randomTopic}
+            style={{
+              padding: "22px 20px",
+              cursor: "pointer",
+              border: "1px dashed color-mix(in srgb, var(--seed-accent) 45%, transparent)",
+              background: "color-mix(in srgb, var(--seed-accent) 6%, transparent)",
+            }}
+          >
+            <div className="seed-card-title" style={{ marginBottom: 8 }}>随机题材</div>
+            <div className="seed-card-desc">
+              {audienceFilter === "all" ? "从全部题材里随机" : audienceFilter === "male" ? "只从男频题材里随机" : "只从女频题材里随机"}
+            </div>
           </div>
-        </div>
+        )}
 
-        {topics.map((topic) => {
+        {sortedTopics.map((topic) => {
           const trope = getTropeById(topic.tropeId);
           const baseOptions = [topic.worldBaseId, ...topic.expandableWorldBaseIds];
           const isSelectedCard = selected === topic.id;
           const hidden = labelLock && !isSelectedCard;
-          // 淡出完成后：选中卡片从所在行列平移到第一排第一个（transform 行列都算）
-          let slideTransform: string | undefined;
-          if (slideApplied && isSelectedCard && gridRef.current) {
-            const gridW = gridRef.current.clientWidth;
-            const cols = Math.max(1, Math.floor((gridW + 16) / 236));
-            const idx = 1 + topics.findIndex((t) => t.id === topic.id);
-            const row = Math.floor(idx / cols);
-            const col = idx % cols;
-            const card = gridRef.current.children[0] as HTMLElement | undefined;
-            const colW = (card?.offsetWidth ?? 295) + 16;
-            const rowH = (card?.offsetHeight ?? 148) + 16;
-            if (row > 0 || col > 0) {
-              slideTransform = `translate(${-col * colW}px, ${-row * rowH}px)`;
-            }
-          }
           return (
             <div
               key={topic.id}
               ref={isSelectedCard ? selectedCardRef : undefined}
               className={`seed-card ${isSelectedCard ? "seed-card--selected" : ""} ${hidden ? "seed-card--collapsed" : ""} ${labelLock && isSelectedCard ? "seed-card--locked" : ""}`}
               onClick={() => {
-                if (slideTimerRef.current) clearTimeout(slideTimerRef.current);
-                setSlideApplied(false);
+                if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
+                setContracted(false);
                 setLabelLock(false);
                 void chooseTopic(topic);
               }}
-              style={{
-                padding: "22px 20px",
-                cursor: "pointer",
-                transform: slideTransform,
-                transition: labelLock && isSelectedCard
-                  ? "transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.45s ease, box-shadow 0.45s ease"
-                  : undefined,
-              }}
+              style={{ padding: "22px 20px", cursor: "pointer" }}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
                 <div className="seed-card-title">{topic.label}</div>
@@ -285,6 +263,24 @@ export function TopicSelect() {
             </div>
           );
         })}
+
+        {selected && (
+          <div
+            className={`seed-card seed-card--custom ${labelLock ? "seed-card--collapsed" : ""}`}
+            onClick={randomTopic}
+            style={{
+              padding: "22px 20px",
+              cursor: "pointer",
+              border: "1px dashed color-mix(in srgb, var(--seed-accent) 45%, transparent)",
+              background: "color-mix(in srgb, var(--seed-accent) 6%, transparent)",
+            }}
+          >
+            <div className="seed-card-title" style={{ marginBottom: 8 }}>随机题材</div>
+            <div className="seed-card-desc">
+              {audienceFilter === "all" ? "从全部题材里随机" : audienceFilter === "male" ? "只从男频题材里随机" : "只从女频题材里随机"}
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={{ textAlign: "center", marginTop: 28 }}>
