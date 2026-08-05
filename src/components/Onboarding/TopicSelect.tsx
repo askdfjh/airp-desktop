@@ -27,6 +27,7 @@ export function TopicSelect() {
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedBase, setSelectedBase] = useState<string | null>(null);
   const [labelLock, setLabelLock] = useState(false);
+  const [sorted, setSorted] = useState(false);
   const [contracted, setContracted] = useState(false);
   const [gridMaxH, setGridMaxH] = useState<string>("6000px");
   const [gridOverflow, setGridOverflow] = useState<"visible" | "hidden">("visible");
@@ -36,10 +37,13 @@ export function TopicSelect() {
   const [audienceFilter, setAudienceFilter] = useState<WorldAudienceFilter>("all");
   const topics = getTopicSchemesByAudience(audienceFilter);
 
-  // 选中卡片直接排序到网格第一位（点击即排位，取消时保持不弹回）
-  const sortedTopics = selected ? [topics.find((t) => t.id === selected)!, ...topics.filter((t) => t.id !== selected)] : topics;
+  // 仅在点标签（锁定）后排序：选中卡排到随机题材卡之后的第一个位置；点卡片主体不排序（不跳位）
+  // 随机题材卡始终固定渲染在网格第一位
+  const sortedTopics = sorted && selected
+    ? [topics.find((t) => t.id === selected)!, ...topics.filter((t) => t.id !== selected)]
+    : topics;
 
-  // 标签锁定：其他卡片淡出（collapsed），淡出完成后网格收缩（contracted），选中卡始终在第一位
+  // 标签锁定：其他卡片淡出（collapsed），淡出完成后网格收缩（contracted），选中卡始终在首位
   const prevLockRef = useRef(false);
   useEffect(() => {
     const ob = document.querySelector(".seed-onboarding");
@@ -90,7 +94,7 @@ export function TopicSelect() {
   };
 
   const pickBase = (topic: TopicScheme, baseId: string) => {
-    // 再点同一标签 → 取消锁定：展开全部卡片，选中卡保持在第一位（不弹回）
+    // 再点同一标签 → 取消锁定：展开全部卡片，选中卡保持排序位置（不弹回）
     if (selected === topic.id && labelLock && selectedBase === baseId) {
       if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
       setContracted(false);
@@ -103,8 +107,9 @@ export function TopicSelect() {
       void chooseTopic(topic, baseId);
       return;
     }
-    // 锁定：选中卡排序到第一位（立即），其他卡片淡出，淡出完成后（460ms）网格收缩
+    // 锁定：选中卡排序到随机题材卡之后的第一位，其他卡片淡出，淡出完成后（460ms）网格收缩
     setContracted(false);
+    setSorted(true);
     setLabelLock(true);
     void chooseTopic(topic, baseId);
     contractTimerRef.current = setTimeout(() => setContracted(true), 460);
@@ -115,6 +120,7 @@ export function TopicSelect() {
     const topic = pool[Math.floor(Math.random() * pool.length)];
     if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
     setContracted(false);
+    setSorted(false);
     setLabelLock(false);
     if (topic) void chooseTopic(topic);
   };
@@ -185,7 +191,8 @@ export function TopicSelect() {
       </div>
 
       <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: gridOverflow, transition: "max-height 0.5s ease", paddingTop: labelLock ? 8 : 0, paddingBottom: labelLock ? 26 : 0, paddingLeft: labelLock ? 4 : 0, paddingRight: labelLock ? 4 : 0, marginTop: labelLock ? -8 : 0, marginLeft: labelLock ? -4 : 0, marginRight: labelLock ? -4 : 0 }}>
-        {!selected && (
+        {/* 随机题材卡固定第一位；仅收缩时隐藏（选中卡前移占位） */}
+        {!contracted && (
           <div
             className={`seed-card seed-card--custom ${labelLock ? "seed-card--collapsed" : ""}`}
             onClick={randomTopic}
@@ -216,6 +223,7 @@ export function TopicSelect() {
               onClick={() => {
                 if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
                 setContracted(false);
+                setSorted(false);
                 setLabelLock(false);
                 void chooseTopic(topic);
               }}
@@ -263,24 +271,6 @@ export function TopicSelect() {
             </div>
           );
         })}
-
-        {selected && (
-          <div
-            className={`seed-card seed-card--custom ${labelLock ? "seed-card--collapsed" : ""}`}
-            onClick={randomTopic}
-            style={{
-              padding: "22px 20px",
-              cursor: "pointer",
-              border: "1px dashed color-mix(in srgb, var(--seed-accent) 45%, transparent)",
-              background: "color-mix(in srgb, var(--seed-accent) 6%, transparent)",
-            }}
-          >
-            <div className="seed-card-title" style={{ marginBottom: 8 }}>随机题材</div>
-            <div className="seed-card-desc">
-              {audienceFilter === "all" ? "从全部题材里随机" : audienceFilter === "male" ? "只从男频题材里随机" : "只从女频题材里随机"}
-            </div>
-          </div>
-        )}
       </div>
 
       <div style={{ textAlign: "center", marginTop: 28 }}>
