@@ -150,7 +150,7 @@ export function TopicSelect() {
         })}
       </div>
 
-      <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: gridOverflow, transition: "max-height 0.35s ease" }}>
+      <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: gridOverflow, transition: "max-height 0.5s ease" }}>
         <div
           className={`seed-card seed-card--custom ${labelLock ? "seed-card--collapsed" : ""}`}
           onClick={randomTopic}
@@ -176,7 +176,7 @@ export function TopicSelect() {
             <div
               key={topic.id}
               ref={isSelectedCard ? selectedCardRef : undefined}
-              className={`seed-card ${isSelectedCard ? "seed-card--selected" : ""} ${hidden ? "seed-card--collapsed" : ""}`}
+              className={`seed-card ${isSelectedCard ? "seed-card--selected" : ""} ${hidden ? "seed-card--collapsed" : ""} ${labelLock && isSelectedCard ? "seed-card--locked" : ""}`}
               onClick={() => {
                 setLabelLock(false);
                 void chooseTopic(topic);
@@ -222,7 +222,7 @@ export function TopicSelect() {
                           : "1px solid var(--seed-border)",
                         color: isSelected ? "var(--seed-accent)" : "var(--seed-muted)",
                         fontWeight: isSelected ? 600 : 400,
-                        transition: "all 0.15s",
+                        transition: "all 0.2s",
                       }}
                     >
                       {worldFoundationLabel(baseId)}

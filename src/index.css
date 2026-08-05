@@ -673,7 +673,19 @@ button.ghost:hover { color:var(--seed-accent); }
   opacity: 0;
   transform: scale(0.96);
   pointer-events: none;
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+/* 选题页：标签锁定后选中卡片强化（放大 + 强调描边） */
+.seed-card--locked {
+  transform: scale(1.03);
+  border-color: var(--seed-accent);
+  box-shadow: 0 0 0 2px var(--seed-accent), 0 14px 44px -10px var(--seed-accent-glow);
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.45s ease, box-shadow 0.45s ease;
+}
+.seed-card--locked:hover {
+  transform: scale(1.03);
+  border-color: var(--seed-accent);
+  box-shadow: 0 0 0 2px var(--seed-accent), 0 14px 44px -10px var(--seed-accent-glow);
 }
 
 .seed-card-icon {
