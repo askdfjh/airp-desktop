@@ -41,7 +41,8 @@ export function TopicSelect() {
     const ob = document.querySelector(".seed-onboarding");
     if (labelLock && selectedCardRef.current) {
       setGridOverflow("hidden");
-      const h = selectedCardRef.current.offsetHeight + 16;
+      // 立即收缩：布局高 + 底部 24px 阴影余量（无 transform，无需延迟测量）
+      const h = selectedCardRef.current.offsetHeight + 24;
       requestAnimationFrame(() => setGridMaxH(`${h}px`));
       ob?.scrollTo({ top: 0, behavior: "smooth" });
     } else if (gridRef.current) {
