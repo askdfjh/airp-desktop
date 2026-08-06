@@ -5,6 +5,7 @@ import { setToolsEnabled } from "@/hooks/useChat";
 import { useUIStore } from "@/stores/uiStore";
 import { SEARCH_PROVIDERS, type SearchProvider } from "@/tools/search";
 import { ComplianceNotice } from "./ComplianceNotice";
+import { McpPanel } from "./McpPanel";
 
 const PROVIDER_KEYS: SearchProvider[] = ["duckduckgo", "serper", "bing", "brave", "tavily"];
 
@@ -118,6 +119,9 @@ export function ToolsPanel() {
           <strong style={{ color: "var(--seed-muted)" }}>工作原理：</strong>AI 判断需要搜索时自动调用 web_search 工具，将搜索结果整合到回复中。支持 5 种搜索引擎，可在上方切换。
         </div>
       </div>
+
+      {/* MCP 服务（外部工具） */}
+      <McpPanel />
     </div>
   );
 }

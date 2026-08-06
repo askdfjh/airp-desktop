@@ -6,6 +6,13 @@ export type ThemeMode = "dark" | "light" | "system";
 export type MessageFontSize = "xs" | "sm" | "md" | "lg" | "xl";
 export type OnboardingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
+/** 格式分析（章节/场景/对话推荐）执行模型设置：跟随当前模型 / 指定模型 / 关闭 */
+export interface FormatModelConfig {
+  mode: "follow" | "custom" | "off";
+  providerId?: string;
+  model?: string;
+}
+
 let toastTimer: ReturnType<typeof setTimeout> | null = null;
 
 interface UIState {
@@ -16,6 +23,20 @@ interface UIState {
   messageFontSize: MessageFontSize;
   webSearchOn: boolean;
   mcpActive: boolean;
+  // 格式分析执行模型（章节/场景/对话推荐独立请求所用模型）
+  formatModel: FormatModelConfig;
+  setFormatModel: (c: FormatModelConfig) => void;
+  // 叙事约束开关（插件设置页）：叙事防护 / 剧情推进
+  narrativeGuardOn: boolean;
+  setNarrativeGuardOn: (v: boolean) => void;
+  progressionGuardOn: boolean;
+  setProgressionGuardOn: (v: boolean) => void;
+  // 角色群像（NPC 以自身利益为中心）
+  ensembleGuardOn: boolean;
+  setEnsembleGuardOn: (v: boolean) => void;
+  // 角色后台进展（隐藏幕后进展注入正文生成，默认开启）
+  hiddenProgressOn: boolean;
+  setHiddenProgressOn: (v: boolean) => void;
   toast: string | null;
   toastAction: "settings" | null;
   notify: (msg: string, action?: "settings" | null) => void;
@@ -97,6 +118,16 @@ export const useUIStore = create<UIState>()(
       messageFontSize: "sm",
       webSearchOn: false,
       mcpActive: false,
+      formatModel: { mode: "follow" },
+      setFormatModel: (c) => set({ formatModel: c }),
+      narrativeGuardOn: false,
+      setNarrativeGuardOn: (v) => set({ narrativeGuardOn: v }),
+      progressionGuardOn: false,
+      setProgressionGuardOn: (v) => set({ progressionGuardOn: v }),
+      ensembleGuardOn: false,
+      setEnsembleGuardOn: (v) => set({ ensembleGuardOn: v }),
+      hiddenProgressOn: true,
+      setHiddenProgressOn: (v) => set({ hiddenProgressOn: v }),
       toast: null,
       toastAction: null,
       notify: (msg, action) => {
@@ -201,6 +232,11 @@ export const useUIStore = create<UIState>()(
         messageFontSize: s.messageFontSize,
         webSearchOn: s.webSearchOn,
         mcpActive: s.mcpActive,
+        formatModel: s.formatModel,
+        narrativeGuardOn: s.narrativeGuardOn,
+        progressionGuardOn: s.progressionGuardOn,
+        ensembleGuardOn: s.ensembleGuardOn,
+        hiddenProgressOn: s.hiddenProgressOn,
       }),
     },
   ),

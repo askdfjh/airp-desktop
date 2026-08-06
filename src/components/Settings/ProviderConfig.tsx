@@ -8,41 +8,41 @@ import {
   Wifi, Loader2, Code2, Filter, Image, Cog, ChevronRight, Pencil, X, SlidersHorizontal, RotateCcw, Database,
   Info,
 } from "lucide-react";
+import { NarraModel, NarraCharacter, NarraWorld, NarraAppearance, NarraTools, NarraMcp, NarraData } from "@/components/icons/NarraIcon";
 import type { ProviderType } from "@/types";
-import { McpPanel } from "./McpPanel";
 import { DataPanel } from "./DataPanel";
 import { CharacterPanel } from "./CharacterPanel";
 import { WorldPanel } from "./WorldPanel";
 import { ToolsPanel } from "./ToolsPanel";
+import { PluginsPanel } from "./PluginsPanel";
 import { GenerationPanel } from "./GenerationPanel";
 import { PromptInjectionSection } from "./PromptInjectionSection";
 import { ComplianceNotice } from "./ComplianceNotice";
 import { AboutPanel } from "./AboutPanel";
 
-type NavKey = "models" | "character" | "world" | "mcp" | "tools" | "generation" | "data" | "about";
-type ConnectionStatus = "unknown" | "checking" | "online" | "offline" | "invalid_key";
+type NavKey = "models" | "character" | "world" | "plugins" | "tools" | "generation" | "data" | "about";type ConnectionStatus = "unknown" | "checking" | "online" | "offline" | "invalid_key";
 
 const NAV_ITEMS: { key: NavKey; icon: React.ComponentType<{ size?: number }>; label: string }[] = [
-  { key: "models", icon: Sparkles, label: "模型服务" },
-  { key: "character", icon: Users, label: "角色" },
-  { key: "world", icon: Globe, label: "世界观" },
-  { key: "generation", icon: SlidersHorizontal, label: "输出" },
-  { key: "tools", icon: Search, label: "工具" },
-  { key: "mcp", icon: Server, label: "MCP 服务器" },
-  { key: "data", icon: Database, label: "数据" },
+  { key: "models", icon: NarraModel, label: "模型服务" },
+  { key: "character", icon: NarraCharacter, label: "角色" },
+  { key: "world", icon: NarraWorld, label: "世界观" },
+  { key: "generation", icon: NarraAppearance, label: "输出" },
+  { key: "tools", icon: NarraTools, label: "外部工具" },
+  { key: "plugins", icon: NarraMcp, label: "插件" },
+  { key: "data", icon: NarraData, label: "数据" },
   { key: "about", icon: Info, label: "关于" },
 ];
 
 const NAV_LABELS: Record<NavKey, string> = {
-  models: "模型服务", character: "角色", world: "世界观", mcp: "MCP 服务器", tools: "工具", generation: "输出预设", data: "数据管理", about: "关于",
+  models: "模型服务", character: "角色", world: "世界观", plugins: "插件", tools: "外部工具", generation: "输出预设", data: "数据管理", about: "关于",
 };
 
 const NAV_SUBTITLES: Record<NavKey, string> = {
   models: "管理 AI 模型接入与 API 密钥",
   character: "管理 AI 角色的设定与经历",
   world: "选择或创建故事发生的宇宙",
-  tools: "启用 AI 可调用的外部能力",
-  mcp: "连接外部工具扩展 AI 能力",
+  tools: "联网搜索与 MCP 服务等外部能力",
+  plugins: "叙事防护、剧情推进与场景格式设置",
   generation: "调节 AI 的创意与输出风格", data: "导出与导入全部设置", about: "免费说明与合规风险提醒",
 };
 
@@ -376,17 +376,6 @@ function ModelsSection() {
     if (!activeModel) { setActiveProvider(providerId); setActiveModel(v); }
   };
 
-  const toggleThinkingModel = (providerId: string, model: string) => {
-    const p = providers.find((pp) => pp.id === providerId);
-    if (!p) return;
-    const isThinking = (p.thinkingModels || []).includes(model);
-    if (isThinking) {
-      updateProvider(providerId, { thinkingModels: (p.thinkingModels || []).filter((m) => m !== model) });
-    } else {
-      updateProvider(providerId, { thinkingModels: [...(p.thinkingModels || []), model] });
-    }
-  };
-
   const toggleGroup = (group: string) => {
     setCollapsedGroups((s) => ({ ...s, [group]: !s[group] }));
   };
@@ -582,7 +571,6 @@ function ModelsSection() {
             toggleModel={toggleModel}
             removeModel={removeModel}
             addModelManually={addModelManually}
-            toggleThinkingModel={toggleThinkingModel}
             handleFetchModels={handleFetchModels}
             collapsedGroups={collapsedGroups}
             setCollapsedGroups={setCollapsedGroups}
@@ -622,7 +610,6 @@ interface ProviderDetailProps {
   toggleModel: (providerId: string, model: string) => void;
   removeModel: (providerId: string, model: string) => void;
   addModelManually: (providerId: string, value: string) => void;
-  toggleThinkingModel: (providerId: string, model: string) => void;
   handleFetchModels: (providerId: string) => Promise<void>;
   collapsedGroups: Record<string, boolean>;
   setCollapsedGroups: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
@@ -653,7 +640,7 @@ function ProviderDetail({
   provider: p, status, statusMsg, testConnection,
   showKey, setShowKey, fetching, fetchError, fetchedModels,
   activeModel, setActiveModel, updateProvider, removeProvider,
-  toggleModel, removeModel, addModelManually, toggleThinkingModel, handleFetchModels,
+  toggleModel, removeModel, addModelManually, handleFetchModels,
   collapsedGroups, toggleGroup, enabledProviders, setEnabledProvider, setActiveProvider, activeProviderId,
 }: ProviderDetailProps) {
   const fetched = fetchedModels[p.id] || [];
@@ -933,7 +920,6 @@ function ProviderDetail({
                   <div style={{ padding: '4px 0 4px 22px' }}>
                     {items.map((m) => {
                       const isEnabled = p.models.includes(m);
-                      const isThinking = (p.thinkingModels || []).includes(m);
                       const isActive = activeModel === m && activeProviderId === p.id;
                       return (
                         <div
@@ -976,21 +962,6 @@ function ProviderDetail({
                             fontWeight: isActive ? 600 : 400,
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                           }}>{m}</span>
-                          {isThinking && (
-                            <span title='思考模型'><Brain size={11} style={{ color: '#f59e0b' }} /></span>
-                          )}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); toggleThinkingModel(p.id, m); }}
-                            title='标记为思考模型'
-                            style={{
-                              width: 20, height: 20, borderRadius: 4, border: 'none', cursor: 'pointer',
-                              background: isThinking ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
-                              color: isThinking ? '#f59e0b' : 'var(--seed-muted)',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}
-                          >
-                            <Brain size={10} />
-                          </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1189,7 +1160,6 @@ function ProviderDetail({
                 <div>
                 {models.map((m) => {
                 const isEnabled = p.models.includes(m);
-                const isThinking = (p.thinkingModels || []).includes(m);
                 return (
                 <div key={m}
                 className="cp"
@@ -1241,20 +1211,7 @@ function ProviderDetail({
                 color: isEnabled ? 'var(--seed-accent)' : 'var(--seed-fg)',
                 fontWeight: isEnabled ? 600 : 400,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>{m}</span>
-                <button
-                onClick={(e) => { e.stopPropagation(); toggleThinkingModel(p.id, m); }}
-                title={isThinking ? '取消思考模型' : '标记为思考模型'}
-                className="cp"
-                style={{
-                width: 22, height: 22, borderRadius: 6, border: 'none', cursor: 'pointer',
-                background: isThinking ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
-                color: isThinking ? '#f59e0b' : 'var(--seed-muted)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}
-                >
-                <Brain size={10} />
-                </button>
+                }}                >{m}</span>
                 <button
                 onClick={(e) => {
                 e.stopPropagation();
@@ -1308,9 +1265,10 @@ function SectionContent({ activeTab }: { activeTab: NavKey }) {
   if (activeTab === "world") return <WorldPanel />;
   if (activeTab === "generation") return <GenerationPanel />;
   if (activeTab === "tools") return <ToolsPanel />;
+  if (activeTab === "plugins") return <PluginsPanel />;
   if (activeTab === "data") return <DataPanel />;
   if (activeTab === "about") return <AboutPanel />;
-  return <McpPanel />;
+  return <ToolsPanel />;
 }
 
 export function ProviderConfigPanel() {

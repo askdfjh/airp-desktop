@@ -11,24 +11,22 @@ export function getTopicOpeningScenarios(
   if (!topic) return [];
   const base = worldBaseId ?? topic.worldBaseId;
   const worldLabel = worldFoundationLabel(base);
-  // 优先级：底座+频道都匹配 → 底座匹配（中性） → 全底座频道匹配 → 全通用
-  // 全部 tab（audience=all/未传）：频道不限，底座匹配的全部开局都展示（男女频混合）
   const matchBase = (seed: TopicOpeningSeed) => (seed.bases as string[] | undefined)?.includes(base) ?? false;
-  const matchAud = (seed: TopicOpeningSeed) =>
-    !audience || audience === "all" || ((seed.audiences as string[] | undefined)?.includes(audience) ?? false);
-  const neutral = (seed: TopicOpeningSeed) => !seed.audiences;
-  const ranked = topic.openingSeeds
-    .map((seed) => ({
-      seed,
-      score:
-        (matchBase(seed) && matchAud(seed) ? 3 : 0) +
-        (matchBase(seed) && neutral(seed) ? 2 : 0) +
-        (!(seed.bases?.length) && matchAud(seed) ? 1 : 0),
-    }))
-    .sort((a, b) => b.score - a.score)
-    .map((r) => r.seed);
-  // 全部 tab（audience=all/未传）：按底座过滤 + 频道不限（男女频混合），跨底座的不混入
-  const seeds = audience && audience !== "all" ? ranked.slice(0, 3) : ranked.filter((s) => matchBase(s) || !s.bases?.length);
+  // 题材级频道（男频/女频专属题材）直接全量归属该频道；通用题材按种子 audiences 判断
+  const matchAud = (seed: TopicOpeningSeed) => {
+    if (topic.audience !== "all") return topic.audience === audience;
+    return (seed.audiences as string[] | undefined)?.includes(audience ?? "") ?? false;
+  };
+  // 频道 tab（男频/女频）：严格只展示该频道的开局（男女频完全分离）；
+  // 底座匹配的种子优先展示，另加"无底座限制的通用种子"（任何底座下都成立）作为兜底，
+  // 其余底座的种子严格排除——选了古代底座就不能出现修仙开局
+  const seeds =
+    audience && audience !== "all"
+      ? [
+          ...topic.openingSeeds.filter((s) => matchBase(s) && matchAud(s)),
+          ...topic.openingSeeds.filter((s) => !s.bases?.length && matchAud(s)),
+        ]
+      : topic.openingSeeds.filter((s) => matchBase(s) || !s.bases?.length);
 
   return seeds.map((seed) => ({
     id: `topic:${topic.id}:${seed.id}`,

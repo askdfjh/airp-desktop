@@ -5,7 +5,7 @@ import { useSessionStore } from "@/stores/sessionStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useCreateStore } from "@/stores/createStore";
 import { AutoInput } from "@/lib/autoGrow";
-import type { Character, CharacterArc } from "@/types";
+import type { Character, CharacterArc, CharacterCard } from "@/types";
 import { EditDialog } from "@/components/Layout/EditDialog";
 
 function formatTime(ts: number): string {
@@ -30,7 +30,6 @@ function buildCharacterPrompt(c: Character, arcs: CharacterArc[]): string {
 
 export function CharacterPanel() {
   const { characters, loadCharactersFromDb, updateCharacter, removeCharacter, loadArcs, arcs, clearWorldArcs, restoreDefaultCharacters, cards, loadFromDb, updateCard, removeCard, trashCards, loadTrashFromDb, restoreCardFromTrash, purgeCardFromTrash, clearExpiredTrash } = useCharacterStore();
-  const { sessions, activeId, updateSystemPrompt } = useSessionStore();
   const [viewTab, setViewTab] = useState<"char" | "extracted" | "trash">("char");
   // 窄屏（手机）：左右分栏改为上下堆叠
   const [isNarrow, setIsNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 820px)').matches);
@@ -48,6 +47,7 @@ export function CharacterPanel() {
   const [searchQuery, setSearchQuery] = useState("");
 
   const setCreateMode = useUIStore((s) => s.setCreateMode);
+  const notify = useUIStore((s) => s.notify);
   const openCreateMode = () => {
     useCreateStore.getState().open("character");
     setCreateMode("character");
@@ -125,15 +125,46 @@ export function CharacterPanel() {
     setDetailId(id);
   };
 
+  // 多选角色 → 新建扮演会话：AI 同时扮演所选角色（按语境切换身份）
   const applySelectedToSession = () => {
-    if (!activeId || selectedChars.size === 0) return;
-    const parts: string[] = [];
-    for (const id of selectedChars) {
-      const c = characters.find(x => x.id === id);
-      if (c) parts.push(buildCharacterPrompt(c, []));
-    }
-    parts.push("请以上述角色身份进行对话，保持性格一致性。");
-    updateSystemPrompt(activeId, parts.join("\n\n"));
+    if (selectedChars.size === 0) return;
+    const picked = characters.filter((c) => selectedChars.has(c.id));
+    if (picked.length === 0) return;
+    const parts: string[] = [`你现在扮演以下 ${picked.length} 个角色，在对话中根据语境切换身份，保持各自性格与设定一致，不要跳出角色：`];
+    picked.forEach((c) => {
+      parts.push(`【${c.name}】` + buildCharacterPrompt(c, []).replace(/^角色：.+?\n/, ""));
+    });
+    useSessionStore.getState().createRoleplaySession({
+      name: picked.length <= 2 ? picked.map((c) => c.name).join("、") : `${picked[0].name} 等 ${picked.length} 人`,
+      systemPrompt: parts.join("\n"),
+      intro: picked.map((c) => c.personality || c.tags.join("、")).filter(Boolean).join("；") || undefined,
+    });
+    useUIStore.getState().setSettingsOpen(false);
+  };
+
+  // 新建扮演会话：AI 完全以该角色身份对话（空白会话 + 自动开场自我介绍）
+  const roleplayFromCharacter = (c: Character) => {
+    const parts: string[] = [`你现在扮演「${c.name}」。`];
+    if (c.appearance) parts.push("外貌：" + c.appearance);
+    if (c.personality) parts.push("性格：" + c.personality);
+    if (c.background) parts.push("背景：" + c.background);
+    if (c.tags.length > 0) parts.push("标签：" + c.tags.join("、"));
+    parts.push("请完全以该角色身份与用户对话，保持性格与设定一致，不要跳出角色。");
+    useSessionStore.getState().createRoleplaySession({
+      name: c.name,
+      systemPrompt: parts.join("\n"),
+      intro: c.personality || c.tags.join("、"),
+    });
+    useUIStore.getState().setSettingsOpen(false);
+  };
+
+  const roleplayFromCard = (c: CharacterCard) => {
+    useSessionStore.getState().createRoleplaySession({
+      name: c.name,
+      systemPrompt: `你现在扮演「${c.name}」。\n${c.systemPrompt}\n请完全以该角色身份与用户对话，保持角色一致，不要跳出角色。`,
+      intro: c.description,
+    });
+    useUIStore.getState().setSettingsOpen(false);
   };
 
   const promoteExtractedCard = async (id: string) => {
@@ -301,6 +332,12 @@ export function CharacterPanel() {
                 <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.5, whiteSpace: "pre-line", maxHeight: 60, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{c.systemPrompt}</div>
                 <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                   <button
+                    onClick={() => roleplayFromCard(c)}
+                    style={{ padding: "5px 12px", borderRadius: 8, fontSize: "var(--fs-11)", fontFamily: "inherit", color: "var(--seed-accent)", background: "transparent", border: "1px dashed var(--seed-accent-border)", cursor: "pointer" }}
+                  >
+                    新建扮演会话
+                  </button>
+                  <button
                     onClick={() => promoteExtractedCard(c.id)}
                     style={{ padding: "5px 12px", borderRadius: 8, fontSize: "var(--fs-11)", fontFamily: "inherit", color: "var(--seed-accent)", background: "var(--seed-accent-bg)", border: "1px solid color-mix(in srgb, var(--seed-accent) 40%, transparent)", cursor: "pointer" }}
                   >
@@ -407,9 +444,13 @@ export function CharacterPanel() {
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <button onClick={() => roleplayFromCharacter(selected)}
+                    style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 16px", borderRadius: 10, fontSize: "var(--fs-12)", fontWeight: 500, fontFamily: "inherit", background: "transparent", color: "var(--seed-accent)", border: "1px dashed var(--seed-accent-border)", cursor: "pointer" }}>
+                    <Send size={12} /> 新建扮演会话
+                  </button>
                   <button onClick={applySelectedToSession} disabled={selectedChars.size === 0}
                     style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 16px", borderRadius: 10, fontSize: "var(--fs-12)", fontWeight: 500, fontFamily: "inherit", background: selectedChars.size > 0 ? "var(--seed-accent)" : "var(--seed-hover-bg)", color: selectedChars.size > 0 ? "#fff" : "var(--seed-muted)", border: "none", cursor: selectedChars.size > 0 ? "pointer" : "not-allowed" }}>
-                    <Send size={12} /> 应用到会话（{selectedChars.size}）
+                    <Send size={12} /> 新建扮演会话（{selectedChars.size}）
                   </button>
                 </div>
               </div>

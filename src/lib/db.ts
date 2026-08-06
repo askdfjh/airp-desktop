@@ -48,6 +48,15 @@ export async function initDb(): Promise<void> {
   await db.execute(`ALTER TABLE messages ADD COLUMN thinking TEXT;`).catch(() => {});
   await db.execute(`ALTER TABLE messages ADD COLUMN opening INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
   await db.execute(`ALTER TABLE messages ADD COLUMN tools TEXT;`).catch(() => {});
+  await db.execute(`ALTER TABLE messages ADD COLUMN sceneAnalysis TEXT;`).catch(() => {});
+  await db.execute(`ALTER TABLE messages ADD COLUMN tokenUsage TEXT;`).catch(() => {});
+  // 故事链（压缩续集）：链标识/卷号/上一卷/锁定/剧情档案/关键词索引
+  await db.execute(`ALTER TABLE sessions ADD COLUMN chainId TEXT;`).catch(() => {});
+  await db.execute(`ALTER TABLE sessions ADD COLUMN chainIndex INTEGER;`).catch(() => {});
+  await db.execute(`ALTER TABLE sessions ADD COLUMN parentId TEXT;`).catch(() => {});
+  await db.execute(`ALTER TABLE sessions ADD COLUMN locked INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
+  await db.execute(`ALTER TABLE sessions ADD COLUMN archive TEXT;`).catch(() => {});
+  await db.execute(`ALTER TABLE sessions ADD COLUMN contextIndex TEXT;`).catch(() => {});
   // 回收站：软删除标记 + 删除时间
   await db.execute(`ALTER TABLE sessions ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
   await db.execute(`ALTER TABLE sessions ADD COLUMN deletedAt INTEGER;`).catch(() => {});
@@ -275,6 +284,12 @@ interface SessionRow {
   summaryUpdatedAt?: number | null;
   summaryCount?: number | null;
   lastSummarizedMessageId?: string | null;
+  chainId?: string | null;
+  chainIndex?: number | null;
+  parentId?: string | null;
+  locked?: number | null;
+  archive?: string | null;
+  contextIndex?: string | null;
 }
 
 interface MessageRow {
@@ -286,6 +301,8 @@ interface MessageRow {
   images: string | null;
   opening: number | null;
   tools: string | null;
+  sceneAnalysis: string | null;
+  tokenUsage: string | null;
   createdAt: number;
 }
 
@@ -305,6 +322,12 @@ function rowToSession(r: SessionRow): Session {
     summaryUpdatedAt: r.summaryUpdatedAt ?? undefined,
     summaryCount: r.summaryCount ?? undefined,
     lastSummarizedMessageId: r.lastSummarizedMessageId ?? undefined,
+    chainId: r.chainId ?? undefined,
+    chainIndex: r.chainIndex ?? undefined,
+    parentId: r.parentId ?? undefined,
+    locked: r.locked === 1,
+    archive: r.archive ?? undefined,
+    contextIndex: r.contextIndex ?? undefined,
   };
 }
 
@@ -318,6 +341,8 @@ function rowToMessage(r: MessageRow): Message {
     images: r.images ? (JSON.parse(r.images) as string[]) : undefined,
     opening: r.opening === 1 ? true : undefined,
     tools: r.tools ? (JSON.parse(r.tools) as string[]) : undefined,
+    sceneAnalysis: r.sceneAnalysis ?? null,
+    tokenUsage: r.tokenUsage ? (JSON.parse(r.tokenUsage) as { input: number; output: number }) : null,
     createdAt: r.createdAt,
   };
 }
@@ -337,8 +362,8 @@ export async function loadSessions(): Promise<Session[]> {
 export async function insertSession(s: Session): Promise<void> {
   console.log("[db] insertSession", s.id, s.title);
   await getDb().execute(
-    "INSERT INTO sessions (id, title, systemPrompt, providerId, model, thinkingEnabled, createdAt, updatedAt, kind, contextSummary, summaryUpdatedAt, summaryCount, lastSummarizedMessageId) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13);",
-    [s.id, s.title, s.systemPrompt, s.providerId, s.model, s.thinkingEnabled ? 1 : 0, s.createdAt, s.updatedAt, s.kind === "blank" ? "blank" : "adventure", s.contextSummary ?? "", s.summaryUpdatedAt ?? null, s.summaryCount ?? 0, s.lastSummarizedMessageId ?? null]
+    "INSERT INTO sessions (id, title, systemPrompt, providerId, model, thinkingEnabled, createdAt, updatedAt, kind, contextSummary, summaryUpdatedAt, summaryCount, lastSummarizedMessageId, chainId, chainIndex, parentId, locked, archive, contextIndex) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19);",
+    [s.id, s.title, s.systemPrompt, s.providerId, s.model, s.thinkingEnabled ? 1 : 0, s.createdAt, s.updatedAt, s.kind === "blank" ? "blank" : "adventure", s.contextSummary ?? "", s.summaryUpdatedAt ?? null, s.summaryCount ?? 0, s.lastSummarizedMessageId ?? null, s.chainId ?? null, s.chainIndex ?? null, s.parentId ?? null, s.locked ? 1 : 0, s.archive ?? null, s.contextIndex ?? null]
   );
 }
 
@@ -371,8 +396,7 @@ export async function loadTrashedSessions(): Promise<Session[]> {
 
 /** 从回收站恢复会话。 */
 export async function restoreSession(id: string): Promise<void> {
-  await getDb().execute(
-    "UPDATE sessions SET deleted = 0, deletedAt = NULL WHERE id = $1;",
+  await getDb().execute(    "UPDATE sessions SET deleted = 0, deletedAt = NULL WHERE id = $1;",
     [id]
   );
 }
@@ -395,7 +419,16 @@ export async function purgeExpiredTrash(): Promise<number> {
   return rows.length;
 }
 
-const SESSION_FIELDS = ["title", "systemPrompt", "providerId", "model", "thinkingEnabled", "updatedAt", "contextSummary", "summaryUpdatedAt", "summaryCount", "lastSummarizedMessageId"] as const;
+/** 硬删除会话（续集创建失败回滚用，连带消息/绑定级联）。 */
+export async function hardDeleteSession(id: string): Promise<void> {
+  await getDb().execute("DELETE FROM messages WHERE sessionId = $1;", [id]);
+  await getDb().execute("DELETE FROM session_character_cards WHERE sessionId = $1;", [id]);
+  await getDb().execute("DELETE FROM session_characters WHERE sessionId = $1;", [id]);
+  await getDb().execute("DELETE FROM session_character_cards WHERE sessionId = $1;", [id]);
+  await getDb().execute("DELETE FROM sessions WHERE id = $1;", [id]);
+}
+
+const SESSION_FIELDS = ["title", "systemPrompt", "providerId", "model", "thinkingEnabled", "updatedAt", "contextSummary", "summaryUpdatedAt", "summaryCount", "lastSummarizedMessageId", "chainId", "chainIndex", "parentId", "locked", "archive", "contextIndex"] as const;
 type SessionUpdateField = (typeof SESSION_FIELDS)[number];
 
 /** 更新会话字段（白名单过滤，安全）。 */
@@ -406,7 +439,7 @@ export async function updateSession(
   const valid = SESSION_FIELDS.filter((k) => k in fields);
   if (valid.length === 0) return;
   const sets = valid.map((k, i) => `${k} = $${i + 1}`).join(", ");
-  const values = valid.map((k) => fields[k] as string | number);
+  const values = valid.map((k) => (k === "locked" ? (fields[k] ? 1 : 0) : (fields[k] as string | number)));
   await getDb().execute(
     `UPDATE sessions SET ${sets} WHERE id = $${valid.length + 1};`,
     [...values, id]
@@ -443,6 +476,16 @@ export async function updateMessageContent(id: string, content: string): Promise
 /** 更新消息思考内容。 */
 export async function updateMessageThinking(id: string, thinking: string): Promise<void> {
   await getDb().execute("UPDATE messages SET thinking = $1 WHERE id = $2;", [thinking, id]);
+}
+
+/** 更新消息的格式分析结果（章节名/场景信息/对话推荐，JSON 文本）。 */
+export async function updateMessageSceneAnalysis(id: string, json: string): Promise<void> {
+  await getDb().execute("UPDATE messages SET sceneAnalysis = $1 WHERE id = $2;", [json, id]);
+}
+
+/** 更新消息的 token 消耗估算（JSON：{ input, output }）。 */
+export async function updateMessageTokenUsage(id: string, json: string): Promise<void> {
+  await getDb().execute("UPDATE messages SET tokenUsage = $1 WHERE id = $2;", [json, id]);
 }
 
 /** 删除单条消息。 */
@@ -728,15 +771,6 @@ export async function updateCharacterCard(id: string, fields: { name?: string; d
   );
 }
 
-/** 查找同名提取角色卡（isExtracted = 1），用于压缩时幂等更新。 */
-export async function findExtractedCharacterCardByName(name: string): Promise<CharacterCard | null> {
-  const rows = await getDb().select<CharacterCardRow[]>(
-    "SELECT * FROM character_cards WHERE isExtracted = 1 AND deleted = 0 AND name = $1 LIMIT 1;",
-    [name]
-  );
-  return rows.length > 0 ? rowToCharacterCard(rows[0]) : null;
-}
-
 /** 删除角色卡（软删除进回收站，保留行与绑定，30 天后自动彻底清理）。 */
 export async function deleteCharacterCard(id: string): Promise<void> {
   await getDb().execute(
@@ -874,11 +908,11 @@ export async function deleteCharacter(id: string): Promise<void> {
 }
 
 export const DEFAULT_CHARACTER_PRESETS: Omit<Character, "createdAt" | "updatedAt">[] = [
-  { id: "char-linwan", name: "林晚", appearance: "长发及肩，常穿素色长裙，举止轻柔，说话声音不大", personality: "温柔内敛，善解人意，喜欢安静的环境，对周围人的情绪变化很敏感", background: "", tags: ["温柔", "细腻"], isBuiltin: true },
-  { id: "char-zhaoyuan", name: "赵远", appearance: "身材高挑，穿着随意但干净利落，笑容爽朗", personality: "直爽大方，待人热情，说话很有感染力，在人群中总是活跃气氛的那个", background: "", tags: ["直爽", "健谈"], isBuiltin: true },
-  { id: "char-suqing", name: "苏晴", appearance: "短发干练，眼神坚定，穿着偏中性化，周身透着一股利落劲儿", personality: "独立自主，做事认真负责，有自己的原则和底线，不轻易妥协但讲道理", background: "", tags: ["独立", "原则"], isBuiltin: true },
-  { id: "char-zhouming", name: "周明", appearance: "戴着黑框眼镜，常穿格子衬衫，看着像个程序员但气质更沉稳", personality: "沉稳可靠，观察力敏锐，话不多但每句都说到点子上，习惯先想清楚再开口", background: "", tags: ["沉稳", "观察"], isBuiltin: true },
-  { id: "char-chenxi", name: "陈溪", appearance: "扎着马尾辫，眼睛明亮有神，总是一副跃跃欲试的样子", personality: "开朗活泼，充满好奇心，什么话题都能聊几句，对新鲜事物永远保持着热情", background: "", tags: ["开朗", "好奇"], isBuiltin: true },
+  { id: "char-architect", name: "架构师", appearance: "专业严谨，逻辑清晰", personality: "善于系统化思考，权衡取舍，先理清约束再给方案", background: "", tags: ["架构", "技术", "设计"], isBuiltin: true },
+  { id: "char-translator", name: "翻译", appearance: "语言功底扎实，表达准确", personality: "严谨细致，兼顾信达雅，主动说明关键译法取舍", background: "", tags: ["翻译", "语言", "本地化"], isBuiltin: true },
+  { id: "char-fullstack", name: "全栈程序员", appearance: "技术全面，动手能力强", personality: "务实高效，优先给出可运行的代码与清晰步骤", background: "", tags: ["编程", "开发", "调试"], isBuiltin: true },
+  { id: "char-docwriter", name: "文档工程师", appearance: "条理清晰，注重细节", personality: "结构分明，步骤可执行，术语统一", background: "", tags: ["文档", "写作", "规范"], isBuiltin: true },
+  { id: "char-analyst", name: "数据分析师", appearance: "数据敏感，结论先行", personality: "用数据说话，先给结论再给依据，图表解读到位", background: "", tags: ["数据", "分析", "洞察"], isBuiltin: true },
 ];
 
 const PRESET_IDS = new Set(DEFAULT_CHARACTER_PRESETS.map(p => p.id));
@@ -1061,9 +1095,9 @@ export interface SessionCharacterCardRow {
 /** 加载某会话绑定的全部提取角色卡绑定（含角色卡信息，供注入用）。 */
 export async function loadSessionCharacterCards(
   sessionId: string
-): Promise<(SessionCharacterCardRow & { name: string; triggerWords: string; systemPrompt: string; description: string })[]> {
+): Promise<(SessionCharacterCardRow & { name: string; triggerWords: string; systemPrompt: string; description: string; tags: string })[]> {
   return await getDb().select(
-    `SELECT scc.*, cc.name, cc.triggerWords, cc.systemPrompt, cc.description
+    `SELECT scc.*, cc.name, cc.triggerWords, cc.systemPrompt, cc.description, cc.tags
      FROM session_character_cards scc
      JOIN character_cards cc ON cc.id = scc.characterCardId
      WHERE scc.sessionId = $1 AND cc.deleted = 0
@@ -1083,11 +1117,39 @@ export async function insertSessionCharacterCard(b: {
   );
 }
 
-export async function deleteSessionCharacterCardByCard(sessionId: string, characterCardId: string): Promise<void> {
-  await getDb().execute(
-    "DELETE FROM session_character_cards WHERE sessionId = $1 AND characterCardId = $2;",
-    [sessionId, characterCardId]
+/** 复制提取卡到目标会话（续集基线：C2 复制 C1 的卡，新 id 独立），返回新卡 id。 */
+export async function duplicateCharacterCard(cardId: string, sessionId: string, worldBookId?: string | null): Promise<string | null> {
+  const rows = await getDb().select<Record<string, unknown>[]>(
+    "SELECT * FROM character_cards WHERE id = $1 AND deleted = 0;",
+    [cardId]
   );
+  if (rows.length === 0) return null;
+  const row = rows[0];
+  const now = Date.now();
+  const newId = "ccx_" + now + "_" + Math.random().toString(36).slice(2, 8);
+  const json = (v: unknown, fb: string) => (typeof v === "string" ? v : fb);
+  await getDb().execute(
+    "INSERT INTO character_cards (id, name, description, systemPrompt, emoji, tags, isBuiltin, createdAt, updatedAt, personality, scenario, worldBookId, characterBookEntries, isExtracted, triggerWords) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15);",
+    [
+      newId,
+      json(row.name, "角色"),
+      json(row.description, ""),
+      json(row.systemPrompt, ""),
+      json(row.emoji, "🎭"),
+      json(row.tags, "[]"),
+      0,
+      now,
+      now,
+      json(row.personality, ""),
+      json(row.scenario, ""),
+      worldBookId ?? (row.worldBookId as string | null) ?? null,
+      json(row.characterBookEntries, "[]"),
+      1,
+      json(row.triggerWords, "[]"),
+    ]
+  );
+  await insertSessionCharacterCard({ sessionId, characterCardId: newId, worldBookId });
+  return newId;
 }
 
 /* ---------- MCP Servers ---------- */
@@ -1710,14 +1772,14 @@ export async function restoreConversations(snap: ConversationsSnapshot): Promise
   const db = getDb();
   for (const row of snap.sessions) {
     await db.execute(
-      "INSERT OR IGNORE INTO sessions (id, title, systemPrompt, providerId, model, thinkingEnabled, createdAt, updatedAt, deleted, deletedAt, kind, contextSummary, summaryUpdatedAt, summaryCount, lastSummarizedMessageId) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15);",
-      ["id", "title", "systemPrompt", "providerId", "model", "thinkingEnabled", "createdAt", "updatedAt", "deleted", "deletedAt", "kind", "contextSummary", "summaryUpdatedAt", "summaryCount", "lastSummarizedMessageId"].map((c) => normalizeSettingValue(c, row[c]))
+      "INSERT OR IGNORE INTO sessions (id, title, systemPrompt, providerId, model, thinkingEnabled, createdAt, updatedAt, deleted, deletedAt, kind, contextSummary, summaryUpdatedAt, summaryCount, lastSummarizedMessageId, chainId, chainIndex, parentId, locked, archive, contextIndex) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21);",
+      ["id", "title", "systemPrompt", "providerId", "model", "thinkingEnabled", "createdAt", "updatedAt", "deleted", "deletedAt", "kind", "contextSummary", "summaryUpdatedAt", "summaryCount", "lastSummarizedMessageId", "chainId", "chainIndex", "parentId", "locked", "archive", "contextIndex"].map((c) => normalizeSettingValue(c, row[c]))
     );
   }
   for (const row of snap.messages) {
     await db.execute(
-      "INSERT OR IGNORE INTO messages (id, sessionId, role, content, thinking, images, opening, tools, createdAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);",
-      ["id", "sessionId", "role", "content", "thinking", "images", "opening", "tools", "createdAt"].map((c) => normalizeSettingValue(c, row[c]))
+      "INSERT OR IGNORE INTO messages (id, sessionId, role, content, thinking, images, opening, tools, sceneAnalysis, tokenUsage, createdAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);",
+      ["id", "sessionId", "role", "content", "thinking", "images", "opening", "tools", "sceneAnalysis", "tokenUsage", "createdAt"].map((c) => normalizeSettingValue(c, row[c]))
     );
   }
   for (const row of snap.favorites) {

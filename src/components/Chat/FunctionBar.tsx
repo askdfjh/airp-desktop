@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Brain, ChevronDown, Check, Feather, Search, WrapText, Square } from "lucide-react";
+import { Brain, ChevronDown, Check, Feather, Search, WrapText, Square, Wifi, Settings } from "lucide-react";
+import { NarraTheme, NarraFont, NarraSession, NarraWorldInfo } from "@/components/icons/NarraIcon";
 import { useUIStore } from "@/stores/uiStore";
 import { useProviderStore } from "@/stores/providerStore";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useGenerationStore } from "@/stores/generationStore";
 import { setToolsEnabled } from "@/hooks/useChat";
 import { setAppSetting } from "@/lib/db";
-import { runCompression, stopCompress } from "@/lib/contextCompress";
+import { runCompression, stopCompress, AUTO_TRIGGER_TOKENS } from "@/lib/contextCompress";
 import { isThinkingModel } from "@/providers/openai";
 import { SessionPopup } from "./SessionPopup";
 import { SearchPanel } from "./SearchPanel";
@@ -18,7 +19,7 @@ type OpenMenu = "provider" | "model" | "style" | null;
 
 type FunctionBarMode = "adventure" | "blank";
 
-export function FunctionBar({ mode = "adventure" }: { mode?: FunctionBarMode }) {
+export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: FunctionBarMode; historyTokens?: number }) {
   const { theme, setTheme, messageFontSize, setMessageFontSize, settingsOpen, setSettingsOpen, webSearchOn, setWebSearchOn, effectiveTheme, toast, toastAction, notify } = useUIStore();
   const { providers, activeProviderId, activeModel, setActiveProvider, setActiveModel, enabledProviders } = useProviderStore();
   const { presets, activePresetId, setActivePreset } = useGenerationStore();
@@ -51,8 +52,11 @@ export function FunctionBar({ mode = "adventure" }: { mode?: FunctionBarMode }) 
     (p) => enabledProviders[p.id] !== false || p.id === activeProviderId,
   );
   const models = activeProvider?.models || [];
-  const thinkingEnabled = activeSession?.thinkingEnabled ?? false;
+  // 思考模式默认开启：仅当会话明确关闭（DB 存 0）时才关闭
+  const thinkingEnabled = activeSession?.thinkingEnabled ?? true;
   const isBlank = mode === "blank" || (activeSession?.kind ?? "adventure") === "blank";
+  // 上下文占用百分比（基于自动整理阈值）
+  const pct = Math.min(100, Math.round((historyTokens || 0) / AUTO_TRIGGER_TOKENS * 100));
 
   // 点击外部 / Esc 关闭下拉
   useEffect(() => {
@@ -196,6 +200,21 @@ export function FunctionBar({ mode = "adventure" }: { mode?: FunctionBarMode }) 
   return (
     <>
       <div className="seed-func-bar" ref={barRef}>
+        {/* 上下文占用百分比（整理故事入口）：放最前，点击触发整理（冒险/空白会话均可用） */}
+        <button
+          className={"seed-func-btn seed-func-pct" + (compressing ? " seed-compress-btn" : "")}
+          disabled={false}
+          data-tooltip={compressing ? "停止整理（不保存任何变更）" : `上下文占用 ${pct}% · 整理故事（压缩上下文${isBlank ? "" : "，提取角色"}）`}
+          onClick={compressing ? stopCompress : () => void runCompression()}
+        >
+          {compressing ? <Square size={14} fill="currentColor" /> : (
+            <>
+              <WrapText size={13} style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: 11, fontWeight: 600, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{pct}%</span>
+            </>
+          )}
+        </button>
+
         {/* Provider 切换 */}
         <div ref={chipRefs.provider} style={{ position: "relative" }}>
           <button
@@ -248,55 +267,29 @@ export function FunctionBar({ mode = "adventure" }: { mode?: FunctionBarMode }) 
 
         {/* Web search toggle */}
         <button className={"seed-func-btn" + (webSearchOn ? " seed-func-btn--active" : "")} disabled={compressing} data-tooltip={webSearchOn ? "联网搜索已开启" : "联网搜索已关闭"} onClick={toggleWebSearch}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 12.55a11 11 0 0 1 14.08 0" />
-            <path d="M1.42 9a16 16 0 0 1 21.16 0" />
-            <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
-            <line x1="12" y1="20" x2="12.01" y2="20" />
-          </svg>
+          <Wifi size={16} />
         </button>
 
         <div style={{ width: 1, height: 20, background: "var(--seed-border)", margin: "0 6px" }} />
 
         {/* Settings */}
         <button className={"seed-func-btn" + (settingsOpen ? " seed-func-btn--active" : "")} disabled={compressing} data-tooltip="设置" onClick={() => { const s = useUIStore.getState(); s.setSettingsOpen(!s.settingsOpen); }}>
-          <svg viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
-          </svg>
+          <Settings size={16} />
         </button>
 
         {/* Theme */}
         <button className="seed-func-btn" disabled={compressing} data-tooltip="深/浅主题" onClick={cycleTheme}>
-          <svg viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="5" />
-            <line x1="12" y1="1" x2="12" y2="3" />
-            <line x1="12" y1="21" x2="12" y2="23" />
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-            <line x1="1" y1="12" x2="3" y2="12" />
-            <line x1="21" y1="12" x2="23" y2="12" />
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-          </svg>
+          <NarraTheme size={16} />
         </button>
 
         {/* Font size */}
         <button className="seed-func-btn" disabled={compressing} data-tooltip="字体大小" onClick={cycleFontSize}>
-          <svg viewBox="0 0 24 24">
-            <polyline points="4 7 4 4 20 4 20 7" />
-            <line x1="9" y1="20" x2="15" y2="20" />
-            <line x1="12" y1="4" x2="12" y2="20" />
-          </svg>
+          <NarraFont size={16} />
         </button>
 
         {/* Session management */}
         <button className="seed-func-btn" disabled={compressing} data-tooltip="会话管理" onClick={() => setShowSessionPopup(true)}>
-          <svg viewBox="0 0 24 24">
-            <polygon points="12 2 2 7 12 12 22 7 12 2" />
-            <polyline points="2 17 12 22 22 17" />
-            <polyline points="2 12 12 17 22 12" />
-          </svg>
+          <NarraSession size={16} />
         </button>
 
         {/* Search messages */}
@@ -304,25 +297,10 @@ export function FunctionBar({ mode = "adventure" }: { mode?: FunctionBarMode }) 
           <Search size={16} />
         </button>
 
-        {/* Compress story: 仅冒险会话显示；空白会话不提取角色/故事脉络 */}
-        {!isBlank && (
-          <button
-            className={"seed-func-btn" + (compressing ? " seed-compress-btn" : "")}
-            data-tooltip={compressing ? "停止整理（不保存任何变更）" : "整理故事（压缩上下文，提取角色）"}
-            onClick={compressing ? stopCompress : () => void runCompression()}
-          >
-            {compressing ? <Square size={16} fill="currentColor" /> : <WrapText size={16} />}
-          </button>
-        )}
-
         {/* World info：空白会话不显示世界规则入口 */}
         {!isBlank && (
           <button ref={worldBtnRef} className={"seed-func-btn" + (showWorldInfo ? " seed-func-btn--active" : "")} disabled={compressing} data-tooltip="世界信息" onClick={() => { setOpenMenu(null); setShowWorldInfo((v) => !v); }}>
-            <svg viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="2" y1="12" x2="22" y2="12" />
-              <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
-            </svg>
+            <NarraWorldInfo size={16} />
           </button>
         )}
       </div>

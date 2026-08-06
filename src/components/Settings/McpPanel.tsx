@@ -131,11 +131,11 @@ export function McpPanel({ onClose }: McpPanelProps) {
   };
 
   return (
-    <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 12, flex: 1, minHeight: 0 }}>
+    <div style={{ padding: 18, borderRadius: 18, background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Server size={16} style={{ color: "var(--seed-accent)" }} />
-          <span style={{ fontSize: "var(--fs-15)", fontWeight: 600, color: "var(--seed-fg)" }}>MCP 服务器</span>
+          <span style={{ fontSize: "var(--fs-15)", fontWeight: 600, color: "var(--seed-fg)" }}>MCP 服务</span>
           <span className="seed-tag-pill" style={{ fontSize: "var(--fs-10)", padding: "1px 7px" }}>{servers.length}</span>
         </div>
         {servers.length > 0 && (
@@ -195,7 +195,7 @@ export function McpPanel({ onClose }: McpPanelProps) {
         </div>
       )}
 
-      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {servers.length === 0 && (
           <div className="seed-empty-state" style={{ flex: 1, background: "var(--seed-surface)", borderRadius: 18, border: "1px solid var(--seed-border)" }}>
             <div className="seed-empty-icon">

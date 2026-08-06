@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import { useChat, getSendBlocker } from "@/hooks/useChat";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -6,13 +6,14 @@ import { StreamingText } from "./StreamingText";
 import { FunctionBar } from "./FunctionBar";
 import { ConfirmDialog } from "@/components/Layout/ConfirmDialog";
 import { MarkdownRender } from "./MarkdownRender";
-import { parseSceneReply, type SceneInfo } from "@/lib/sceneTemplate";
-import { stopCompress } from "@/lib/contextCompress";
+import { parseSceneAnalysis, type SceneAnalysis } from "@/lib/sceneAnalyzer";
+import type { SceneInfo } from "@/lib/sceneTemplate";
+import { stopCompress, estimateHistoryTokens } from "@/lib/contextCompress";
 import { registerBackHandler } from "@/lib/androidBack";
 import { fitTextarea } from "@/lib/autoGrow";
 
 export function DialogueNovel() {
-  const { messages, sendMessage, streaming, stopStreaming, regenerate, editAndSend, editMessage, deleteMessage } = useChat();
+  const { messages, sendMessage, streaming, stopStreaming, regenerate, editAndSend, editMessage, deleteMessage, analysingScene } = useChat();
   const activeSession = useSessionStore((s) =>
     s.activeId ? s.sessions.find((ss) => ss.id === s.activeId) : null
   );
@@ -159,8 +160,7 @@ export function DialogueNovel() {
 
   // Copy message content
   const handleCopy = (msg: typeof messages[0]) => {
-    const parsed = parseSceneReply(msg.content);
-    navigator.clipboard.writeText(parsed.body);
+    navigator.clipboard.writeText(msg.content);
     setCopiedId(msg.id);
     setTimeout(() => setCopiedId(null), 1500);
   };
@@ -225,7 +225,7 @@ export function DialogueNovel() {
   const visibleMessages = allVisible.filter((m) => !m.opening);
   const lastMsg = visibleMessages[visibleMessages.length - 1];
 
-  // 固定模板解析：取最新一条非空 assistant 回复（含流式中），实时解析版面数据
+  // 版面数据（章节/场景/推荐）：读最新一条 assistant 消息的 sceneAnalysis（独立格式分析请求结果）
   const lastAssistantMsg = (() => {
     for (let i = visibleMessages.length - 1; i >= 0; i--) {
       const m = visibleMessages[i];
@@ -233,10 +233,18 @@ export function DialogueNovel() {
     }
     return null;
   })();
-  const parsedReply = lastAssistantMsg ? parseSceneReply(lastAssistantMsg.content) : null;
   const isParsingLive = streaming && lastMsg === lastAssistantMsg;
-  const sceneInfo = parsedReply?.scene ?? null;
-  const suggestions = parsedReply?.suggestions ?? [];
+  // 分析进行中（正文已完成、格式请求未返回）：正文流式期 + 分析期都视为"推荐生成中"
+  const analysisPending = (isParsingLive || analysingScene) && lastMsg === lastAssistantMsg;
+  const sceneAnalysisData = useMemo<SceneAnalysis | null>(() => {
+    if (!lastAssistantMsg?.sceneAnalysis) return null;
+    return parseSceneAnalysis(lastAssistantMsg.sceneAnalysis);
+  }, [lastAssistantMsg?.sceneAnalysis]);
+  const sceneInfo = sceneAnalysisData
+    ? { location: sceneAnalysisData.location ?? "", time: sceneAnalysisData.time ?? "", characters: sceneAnalysisData.characters ?? "", cause: sceneAnalysisData.cause ?? "" }
+    : null;
+  const suggestions = sceneAnalysisData?.suggestions ?? [];
+  const hasSceneAnalysis = !!sceneAnalysisData;
 
   // 开局生成状态：已有开局消息且第一条 AI 回复尚未完成 → 显示「世界生成中...」/「完成规划」
   // 用 ref 记忆「开局已完成」，避免每次发送消息时（全局 streaming 变化）状态条反复出现
@@ -262,7 +270,8 @@ export function DialogueNovel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streaming, openingMsg?.id]);
 
-  // 场景条一行自适应：用隐藏测量行检测单行是否放得下（测量与显示解耦，避免结构切换震荡）
+  // 场景条一行自适应：用隐藏测量行检测单行是否放得下（测量与显示解耦，避免结构切换震荡）；
+  // 依赖 sceneAnalysis——场景数据由格式分析异步到达，到达后需重新测量（正文流式期 scene 为空）
   useEffect(() => {
     const el = sceneMeasureRef.current;
     if (!el) return;
@@ -279,17 +288,18 @@ export function DialogueNovel() {
       ro.disconnect();
       window.removeEventListener("resize", check);
     };
-  }, [lastAssistantMsg?.content, isBlank]);
+  }, [lastAssistantMsg?.content, lastAssistantMsg?.sceneAnalysis, isBlank]);
 
   // 新场景内容到来时，重新允许自动折叠判断
   useEffect(() => {
     sceneUserToggledRef.current = false;
-  }, [lastAssistantMsg?.content]);
+  }, [lastAssistantMsg?.content, lastAssistantMsg?.sceneAnalysis]);
 
-  // 动态章节名：解析最新 AI 回复的【章节名】；首次设置不跳号，之后变化章节号 +1
+  // 动态章节名：读格式分析结果中的章节名；首次设置不跳号，之后变化章节号 +1；
+  // 无分析结果（未绑定/失败/旧消息）→ 保持「第一章」兜底
   useEffect(() => {
     if (isBlank) return;
-    const title = parsedReply?.chapterTitle?.trim();
+    const title = sceneAnalysisData?.chapterTitle?.trim();
     if (!title) return;
     if (!chapterInitRef.current) {
       chapterInitRef.current = true;
@@ -304,7 +314,7 @@ export function DialogueNovel() {
       return prev;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastAssistantMsg?.content, isBlank]);
+  }, [lastAssistantMsg?.sceneAnalysis, isBlank]);
 
   // 流式完成过渡：streaming 由 true → false 时，对刚完成的 assistant 消息做淡入（掩盖模板区块被裁剪的突兀）
   useEffect(() => {
@@ -344,6 +354,9 @@ export function DialogueNovel() {
       }}
     />
   ));
+
+  // 会话历史估算 token（整理按钮百分比显示）
+  const historyTokens = useMemo(() => estimateHistoryTokens(messages), [messages]);
 
   return (
     <div className="seed-dialogue">
@@ -393,8 +406,8 @@ export function DialogueNovel() {
         </div>
       )}
 
-      {/* 场景信息条（顶部，一行自适应：放得下直接显示，放不下折叠） */}
-      {!isBlank && visibleMessages.length > 0 && (
+      {/* 场景信息条（顶部，一行自适应：放得下直接显示，放不下折叠；仅格式分析可用时显示） */}
+      {!isBlank && visibleMessages.length > 0 && (hasSceneAnalysis || analysisPending) && (
         <div className="seed-scene-bar">
           <div className="seed-scene-measure" aria-hidden="true">
             <SceneInfoBar innerRef={sceneMeasureRef} scene={sceneInfo} streaming={false} />
@@ -416,11 +429,11 @@ export function DialogueNovel() {
                 </svg>
               </div>
               {sceneBarOpen && (
-                <SceneInfoBar scene={sceneInfo} streaming={isParsingLive} wrap />
+                <SceneInfoBar scene={sceneInfo} streaming={analysisPending} wrap />
               )}
             </>
           ) : (
-            <SceneInfoBar scene={sceneInfo} streaming={isParsingLive} />
+            <SceneInfoBar scene={sceneInfo} streaming={analysisPending} />
           )}
         </div>
       )}
@@ -428,10 +441,10 @@ export function DialogueNovel() {
       {/* Scrollable content */}
       <div className="seed-dialogue-scroll" ref={scrollRef} onScroll={handleScroll} style={{ paddingBottom: inputHidden ? 8 : 152 }}>
         <div className="seed-dialogue-content">
-          {/* Chapter divider：第 N 章 · 章节名（AI 动态更新，仅冒险会话） */}
+          {/* Chapter divider：第 N 章 · 章节名（格式分析动态更新，仅冒险会话；无分析数据固定第一章） */}
           {visibleMessages.length > 0 && !isBlank && (
             <div key={chapterNo + ":" + (chapterName || "")} className="seed-chapter-divider seed-chapter-divider--transition">
-              <span>第 {chapterNo} 章 · {chapterName || selectedScenarioName || selectedWorldName || "冒险开始"}</span>
+              <span>{chapterName ? `第 ${chapterNo} 章 · ${chapterName}` : "第一章"}</span>
               <span className="seed-chapter-line" />
             </div>
           )}
@@ -521,7 +534,6 @@ export function DialogueNovel() {
               // Assistant message：首段加 drop-cap class
               const isStreaming = streaming && msg === lastMsg && msg.role === "assistant";
               const isDropCap = !isBlank && msg.id === firstAssistantId;
-              const parsed = isBlank ? null : parseSceneReply(msg.content);
               if (editingId === msg.id) {
                 return (
                   <div key={msg.id} className="seed-edit-block" style={{ animationDelay: `${Math.min(idx * 0.05, 0.5)}s` }}>
@@ -558,12 +570,19 @@ export function DialogueNovel() {
                       <StreamingText content={msg.content} active={isStreaming} />
                     ) : isBlank ? (
                       <MarkdownRender content={msg.content} highlight={hl || undefined} />
-                    ) : parsed && parsed.body !== msg.content.trim() ? (
-                      hl ? <HighlightText text={parsed.body} keyword={hl} /> : parsed.body
                     ) : (
                       hl ? <HighlightText text={msg.content} keyword={hl} /> : msg.content
                     )}
                   </div>
+                  {/* AI 生成合规标识 + token 消耗（低调展示；↑上传/输入 ↓下载/输出） */}
+                  {!isStreaming && msg.role === "assistant" && msg.tokenUsage && (
+                    <div className="seed-ai-meta">
+                      <div>本回答由 AI 生成，内容仅供参考，请仔细甄别</div>
+                      <div style={{ fontVariantNumeric: "tabular-nums" }}>
+                        ↑{fmtTokens(msg.tokenUsage.input)}&nbsp;&nbsp;↓{fmtTokens(msg.tokenUsage.output)}
+                      </div>
+                    </div>
+                  )}
                   {!isStreaming && msg.content && (
                     <div className="seed-msg-actions">
                       <button className="seed-msg-action-btn" data-tooltip="复制" onClick={() => handleCopy(msg)}>
@@ -631,12 +650,13 @@ export function DialogueNovel() {
           transition: "transform 0.28s ease",
         }}
       >
-        {/* 对话推荐条（输入框上方，可折叠）：与输入区同属底部浮层，一起隐藏/显示 */}
-        {!isBlank && (suggestions.length > 0 || isParsingLive) && (
+        {/* 对话推荐条（输入框上方，可折叠）：与输入区同属底部浮层，一起隐藏/显示；
+            仅格式分析可用时显示（无分析数据直接隐藏，不做兜底） */}
+        {!isBlank && (suggestions.length > 0 || analysisPending) && (
           <div className="seed-suggest-bar">
             <div className="seed-suggest-head" onClick={() => setSuggestBarOpen((v) => !v)}>
               <span className="seed-suggest-head-title">
-                对话推荐{suggestions.length > 0 ? ` (${suggestions.length})` : ""}
+                {suggestions.length > 0 ? `对话推荐 (${suggestions.length})` : "正在生成场景与推荐…"}
               </span>
               <svg
                 className={`seed-scene-chevron${suggestBarOpen ? " is-open" : ""}`}
@@ -646,7 +666,7 @@ export function DialogueNovel() {
               </svg>
             </div>
             {suggestBarOpen && (
-              <SuggestBar suggestions={suggestions} streaming={isParsingLive} onPick={handleSuggest} />
+              <SuggestBar suggestions={suggestions} streaming={analysisPending} onPick={handleSuggest} />
             )}
           </div>
         )}
@@ -678,7 +698,7 @@ export function DialogueNovel() {
               </button>
             )}
           </div>
-          <FunctionBar mode={isBlank ? "blank" : "adventure"} />
+          <FunctionBar mode={isBlank ? "blank" : "adventure"} historyTokens={historyTokens} />
         </div>
       </div>
 
@@ -697,7 +717,10 @@ export function DialogueNovel() {
       {compressPrompt && compressPromptCallbacks && (
         <ConfirmDialog
           title="对话较长，建议整理故事脉络"
-          message={`当前会话已有 ${compressPrompt.count} 条消息。整理将摘要其中的 ${compressPrompt.windowCount} 条为故事脉络，保留最近 ${compressPrompt.keptCount} 条原文，并提取出场的重要角色存入角色卡（后续出场自动注入）。预计消耗约 ${compressPrompt.estimatedTokens} token，整理期间无法操作。是否整理？`}
+          message={`当前会话已有 ${compressPrompt.count} 条消息。整理将新建一个续集会话（第 ${(() => {
+            const cur = useSessionStore.getState().sessions.find((s) => s.id === compressPrompt.sessionId);
+            return (cur?.chainIndex ?? 1) + 1;
+          })()} 卷）：继承本会话的设定与角色卡，自动生成剧情档案带入续集，相关旧消息在后续对话中按需触发注入；原会话将锁定只读（仍可创建分支）。预计消耗约 ${compressPrompt.estimatedTokens} token，整理期间无法操作。是否整理？`}
           confirmLabel="整理"
           cancelLabel="暂不"
           onConfirm={compressPromptCallbacks.onConfirm}
@@ -708,9 +731,15 @@ export function DialogueNovel() {
   );
 }
 
+// === token 数字格式化：<1000 原数，≥1000 X.Xk，≥10000 整数 k ===
+function fmtTokens(n: number): string {
+  if (n >= 10000) return `${Math.round(n / 1000)}k`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
+  return String(n);
+}
+
 // === 文本关键词高亮（搜索结果跳转后，正文内匹配词以紫色标记） ===
-function HighlightText({ text, keyword }: { text: string; keyword: string }) {
-  if (!keyword) return <>{text}</>;
+function HighlightText({ text, keyword }: { text: string; keyword: string }) {  if (!keyword) return <>{text}</>;
   const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const lower = keyword.toLowerCase();
   const parts = text.split(new RegExp(`(${escaped})`, "ig"));
@@ -747,15 +776,16 @@ function SceneInfoBar({
   ];
   return (
     <div ref={innerRef} className={`seed-scene-bar-inner${wrap ? " is-wrap" : ""}`}>
-      {fields.map((f) => (
-        <span key={f.label} className="seed-scene-field">
-          <svg className="seed-scene-field-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{f.icon}</svg>
-          <span className="seed-scene-field-label">{f.label}</span>
-          <span className="seed-scene-field-value">{f.value || "——"}</span>
-        </span>
-      ))}
+      {scene &&
+        fields.map((f) => (
+          <span key={f.label} className="seed-scene-field">
+            <svg className="seed-scene-field-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{f.icon}</svg>
+            <span className="seed-scene-field-label">{f.label}</span>
+            <span className="seed-scene-field-value">{f.value || "——"}</span>
+          </span>
+        ))}
       {streaming && (
-        <span className="seed-scene-live">更新中…</span>
+        <span className="seed-scene-live">{scene ? "更新中…" : "场景信息生成中…"}</span>
       )}
     </div>
   );

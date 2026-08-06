@@ -40,6 +40,29 @@ export function SessionPopup({ onClose }: Props) {
   );
   const adventureSessions = filtered.filter((s) => (s.kind ?? "adventure") === "adventure").sort((a, b) => b.updatedAt - a.updatedAt);
   const blankSessions = filtered.filter((s) => s.kind === "blank").sort((a, b) => b.updatedAt - a.updatedAt);
+  // 冒险会话按链分组（chainId），组内按卷号排序；独链=单会话组；组按最新更新排序
+  const adventureGroups = (() => {
+    const groups = new Map<string, Session[]>();
+    for (const s of adventureSessions) {
+      const cid = s.chainId || s.id;
+      if (!groups.has(cid)) groups.set(cid, []);
+      groups.get(cid)!.push(s);
+    }
+    return Array.from(groups.entries())
+      .map(([cid, list]) => ({
+        cid,
+        sessions: list.sort((a, b) => (a.chainIndex ?? 1) - (b.chainIndex ?? 1)),
+      }))
+      .sort(
+        (a, b) =>
+          Math.max(...b.sessions.map((s) => s.updatedAt)) -
+          Math.max(...a.sessions.map((s) => s.updatedAt))
+      );
+  })();
+  // 折叠的链（默认全展开）
+  const [collapsedChains, setCollapsedChains] = useState<string[]>([]);
+  const toggleChain = (cid: string) =>
+    setCollapsedChains((prev) => (prev.includes(cid) ? prev.filter((c) => c !== cid) : [...prev, cid]));
 
   const trashed = [...trash].sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0));
 
@@ -188,8 +211,19 @@ export function SessionPopup({ onClose }: Props) {
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            minWidth: 0,
           }}>
-            {session.title || "未命名对话"}
+            {session.locked && (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={seed.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            )}
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {session.title || "未命名对话"}
+            </span>
           </span>
         )}
         <button
@@ -420,12 +454,76 @@ export function SessionPopup({ onClose }: Props) {
               blankSessions.map((session) => renderSessionRow(session))
             )
           ) : tab === "adventure" ? (
-            adventureSessions.length === 0 ? (
+            adventureGroups.length === 0 ? (
               <div style={{ textAlign: "center", padding: "40px 0", color: seed.muted, fontSize: "14px" }}>
                 {search ? "没有匹配的冒险会话" : "暂无冒险会话"}
               </div>
             ) : (
-              adventureSessions.map((session) => renderSessionRow(session))
+              adventureGroups.map((group) => {
+                const isChain = group.sessions.length > 1;
+                const collapsed = collapsedChains.includes(group.cid);
+                const last = group.sessions[group.sessions.length - 1];
+                return (
+                  <div key={group.cid} style={{ marginBottom: 4 }}>
+                    {isChain && (
+                      <div
+                        onClick={() => toggleChain(group.cid)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "7px 10px",
+                          borderRadius: 8,
+                          cursor: "pointer",
+                          marginBottom: 2,
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = seed.hoverBg; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={seed.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                          {collapsed ? <polyline points="6 9 12 15 18 9" /> : <polyline points="6 15 12 9 18 15" />}
+                        </svg>
+                        <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: seed.fg, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {last.title || "未命名对话"}
+                        </span>
+                        <span style={{ fontSize: 10, color: seed.muted, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                          {group.sessions.map((s) => `#${s.chainIndex ?? 1}`).join(" → ")}
+                        </span>
+                      </div>
+                    )}
+                    {!collapsed && (
+                      <div>
+                        {group.sessions.map((session, idx) => {
+                          const isLast = idx === group.sessions.length - 1;
+                          return isChain ? (
+                            <div key={session.id} style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+                              {/* 链连接线 + 卷号圆点 */}
+                              <div style={{ width: 18, display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+                                <div style={{
+                                  width: 14, height: 14, borderRadius: "50%", flexShrink: 0,
+                                  background: session.id === activeId ? seed.accent : seed.hoverBg,
+                                  color: session.id === activeId ? "#fff" : seed.muted,
+                                  fontSize: 9, fontWeight: 700,
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  fontVariantNumeric: "tabular-nums",
+                                }}>
+                                  {session.chainIndex ?? 1}
+                                </div>
+                                {!isLast && <div style={{ flex: 1, width: 2, background: seed.border, minHeight: 6 }} />}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0, paddingBottom: isLast ? 0 : 2 }}>
+                                {renderSessionRow(session)}
+                              </div>
+                            </div>
+                          ) : (
+                            renderSessionRow(session)
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )
           ) : trashed.length === 0 ? (
             <div style={{ textAlign: "center", padding: "40px 0", color: seed.muted, fontSize: "14px" }}>

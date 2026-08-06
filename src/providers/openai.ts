@@ -91,6 +91,9 @@ interface PartialToolCall {
   function: { name: string; arguments: string };
 }
 
+/** 从 API 读取流式响应的统一抽象：返回 { done, value } */
+type NextChunk = () => Promise<{ done: boolean; value: Uint8Array | null }>;
+
 export async function* chatStream(
   messages: ApiMessage[],
   model: string,
@@ -121,107 +124,145 @@ export async function* chatStream(
     console.log("[chatStream] tools sent:", tools.map(t => t.function?.name));
   }
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
+  const requestId = crypto.randomUUID();
+  let cleanup: (() => void) | undefined;
+
+  // 统一走 Rust 后端流式转发（chat_completions_stream）：绕过 WebView2 CORS，
+  // 所有 Provider 行为一致，错误信息明确（不再出现模糊的 Failed to fetch）
+  const { invoke, Channel } = await import("@tauri-apps/api/core");
+  const channel = new Channel<number[]>();
+  const queue: Uint8Array[] = [];
+  let waiter: ((v: { done: boolean; value: Uint8Array | null }) => void) | null = null;
+  let streamDone = false;
+  let streamError: Error | null = null;
+
+  channel.onmessage = (chunk: number[]) => {
+    const u8 = Uint8Array.from(chunk);
+    if (waiter) {
+      const w = waiter;
+      waiter = null;
+      w({ done: false, value: u8 });
+    } else {
+      queue.push(u8);
+    }
+  };
+
+  const onAbort = () => {
+    void invoke("chat_stream_abort", { requestId });
+  };
+  signal?.addEventListener("abort", onAbort);
+  cleanup = () => signal?.removeEventListener("abort", onAbort);
+
+  void invoke("chat_completions_stream", {
+    requestId,
+    url,
+    apiKey,
     body: JSON.stringify(body),
-    signal,
-  });
+    onChunk: channel,
+  })
+    .then(() => { streamDone = true; })
+    .catch((err: unknown) => {
+      streamError = err instanceof Error ? err : new Error(String(err));
+      streamDone = true;
+    });
 
-  if (!res.ok) {
-    const err = await res.text().catch(() => "Unknown error");
-    throw new Error(`API error ${res.status}: ${err}`);
-  }
-
-  const reader = res.body?.getReader();
-  if (!reader) throw new Error("No response body");
+  const next: NextChunk = async () => {
+    while (!streamDone && queue.length === 0 && !streamError) {
+      if (signal?.aborted) return { done: true, value: null };
+      await new Promise<void>((resolve) => setTimeout(resolve, 15));
+    }
+    if (streamError) throw streamError;
+    if (queue.length > 0) return { done: false, value: queue.shift()! };
+    return { done: true, value: null };
+  };
 
   const decoder = new TextDecoder();
   let buffer = "";
   const toolCallsMap = new Map<number, PartialToolCall>();
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  try {
+    while (true) {
+      const { done, value } = await next();
+      if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
+      buffer += decoder.decode(value ?? new Uint8Array(), { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || !trimmed.startsWith("data: ")) continue;
-      const data = trimmed.slice(6);
-      if (data === "[DONE]") {
-        yield { content: "", done: true };
-        return;
-      }
-      try {
-        const parsed = JSON.parse(data);
-        const choice = parsed.choices?.[0];
-        const delta = choice?.delta;
-        if (!delta) continue;
-
-        const content = delta?.content ?? "";
-        const thinking = delta?.reasoning_content ?? "";
-
-        if (delta?.tool_calls) {
-          for (const tc of delta.tool_calls) {
-            const idx = tc.index ?? 0;
-            if (!toolCallsMap.has(idx)) {
-              toolCallsMap.set(idx, { id: "", type: "function", function: { name: "", arguments: "" } });
-            }
-            const existing = toolCallsMap.get(idx)!;
-            if (tc.id) existing.id = tc.id;
-            if (tc.function?.name) existing.function.name += tc.function.name;
-            if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
-          }
-        }
-
-        if (content || thinking) {
-          yield { content, thinking: thinking || undefined, done: false };
-        }
-
-        if (choice?.finish_reason === "tool_calls" && toolCallsMap.size > 0) {
-          const toolCalls: ToolCall[] = [];
-          for (const [, tc] of toolCallsMap) {
-            toolCalls.push({
-              id: tc.id || "",
-              type: "function",
-              function: {
-                name: tc.function?.name || "",
-                arguments: tc.function?.arguments || "{}",
-              },
-            });
-          }
-          console.log("[chatStream] tool_calls received:", toolCalls.map(t => t.function?.name));
-          toolCallsMap.clear();
-          yield { content: "", done: true, toolCalls };
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith("data: ")) continue;
+        const data = trimmed.slice(6);
+        if (data === "[DONE]") {
+          yield { content: "", done: true };
           return;
         }
-      } catch { /* skip */ }
-    }
+        try {
+          const parsed = JSON.parse(data);
+          const choice = parsed.choices?.[0];
+          const delta = choice?.delta;
+          if (!delta) continue;
 
-    if (toolCallsMap.size > 0) {
-      const toolCalls: ToolCall[] = [];
-      for (const [, tc] of toolCallsMap) {
-        toolCalls.push({
-          id: tc.id || "",
-          type: "function",
-          function: {
-            name: tc.function?.name || "",
-            arguments: tc.function?.arguments || "{}",
-          },
-        });
+          const content = delta?.content ?? "";
+          const thinking = delta?.reasoning_content ?? "";
+
+          if (delta?.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              const idx = tc.index ?? 0;
+              if (!toolCallsMap.has(idx)) {
+                toolCallsMap.set(idx, { id: "", type: "function", function: { name: "", arguments: "" } });
+              }
+              const existing = toolCallsMap.get(idx)!;
+              if (tc.id) existing.id = tc.id;
+              if (tc.function?.name) existing.function.name += tc.function.name;
+              if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
+            }
+          }
+
+          if (content || thinking) {
+            yield { content, thinking: thinking || undefined, done: false };
+          }
+
+          if (choice?.finish_reason === "tool_calls" && toolCallsMap.size > 0) {
+            const toolCalls: ToolCall[] = [];
+            for (const [, tc] of toolCallsMap) {
+              toolCalls.push({
+                id: tc.id || "",
+                type: "function",
+                function: {
+                  name: tc.function?.name || "",
+                  arguments: tc.function?.arguments || "{}",
+                },
+              });
+            }
+            console.log("[chatStream] tool_calls received:", toolCalls.map(t => t.function?.name));
+            toolCallsMap.clear();
+            yield { content: "", done: true, toolCalls };
+            return;
+          }
+        } catch { /* skip */ }
       }
-      console.log("[chatStream] tool_calls recovered (no finish_reason):", toolCalls.map(t => t.function?.name));
-      toolCallsMap.clear();
-      yield { content: "", done: true, toolCalls };
-      return;
+
+      if (toolCallsMap.size > 0) {
+        const toolCalls: ToolCall[] = [];
+        for (const [, tc] of toolCallsMap) {
+          toolCalls.push({
+            id: tc.id || "",
+            type: "function",
+            function: {
+              name: tc.function?.name || "",
+              arguments: tc.function?.arguments || "{}",
+            },
+          });
+        }
+        console.log("[chatStream] tool_calls recovered (no finish_reason):", toolCalls.map(t => t.function?.name));
+        toolCallsMap.clear();
+        yield { content: "", done: true, toolCalls };
+        return;
+      }
     }
+  } finally {
+    cleanup?.();
   }
   yield { content: "", done: true };
 }

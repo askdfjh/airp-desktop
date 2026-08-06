@@ -595,6 +595,7 @@ button.ghost:hover { color:var(--seed-accent); }
   background: var(--seed-bg);
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-gutter: stable;
   font-family: var(--font);
   -webkit-font-smoothing: antialiased;
   scrollbar-width: thin;
@@ -1754,6 +1755,31 @@ mark.seed-hl {
   color: var(--seed-muted);
   margin: 0 4px;
 }
+/* 上下文占用百分比按钮（整理故事入口）：图标 + 百分比文字，自适应宽度 */
+.seed-func-btn.seed-func-pct {
+  width: auto;
+  padding: 0 10px;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+/* AI 生成合规标识 + token 标注（低调，不参与交互） */
+.seed-ai-meta {
+  text-align: right;
+  font-size: 10px;
+  opacity: 0.45;
+  color: var(--seed-muted);
+  margin-top: 4px;
+  user-select: none;
+  line-height: 1.5;
+}
+/* 百分比按钮在最左侧，tooltip 居中会溢出左侧视口 → 左对齐从按钮左缘展开 */
+.seed-func-btn.seed-func-pct::after {
+  left: 0;
+  transform: translateX(0) translateY(4px);
+}
+.seed-func-btn.seed-func-pct:hover::after {
+  transform: translateX(0) translateY(0);
+}
 .seed-func-btn:hover {
   background: var(--seed-hover-bg);
   color: var(--seed-fg);
@@ -1902,6 +1928,21 @@ mark.seed-hl {
     height: 30px;
     margin: 0 2px;
     flex-shrink: 0;
+  }
+  /* 手机：百分比按钮只显示数字（隐藏图标，更紧凑） */
+  .seed-func-btn.seed-func-pct {
+    padding: 0 8px;
+    gap: 0;
+  }
+  .seed-func-btn.seed-func-pct svg {
+    display: none;
+  }
+  /* 手机：AI 合规标注紧凑（字号 9px、收紧间距） */
+  .seed-ai-meta {
+    font-size: 9px;
+    line-height: 1.4;
+    margin-top: 3px;
+    opacity: 0.4;
   }
   .seed-func-chip {
     height: 30px;

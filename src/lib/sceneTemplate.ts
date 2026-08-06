@@ -17,7 +17,7 @@ export const SCENE_TEMPLATE_PROMPT = `【回复模板·必须严格遵守】
 2. <下一步可选的行动或对话>
 3. <下一步可选的行动或对话>
 注意：对话推荐必须是玩家可直接执行的剧情行动或对话（如探索、交谈、战斗、观察、思考），严禁推荐"查看世界设定/图鉴/背景资料/角色设定"等元操作类选项，也严禁把注入的世界设定内容（如【XX设定·XX】条目）原样抄入推荐列表。
-注意：若本条回复是纯工具调用、简短回应或无叙事推进，可省略【章节名】【场景信息】与【对话推荐】区块，直接输出正文。`;
+注意：只要本条回复包含完整叙事正文，就必须同时输出【对话推荐】3 条，以 "1." "2." "3." 编号，每条一句话、可直接执行；仅纯工具调用或极简回应（一两句话）可省略。`;
 
 export interface SceneInfo {
   location: string;
@@ -33,7 +33,22 @@ export interface ParsedReply {
   suggestions: string[];
 }
 
-const SECTION_RE = /(?:【章节名】\s*([^\n【]*)\s*)?【场景信息】([\s\S]*?)【正文】([\s\S]*?)(?:【对话推荐】([\s\S]*?))?\s*$/;
+// 推荐区块支持的标准标签 + 常见变体（部分模型不严格按【对话推荐】输出）
+const SUGGEST_LABELS = [
+  "对话推荐",
+  "推荐回答",
+  "推荐行动",
+  "行动建议",
+  "可选行动",
+  "下一步建议",
+  "建议行动",
+];
+
+const SECTION_RE = new RegExp(
+  `(?:【章节名】\\s*([^\\n【]*)\\s*)?【场景信息】([\\s\\S]*?)【正文】([\\s\\S]*?)(?:【(?:${SUGGEST_LABELS.join(
+    "|",
+  )})】([\\s\\S]*?))?\\s*$`,
+);
 
 // 元操作类推荐（查看设定/图鉴/背景资料等）不属于剧情行动，一律过滤
 const META_DIRECT_RE = /(世界设定|世界观|背景设定|剧情背景|故事背景|图鉴|角色设定|人物设定|设定(?:介绍|详情|说明|列表|页面|面板|文档))/;
@@ -50,9 +65,30 @@ export function isMetaSuggestion(s: string): boolean {
   return WORLD_BOOK_TWO_SEG_RE.test(t) && t.length > 24;
 }
 
+function parseSuggestions(sugText: string): string[] {
+  return sugText
+    .split("\n")
+    .map((l) => l.replace(/^\s*(?:\d+[.、．)）]\s*|[-*•·]\s*)/, "").trim())
+    .filter((l) => Boolean(l) && !isMetaSuggestion(l));
+}
+
 export function parseSceneReply(content: string): ParsedReply {
   const m = content.match(SECTION_RE);
   if (!m) {
+    // 未匹配标准模板（无【场景信息】/【正文】）：尝试从回复中提取推荐块变体，
+    // 兼容模型只写了推荐标签但省略了其他区块的情况
+    for (const label of SUGGEST_LABELS) {
+      const marker = `【${label}】`;
+      const idx = content.lastIndexOf(marker);
+      if (idx >= 0) {
+        const sugText = content.slice(idx + marker.length).trim();
+        const suggestions = parseSuggestions(sugText);
+        const body = content.slice(0, idx).trim();
+        if (suggestions.length > 0) {
+          return { scene: null, body: body || content.trim(), suggestions };
+        }
+      }
+    }
     return { scene: null, body: content.trim(), suggestions: [] };
   }
   const chapterTitle = (m[1] || "").trim() || undefined;
@@ -74,10 +110,7 @@ export function parseSceneReply(content: string): ParsedReply {
       ? { location, time, characters, cause }
       : null;
 
-  const suggestions = sugText
-    .split("\n")
-    .map((l) => l.replace(/^\s*(?:\d+[.、．)）]\s*|[-*•·]\s*)/, "").trim())
-    .filter((l) => Boolean(l) && !isMetaSuggestion(l));
+  const suggestions = parseSuggestions(sugText);
 
   return { chapterTitle, scene, body: body || content.trim(), suggestions };
 }

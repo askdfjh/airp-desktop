@@ -24,7 +24,8 @@ export function ProtagonistSelect({ onComplete }: Props) {
     onboardingAudience,
   } = useUIStore();
   const effTheme = useUIStore((s) => s.effectiveTheme)();
-  const characters = useCharacterStore((s) => s.characters);
+  // 开局选主角：只显示自定义角色（内置功能性角色用于扮演/工具场景，不参与冒险主角）
+  const characters = useCharacterStore((s) => s.characters).filter((c) => !c.isBuiltin);
   const addCharacter = useCharacterStore((s) => s.addCharacter);
   const { activePresetId, setActivePreset } = useGenerationStore();
 

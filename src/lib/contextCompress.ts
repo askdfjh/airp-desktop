@@ -1,7 +1,7 @@
 import type { Message, Session } from "@/types";
 import { chatStream } from "@/providers/openai";
-import { loadMessages, updateSession } from "./db";
-import { extractCharacters, saveExtractedCharacters, estimateTokens } from "./characterExtract";
+import { loadMessages, updateSession, hardDeleteSession } from "./db";
+import { extractCharacters, saveExtractedCharacters, estimateTokens, type ExtractedCharacterInfo } from "./characterExtract";
 import { useProviderStore } from "@/stores/providerStore";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -42,10 +42,8 @@ export interface CompressResult {
   windowCount: number;
   keptCount: number;
   estimatedTokens: number;
-  /** 合并后的完整摘要（写回 DB 后供内存同步） */
-  mergedSummary?: string;
-  /** 新的压缩点（摘要窗口最后一条消息 id） */
-  lastSummarizedMessageId?: string;
+  /** 新建的续集会话 id（成功时） */
+  continuationSessionId?: string;
 }
 
 function isAbort(e: unknown): boolean {
@@ -93,18 +91,26 @@ function buildSummaryWindowText(window: Message[]): string {
   return out.join("\n");
 }
 
-async function summarize(windowText: string, sessionTitle: string, provider: { model: string; baseUrl: string; apiKey: string }, signal?: AbortSignal): Promise<string> {
+/** 生成剧情档案（结构化：局势/角色现状/关键事件/伏笔），注入父卷档案做衔接。 */
+async function generateArchive(
+  windowText: string,
+  sessionTitle: string,
+  parentArchive: string | undefined,
+  provider: { model: string; baseUrl: string; apiKey: string },
+  signal?: AbortSignal,
+): Promise<string> {
   const sys =
-    "你是一位小说编辑。请把用户提供的对话记录压缩为「故事脉络摘要」，" +
-    "用于长对话压缩后保持剧情连贯。只输出摘要正文，不要任何解释。";
+    "你是一位小说编辑。把对话记录整理成「剧情档案」，用于续集会话保持剧情一致性。" +
+    "只输出档案正文，不要任何解释。";
   const user =
     `会话标题：${sessionTitle}\n` +
-    "要求：\n" +
-    "1. 按时间顺序概括关键事件（起因 / 经过 / 结果）；\n" +
-    "2. 概括玩家（主角）的关键选择与后果；\n" +
-    "3. 概括主要角色当前的处境、关系进展与恩怨；\n" +
-    "4. 概括当前局势与未解决的伏笔；\n" +
-    "5. 输出 300-600 字简体中文要点式（1. 2. 3. …），不要角色扮演、不要对话原文、不要【】模板。\n" +
+    "输出结构（简体中文要点式，总篇幅 500-800 字）：\n" +
+    "【当前局势】各方势力与人物当前状态、矛盾焦点、主角处境\n" +
+    "【角色现状】每个主要角色一行：位置、处境、目标、恩怨\n" +
+    "【关键事件】按时间顺序的剧情要点\n" +
+    "【未解伏笔】尚未揭晓的悬念清单\n" +
+    "要求：只写事实不评价；不要对话原文；不要【场景信息】等标签模板；" +
+    (parentArchive ? "必须衔接上卷档案——上卷的重大事件结果与伏笔去向要纳入本卷（上卷档案见下）。\n上卷档案：\n" + parentArchive + "\n" : "（无上卷档案）\n") +
     "对话记录如下（==== 之间）：\n====\n" + windowText + "\n====";
   let out = "";
   for await (const chunk of chatStream(
@@ -121,12 +127,33 @@ async function summarize(windowText: string, sessionTitle: string, provider: { m
   )) {
     out += chunk.content;
   }
-  return out.trim() || "（摘要为空）";
+  return out.trim() || "（档案为空）";
+}
+
+/** 构建关键词索引：角色名/别名 → 窗口内包含该词的消息 id（触发式注入用）。 */
+export function buildContextIndex(chars: ExtractedCharacterInfo[], window: Message[]): string {
+  const keywords = new Set<string>();
+  for (const c of chars) {
+    if (c.name && c.name.trim().length >= 2) keywords.add(c.name.trim());
+    for (const a of c.aliases || []) {
+      if (a && a.trim().length >= 2) keywords.add(a.trim());
+    }
+  }
+  const index: Record<string, string[]> = {};
+  for (const kw of keywords) {
+    const ids = window
+      .filter((m) => m.role !== "system" && m.content && m.content.includes(kw))
+      .map((m) => m.id);
+    if (ids.length > 0) index[kw] = ids.slice(0, 8);
+  }
+  return JSON.stringify(index);
 }
 
 /**
- * 压缩会话：① 提取主要 NPC 存角色卡并绑定 ② 增量摘要 ③ 写回 sessions（摘要合并 / 压缩点前移）。
- * 任一步失败（非中止）不阻塞整体：角色提取失败则只摘要，摘要失败则整体失败且不写回。
+ * 压缩会话（整理故事）：
+ * ① 提取主要 NPC（保存到续集会话，与基线卡合并）② 生成剧情档案（衔接父卷）③ 建关键词索引
+ * ④ 创建续集会话（继承设定 + 复制前卷基线卡 + 写入档案/索引）⑤ 原会话锁定只读。
+ * 任一步失败（非中止）不阻塞整体：角色提取失败则只生成档案；续集创建失败则整体失败并回滚。
  */
 export async function compressSession(ctx: CompressContext): Promise<CompressResult> {
   const { session, messages, provider, signal, onStage } = ctx;
@@ -136,50 +163,69 @@ export async function compressSession(ctx: CompressContext): Promise<CompressRes
     return { ok: false, reason: "没有可整理的内容（已全部在最近保留范围内）", charactersSaved: 0, windowCount: 0, keptCount: kept.length, estimatedTokens };
   }
 
-  // 第 1 步：提取主要 NPC → 角色卡 + 绑定
-  let charactersSaved = 0;
-  onStage?.("extracting");
-  try {
-    const chars = await extractCharacters({
-      messages: window,
-      playerCharacterName: ctx.playerCharacterName,
-      worldBookName: ctx.worldBookName,
-      provider,
-      signal,
-    });
-    charactersSaved = await saveExtractedCharacters(chars, session.id, ctx.worldBookId);
-  } catch (e) {
-    if (isAbort(e)) throw e;
-    console.warn("[compress] character extraction failed, continuing with summary only:", e);
-    charactersSaved = 0;
+  // 第 1 步：提取主要 NPC（仅冒险会话；空白会话跳过——不提取角色、不关联世界书）
+  let chars: ExtractedCharacterInfo[] = [];
+  const isBlankSession = session.kind === "blank";
+  if (!isBlankSession) {
+    onStage?.("extracting");
+    try {
+      chars = await extractCharacters({
+        messages: window,
+        playerCharacterName: ctx.playerCharacterName,
+        worldBookName: ctx.worldBookName,
+        provider,
+        signal,
+      });
+    } catch (e) {
+      if (isAbort(e)) throw e;
+      console.warn("[compress] character extraction failed, continuing with archive only:", e);
+      chars = [];
+    }
   }
 
-  // 第 2 步：增量摘要
+  // 第 2 步：生成剧情档案（注入父卷档案衔接）
   onStage?.("summarizing");
   const windowText = buildSummaryWindowText(window);
-  const summary = await summarize(windowText, session.title, provider, signal);
+  const parent = session.parentId
+    ? useSessionStore.getState().sessions.find((s) => s.id === session.parentId)
+    : undefined;
+  const archive = await generateArchive(windowText, session.title, parent?.archive, provider, signal);
 
-  // 第 3 步：写回（摘要增量合并，压缩点前移到窗口最后一条）
-  const mergedSummary = session.contextSummary
-    ? session.contextSummary + `\n\n【后续进展】\n${summary}`
-    : summary;
-  const lastWindowMsg = window[window.length - 1];
-  await updateSession(session.id, {
-    contextSummary: mergedSummary,
-    summaryUpdatedAt: Date.now(),
-    summaryCount: (session.summaryCount ?? 0) + 1,
-    lastSummarizedMessageId: lastWindowMsg.id,
-  });
+  // 第 3 步：关键词索引
+  const contextIndex = buildContextIndex(chars, window);
 
-  return {
-    ok: true,
-    charactersSaved,
-    windowCount: window.length,
-    keptCount: kept.length,
-    estimatedTokens,
-    mergedSummary,
-    lastSummarizedMessageId: lastWindowMsg.id,
-  };
+  // 第 4 步：创建续集会话（复制基线卡）+ 在续集上保存提取 + 锁定原会话（原子：失败回滚）
+  const ss = useSessionStore.getState();
+  let continuationId = "";
+  try {
+    continuationId = await ss.createContinuationSession(session, { archive, contextIndex });
+    const charactersSaved = chars.length > 0
+      ? await saveExtractedCharacters(chars, continuationId, ctx.worldBookId)
+      : 0;
+    ss.lockSession(session.id);
+    return {
+      ok: true,
+      charactersSaved,
+      windowCount: window.length,
+      keptCount: kept.length,
+      estimatedTokens,
+      continuationSessionId: continuationId,
+    };
+  } catch (e) {
+    if (isAbort(e)) throw e;
+    console.warn("[compress] continuation creation failed, rolling back:", e);
+    if (continuationId) {
+      await hardDeleteSession(continuationId).catch(() => {});
+    }
+    return {
+      ok: false,
+      reason: "整理失败（续集会话创建异常），已回滚，原会话未改动",
+      charactersSaved: 0,
+      windowCount: window.length,
+      keptCount: kept.length,
+      estimatedTokens,
+    };
+  }
 }
 
 /* ---------- 上层编排：手动/自动触发、锁、超时 ---------- */
@@ -212,7 +258,7 @@ export function maybePromptCompress(sessionId: string, messages: Message[]): boo
   if (ui.compressing) return false;
   const ss = useSessionStore.getState();
   const session = ss.sessions.find((x) => x.id === sessionId);
-  if (!session || session.kind === "blank") return false;
+  if (!session) return false;
   if (messages.length < AUTO_TRIGGER_COUNT) return false;
   if (estimateHistoryTokens(messages) < AUTO_TRIGGER_TOKENS) return false;
   if (Date.now() - ui.lastCompressDeclineAt < REMIND_COOLDOWN_MS) return false;
@@ -294,14 +340,12 @@ export async function runCompression(): Promise<CompressResult> {
       onStage: (stage) => useUIStore.getState().setCompressStage(stage),
     });
     if (result.ok) {
-      useSessionStore.getState().applyCompression(
-        session.id,
-        result.mergedSummary ?? "",
-        (session.summaryCount ?? 0) + 1,
-        result.lastSummarizedMessageId ?? null,
+      const contId = result.continuationSessionId ?? session.id;
+      markCompressDone(contId);
+      const cont = useSessionStore.getState().sessions.find((s) => s.id === contId);
+      ui.notify(
+        `整理完成：已新建续集会话（第 ${cont?.chainIndex ?? 1} 卷），记住 ${result.charactersSaved} 位角色；原会话已锁定只读，可创建分支继续`
       );
-      markCompressDone(session.id);
-      ui.notify(`整理完成：已记住 ${result.charactersSaved} 位角色，摘要 ${result.windowCount} 条消息（保留最近 ${result.keptCount} 条）`);
     } else {
       ui.notify(result.reason || "整理失败，请重试");
     }
@@ -309,7 +353,7 @@ export async function runCompression(): Promise<CompressResult> {
   } catch (e) {
     console.warn("[compress] aborted:", e);
     if (timedOut) {
-      ui.notify("整理超时，已中止（未保存任何变更）");
+      ui.notify("整理超时，已中止（未保存任何变更）。手机弱网下整理可能需要较长时间，可稍后重试");
     } else {
       ui.notify("已取消整理");
     }

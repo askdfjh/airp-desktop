@@ -2,7 +2,8 @@ use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ACCEPT, ACCEPT_LANGUAG
 use reqwest::cookie::{Jar, CookieStore};
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 use url::Url;
 
 #[derive(Deserialize)]
@@ -310,6 +311,78 @@ fn exit_app(app: tauri::AppHandle) {
   app.exit(0);
 }
 
+/// 进行中的流式聊天请求（request_id → 取消标志），供 chat_stream_abort 中断
+static STREAM_CANCELS: OnceLock<Mutex<HashMap<String, Arc<AtomicBool>>>> = OnceLock::new();
+fn get_stream_cancels() -> &'static Mutex<HashMap<String, Arc<AtomicBool>>> {
+    STREAM_CANCELS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// 聊天流式请求：Rust 端直连（绕过 WebView2 CORS），SSE 响应逐块经 Channel 转发给前端。
+/// 前端 fetch 被 CORS 拦截时使用（如 opencode.ai 等不支持浏览器直连的 API）。
+/// 中断：chat_stream_abort 置取消标志，读流循环在下一块前退出；120s 读超时兜底。
+#[tauri::command]
+async fn chat_completions_stream(
+    request_id: String,
+    url: String,
+    api_key: String,
+    body: String,
+    on_chunk: tauri::ipc::Channel<Vec<u8>>,
+) -> Result<(), String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(600))
+        .build()
+        .map_err(|e| format!("HTTP 客户端初始化失败: {}", e))?;
+    let resp = client
+        .post(&url)
+        .header(reqwest::header::AUTHORIZATION, format!("Bearer {}", api_key))
+        .header(reqwest::header::CONTENT_TYPE, "application/json")
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| format!("请求失败: {}", e))?;
+    let status = resp.status();
+    if !status.is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!(
+            "API error {}: {}",
+            status,
+            text.chars().take(400).collect::<String>()
+        ));
+    }
+    let cancel = Arc::new(AtomicBool::new(false));
+    get_stream_cancels()
+        .lock()
+        .unwrap()
+        .insert(request_id.clone(), cancel.clone());
+
+    let mut resp = resp;
+    let result: Result<(), String> = loop {
+        if cancel.load(Ordering::Relaxed) {
+            break Ok(());
+        }
+        match resp.chunk().await {
+            Ok(Some(bytes)) => {
+                if let Err(e) = on_chunk.send(bytes.to_vec()) {
+                    break Err(format!("通道发送失败: {}", e));
+                }
+            }
+            Ok(None) => break Ok(()),
+            Err(e) => break Err(format!("读取响应失败: {}", e)),
+        }
+    };
+    get_stream_cancels().lock().unwrap().remove(&request_id);
+    println!("[chat_stream] {} -> {}", url.chars().take(80).collect::<String>(), if result.is_ok() { "ok" } else { "aborted/err" });
+    result
+}
+
+/// 中断进行中的流式请求（前端 AbortController 触发）
+#[tauri::command]
+fn chat_stream_abort(request_id: String) {
+    if let Some(cancel) = get_stream_cancels().lock().unwrap().remove(&request_id) {
+        cancel.store(true, Ordering::Relaxed);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -323,6 +396,8 @@ pub fn run() {
             http_set_cookie,
             http_list_cookies,
             http_clear_cookies,
+            chat_completions_stream,
+            chat_stream_abort,
             exit_app,
         ])
         .run(tauri::generate_context!())

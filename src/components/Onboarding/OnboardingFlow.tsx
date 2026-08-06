@@ -34,7 +34,7 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
   const buildModePrompt = useOnboardingStore((s) => s.buildModePrompt);
   const buildAIOpeningMessage = useOnboardingStore((s) => s.buildAIOpeningMessage);
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     // 必须从 getState() 读最新值：handleRandomStart 直接写 store 后同步调用本函数，
     // 组件订阅的 hook 值仍是旧快照
     const ui = useUIStore.getState();
@@ -50,7 +50,14 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
     const selectedWorldName = ui.selectedWorldName;
     const selectedWorldId = ui.selectedWorldId;
     const worldState = useWorldStore.getState();
-    const selectedBook = worldState.activeBook || worldState.books.find((b) => b.id === selectedWorldId) || null;
+    // 世界书激活推迟到这里（最后一步点"开始冒险"才执行）：中途退出开局流程不改变任何世界状态。
+    // 按当前选择的题材底座解析对应世界书，与 TopicSelect 的解析逻辑保持一致
+    const foundation = getWorldFoundation(selectedWorldId);
+    const resolvedBookId =
+      foundation.builtinBookId ||
+      worldState.books.find((b) => b.id === selectedWorldId || b.theme === selectedWorldId)?.id ||
+      null;
+    const selectedBook = resolvedBookId ? worldState.books.find((b) => b.id === resolvedBookId) || null : null;
     const selectedPresetWorld = PRESET_WORLDS.find((w) => w.id === selectedWorldId);
     const worldviewId =
       selectedPresetWorld?.id ||
@@ -149,6 +156,13 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
       updatedAt: now,
     };
 
+    // 开局全部设置完成后才激活所选世界书
+    if (resolvedBookId) {
+      await worldState.setActiveBook(resolvedBookId);
+    } else {
+      await worldState.deactivateAllBooks();
+    }
+
     addSession(session);
     // 激活新创建的会话，让 DialogueNovel/useChat 能正确加载
     setActive(session.id);
@@ -177,12 +191,8 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
     const basePool = [topic.worldBaseId, ...topic.expandableWorldBaseIds];
     const worldBaseId = basePool[Math.floor(Math.random() * basePool.length)];
     const foundation = getWorldFoundation(worldBaseId);
+    // 世界书激活统一在 handleComplete 内执行（此处只计算 bookId 供 mainEntry 等使用）
     const bookId = foundation.builtinBookId || books.find((b) => b.id === worldBaseId || b.theme === worldBaseId)?.id;
-    if (bookId) {
-      await worldStore.setActiveBook(bookId);
-    } else {
-      await worldStore.deactivateAllBooks();
-    }
 
     const ui = useUIStore.getState();
     ui.setSelectedTopicScheme(topic.id, topic.label);

@@ -22,8 +22,6 @@ export function TopicSelect() {
     setOnboardingAudience,
   } = useUIStore();
   const books = useWorldStore((s) => s.books);
-  const setActiveBook = useWorldStore((s) => s.setActiveBook);
-  const deactivateAllBooks = useWorldStore((s) => s.deactivateAllBooks);
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedBase, setSelectedBase] = useState<string | null>(null);
   const [labelLock, setLabelLock] = useState(false);
@@ -31,11 +29,12 @@ export function TopicSelect() {
   const [sortedTopicId, setSortedTopicId] = useState<string | null>(null);
   const [contracted, setContracted] = useState(false);
   const [hideOthers, setHideOthers] = useState(false);
-  const [gridMaxH, setGridMaxH] = useState<string>("6000px");
+  const [gridHeight, setGridHeight] = useState<string>("auto");
   const [gridOverflow, setGridOverflow] = useState<"visible" | "hidden">("visible");
   const selectedCardRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const contractTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flipPosRef = useRef<{ x: number; y: number } | null>(null);
   const [audienceFilter, setAudienceFilter] = useState<WorldAudienceFilter>("all");
   const topics = getTopicSchemesByAudience(audienceFilter);
@@ -108,15 +107,29 @@ export function TopicSelect() {
       const cols = Math.max(1, Math.floor((gridW + 16) / 236));
       const rows = cols > 1 ? 1 : 2;
       const h = Math.max(Number.isFinite(cardH) ? cardH : 120, 120) * rows + (rows > 1 ? 16 : 0) + 34;
-      setGridMaxH(`${h}px`);
-      // 瞬间滚回顶部（与收缩动画同步执行，避免 smooth 滚动与 maxHeight 过渡竞争导致底部截断）
-      ob?.scrollTo({ top: 0 });
+      // 显式 height 收缩：起点取点击时钉住的 height（卡片移除后 clientHeight 已是收缩值，不能用作动画起点），
+      // 强制回流后更新为目标高度，让 0.5s 过渡全程均匀压缩（max-height 无法做到：内容变少时它不约束高度）
+      const grid = gridRef.current;
+      const lockedH = parseFloat(grid.style.height);
+      const startH = Number.isFinite(lockedH) && lockedH > 0 ? lockedH : grid.clientHeight;
+      grid.style.transition = "none";
+      grid.style.height = `${startH}px`;
+      void grid.offsetWidth;
+      grid.style.transition = "height 0.5s ease";
+      setGridHeight(`${h}px`);
+      // 等 height 收缩过渡（0.5s）结束再平滑滚回顶部：收缩期间内容自然上移，避免与过渡竞争导致底部截断或整页瞬跳
+      if (ob) {
+        if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+        scrollTimerRef.current = window.setTimeout(() => {
+          ob.scrollTo({ top: 0, behavior: "smooth" });
+        }, 560);
+      }
     } else if (labelLock && !contracted) {
       setGridOverflow("hidden");
     } else if (gridRef.current) {
       setGridOverflow("visible");
-      // 展开：直接移除 max-height 限制（瞬时，避免 max-height 过渡中间值小于内容高度导致 grid 行被压缩成细条）
-      setGridMaxH("none");
+      // 展开：直接移除 height 限制（瞬时），恢复内容自适应高度
+      setGridHeight("auto");
       // 展开时清理所有 inline 残留（切换标签时旧卡被手动置 0 的 opacity 需恢复，避免空白格）
       clearCardTransforms();
       // 仅从锁定状态恢复时才滚回顶部；点卡片主体（未锁定）不改变滚动位置
@@ -143,12 +156,8 @@ export function TopicSelect() {
     setSelectedMode(null);
     setSelectedCharacter(null, null);
     setPlayerName("");
-
-    if (bookId) {
-      await setActiveBook(bookId);
-    } else {
-      await deactivateAllBooks();
-    }
+    // 注意：世界书激活推迟到 OnboardingFlow.handleComplete（最后一步点"开始冒险"才执行），
+    // 中途退出开局流程不改变任何世界状态
   };
 
   const pickBase = (topic: TopicScheme, baseId: string) => {
@@ -175,6 +184,18 @@ export function TopicSelect() {
     // 锁定/切换卡片：清理旧卡 transform 残留 → 记录被点卡片旧位置 → 排序到随机题材卡之后的第一位（DOM 重排）→ FLIP 平滑滑动归位
     const wasLocked = labelLock;
     clearCardTransforms();
+    // 锁高：点击时先把网格高度钉在当前值（显式 height，内容变化不塌缩）。排序/淡出期间其他卡片仍在，
+    // 网格区域保持不变；460ms 后卡片移除时高度才能从锁值平滑收缩
+    const lockGrid = gridRef.current;
+    if (lockGrid) {
+      const curH = lockGrid.clientHeight;
+      if (Number.isFinite(curH) && curH > 0) {
+        lockGrid.style.transition = "none";
+        lockGrid.style.height = `${curH}px`;
+        void lockGrid.offsetWidth;
+        lockGrid.style.transition = "height 0.5s ease";
+      }
+    }
     if (wasLocked && selected) {
       // 锁定中切到其他卡：旧选中卡立即隐藏（避免与滑动中的新卡重叠）
       const oldCard = gridRef.current?.querySelector(`[data-topic="${selected}"]`) as HTMLElement | null;
@@ -278,7 +299,7 @@ export function TopicSelect() {
                 setSelected(null);
                 setSelectedBase(null);
                 clearCardTransforms();
-                setGridMaxH("6000px");
+                setGridHeight("auto");
                 setAudienceFilter(tab.key);
               }}
               style={{
@@ -299,7 +320,7 @@ export function TopicSelect() {
         })}
       </div>
 
-      <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, maxHeight: gridMaxH, overflow: gridOverflow, transition: "max-height 0.5s ease", alignContent: labelLock ? "start" : undefined, paddingTop: labelLock ? 8 : 0, paddingBottom: labelLock ? 26 : 0, paddingLeft: labelLock ? 4 : 0, paddingRight: labelLock ? 4 : 0, marginTop: labelLock ? -8 : 0, marginLeft: labelLock ? -4 : 0, marginRight: labelLock ? -4 : 0 }}>
+      <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, height: gridHeight, overflow: gridOverflow, transition: "height 0.5s ease", alignItems: "start" }}>
         {/* 随机题材卡固定第一位，锁定收缩时保持可见（与选中卡同行） */}
         <div
           className="seed-card seed-card--custom"
@@ -388,12 +409,12 @@ export function TopicSelect() {
         })}
       </div>
 
-      <div style={{ textAlign: "center", marginTop: 28 }}>
+      <div style={{ textAlign: "center", marginTop: 28, minHeight: 48, display: "flex", alignItems: "center", justifyContent: "center" }}>
         {selectedTopic ? (
           <button
             className="seed-cta"
             onClick={confirmTopic}
-            style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, animation: "seed-fade-in-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) both" }}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: 15, height: 15 }}>
               <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />

@@ -2,11 +2,10 @@ import type { Message } from "@/types";
 import { chatStream } from "@/providers/openai";
 import type { CharacterDraft } from "@/stores/createStore";
 import {
-  findExtractedCharacterCardByName,
   insertCharacterCard,
   updateCharacterCard,
   insertSessionCharacterCard,
-  deleteSessionCharacterCardByCard,
+  loadSessionCharacterCards,
 } from "./db";
 import { parseSceneReply } from "./sceneTemplate";
 
@@ -298,8 +297,8 @@ export function buildCharacterContext(
 }
 
 /**
- * 幂等保存提取角色：同名提取卡更新内容，否则新建；均绑定到当前会话（先删旧绑再插）。
- * 返回实际保存/更新的角色数。
+ * 幂等保存提取角色：查重范围限定「当前会话已绑定的提取卡」（续集基线卡内合并，不影响其他卷同名卡），
+ * 命中则更新该卡，否则新建并绑定。返回实际保存/更新的角色数。
  */
 export async function saveExtractedCharacters(
   cards: ExtractedCharacterInfo[],
@@ -307,26 +306,34 @@ export async function saveExtractedCharacters(
   worldBookId: string | null,
 ): Promise<number> {
   let saved = 0;
+  const bound = await loadSessionCharacterCards(sessionId);
   for (const info of cards) {
     if (!normalizeName(info.name)) continue;
     const triggerWords = [info.name, ...info.aliases].filter(Boolean);
     const description = (info.relationships || info.name).slice(0, 80);
     const now = Date.now();
-    const existing = await findExtractedCharacterCardByName(info.name);
+    // 只在本会话已绑定的提取卡中按名字/触发词匹配（不查全局，避免改到其他卷的卡）
+    const existing = bound.find(
+      (b) => b.name === info.name || (b.triggerWords || "").includes(info.name)
+    );
     if (existing) {
-      await updateCharacterCard(existing.id, {
+      let existingTags: string[] = [];
+      try {
+        existingTags = JSON.parse(existing.tags || "[]");
+      } catch {
+        existingTags = [];
+      }
+      await updateCharacterCard(existing.characterCardId, {
         description,
         personality: info.personality,
         scenario: info.currentStatus,
         systemPrompt: buildCharacterCardContent(info),
-        tags: [...(existing.tags || []).filter((t) => t !== "提取"), "提取"],
+        tags: [...existingTags.filter((t) => t !== "提取"), "提取"],
         worldBookId,
         isExtracted: true,
         triggerWords,
         updatedAt: now,
       });
-      await deleteSessionCharacterCardByCard(sessionId, existing.id);
-      await insertSessionCharacterCard({ sessionId, characterCardId: existing.id, worldBookId });
     } else {
       const id = "ccx_" + now + "_" + Math.random().toString(36).slice(2, 8);
       await insertCharacterCard({

@@ -1,6 +1,7 @@
 ﻿import { create } from "zustand";
 import type { Session } from "@/types";
 import { useUIStore } from "./uiStore";
+import { useProviderStore } from "./providerStore";
 import {
   loadSessions, insertSession, deleteSession, deleteAllSessions, updateSession,
   loadTrashedSessions, restoreSession as restoreSessionDb,
@@ -8,6 +9,7 @@ import {
   createBranchSession,
   loadFavorites, addFavorite as addFavoriteDb,
   removeFavorite as removeFavoriteDb, searchMessages as searchMessagesDb,
+  loadSessionCharacterCards, duplicateCharacterCard, insertMessage,
   type Favorite, type SearchResult,
 } from "@/lib/db";
 
@@ -47,7 +49,12 @@ interface SessionState {
   toggleThinking: (id: string) => void;
   setThinkingEnabled: (id: string, enabled: boolean) => void;
   branchFromMessage: (sourceId: string, messageId: string) => Promise<boolean>;
-  applyCompression: (id: string, contextSummary: string, summaryCount: number, lastSummarizedMessageId: string | null) => void;
+  /** 创建续集会话（继承设定 + 复制前卷基线卡 + 写入档案/索引），返回新会话 id */
+  createContinuationSession: (source: Session, opts: { archive: string; contextIndex: string }) => Promise<string>;
+  /** 锁定会话（压缩后只读，可分支） */
+  lockSession: (id: string) => void;
+  /** 创建角色扮演会话（AI 扮演该角色，空白会话类型 + 自动开场自我介绍），返回新会话 id */
+  createRoleplaySession: (role: { name: string; systemPrompt: string; intro?: string }) => Promise<string>;
 }
 
 export const useSessionStore = create<SessionState>((set, get) => ({
@@ -254,23 +261,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   clearTargetMessage: () => set({ targetMessageId: null, targetKeyword: null }),
 
-  applyCompression: (id, contextSummary, summaryCount, lastSummarizedMessageId) => {
-    set((st) => ({
-      sessions: st.sessions.map((s) =>
-        s.id === id
-          ? {
-              ...s,
-              contextSummary,
-              summaryCount,
-              lastSummarizedMessageId: lastSummarizedMessageId ?? undefined,
-              summaryUpdatedAt: Date.now(),
-            }
-          : s
-      ),
-    }));
-  },
-
-
   createBlankSession: () => {
     const now = Date.now();
     const id = 's_' + now + '_' + Math.random().toString(36).slice(2, 8);
@@ -287,6 +277,86 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     };
     set((st) => ({ sessions: [session, ...st.sessions], activeId: id }));
     insertSession(session).catch((e) => console.error('[db] insertSession failed:', e));
+    return id;
+  },
+
+  createContinuationSession: async (source, opts) => {
+    const now = Date.now();
+    const id = crypto.randomUUID();
+    const session: Session = {
+      id,
+      title: source.title,
+      systemPrompt: source.systemPrompt,
+      providerId: source.providerId,
+      model: source.model,
+      thinkingEnabled: source.thinkingEnabled ?? true,
+      kind: source.kind ?? "adventure",
+      createdAt: now,
+      updatedAt: now,
+      chainId: source.chainId || source.id,
+      chainIndex: (source.chainIndex ?? 1) + 1,
+      parentId: source.id,
+      archive: opts.archive,
+      contextIndex: opts.contextIndex,
+    };
+    // 复制前卷绑定卡作为续集基线（C2 包含 C1，各自独立；仅冒险会话有绑定卡）
+    if (session.kind !== "blank") {
+      try {
+        const cards = await loadSessionCharacterCards(source.id);
+        for (const c of cards) {
+          await duplicateCharacterCard(c.characterCardId, id, c.worldBookId ?? null);
+        }
+      } catch (e) {
+        console.warn("[continuation] copy baseline cards failed:", e);
+      }
+    }
+    insertSession(session).catch((e) => console.error("[db] insertSession(continuation) failed:", e));
+    set((st) => ({ sessions: [session, ...st.sessions], activeId: id }));
+    return id;
+  },
+
+  lockSession: (id) => {
+    set((st) => ({
+      sessions: st.sessions.map((s) => (s.id === id ? { ...s, locked: true, updatedAt: Date.now() } : s)),
+    }));
+    updateSession(id, { locked: true, updatedAt: Date.now() }).catch((e) =>
+      console.error("[db] lockSession failed:", e)
+    );
+  },
+
+  createRoleplaySession: async (role) => {
+    const now = Date.now();
+    const id = crypto.randomUUID();
+    const ps = useProviderStore.getState();
+    const session: Session = {
+      id,
+      title: `扮演·${role.name}`,
+      systemPrompt: role.systemPrompt,
+      providerId: ps.activeProviderId ?? "",
+      model: ps.activeModel ?? "",
+      thinkingEnabled: true,
+      kind: "blank",
+      createdAt: now,
+      updatedAt: now,
+    };
+    // 自动开场：角色自我介绍（本地模板，不消耗 token）
+    const intro = role.intro?.trim()
+      ? `你好，我是「${role.name}」。${role.intro.trim()}你可以直接告诉我需求，我们开始吧。`
+      : `你好，我是「${role.name}」。${role.systemPrompt.slice(0, 60)}有什么可以帮你的，直接告诉我就好。`;
+    // 先落库再激活：避免 useChat 加载消息时开场白尚未写入（时序竞态导致开场白丢失）
+    try {
+      await insertSession(session);
+      await insertMessage({
+        id: crypto.randomUUID(),
+        sessionId: id,
+        role: "assistant",
+        content: intro,
+        createdAt: now,
+      });
+    } catch (e) {
+      console.error("[db] roleplay session init failed:", e);
+    }
+    set((st) => ({ sessions: [session, ...st.sessions], activeId: id }));
     return id;
   },
 

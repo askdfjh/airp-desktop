@@ -55,6 +55,15 @@ export interface Session {
   summaryUpdatedAt?: number;
   summaryCount?: number;
   lastSummarizedMessageId?: string;
+  // 故事链（压缩续集体系）：chainId 链标识（首卷=自身 id）、chainIndex 卷号、parentId 上一卷
+  chainId?: string;
+  chainIndex?: number;
+  parentId?: string | null;
+  // 压缩后原会话锁定只读（可创建分支）
+  locked?: boolean;
+  // 剧情档案（结构化：局势/角色现状/关键事件/伏笔）+ 关键词索引（JSON：关键词→消息 id）
+  archive?: string;
+  contextIndex?: string;
 }
 
 export interface Message {
@@ -72,6 +81,10 @@ export interface Message {
   toolStatus?: "running" | "done" | "aborted";
   // 已调用的工具名（持久化到 DB，用于完成后/刷新后的轻量提示）
   tools?: string[];
+  // 格式分析结果（独立 API 请求生成，JSON 文本：章节名/场景信息/对话推荐；持久化到 DB）
+  sceneAnalysis?: string | null;
+  // token 消耗估算（input=上传/正文+分析输入合计，output=下载/正文+分析输出合计；持久化到 DB）
+  tokenUsage?: { input: number; output: number } | null;
 }
 
 export interface ChatStreamChunk {

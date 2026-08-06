@@ -3,10 +3,13 @@ import { flushSync } from "react-dom";
 import type { Message, AttachedFile, ToolDefinition, ToolCall } from "@/types";
 import { chatStream } from "@/providers/openai";
 import type { ApiMessage } from "@/providers/openai";
-import { SCENE_TEMPLATE_PROMPT } from "@/lib/sceneTemplate";
+import { analyzeScene, parseSceneAnalysis, buildAnalyzePrompt } from "@/lib/sceneAnalyzer";
+import { parseSceneReply } from "@/lib/sceneTemplate";
+import { buildNarrativeGuard, buildProgressionGuard } from "@/lib/narrativeGuard";
+import { estimateTokens } from "@/lib/characterExtract";
 import { useProviderStore } from "@/stores/providerStore";
 import { useSessionStore } from "@/stores/sessionStore";
-import { loadMessages, insertMessage, updateMessageContent, updateMessageThinking, deleteMessage as deleteMessageDb, getAppSetting } from "@/lib/db";
+import { loadMessages, insertMessage, updateMessageContent, updateMessageThinking, updateMessageSceneAnalysis, updateMessageTokenUsage, deleteMessage as deleteMessageDb, getAppSetting } from "@/lib/db";
 import { getBuiltinTools, executeBuiltinTool } from "@/tools/builtinTools";
 import { useMcpStore } from "@/stores/mcpStore";
 import { callTool as callMcpTool } from "@/lib/mcpClient";
@@ -30,6 +33,12 @@ export function setToolsEnabled(v: boolean) {
 // 检查当前是否配置了可用的模型服务；未配置时返回提示文案，配置正常返回 null
 export function getSendBlocker(): string | null {
   const ps = useProviderStore.getState();
+  // 压缩续集锁定：原会话只读，禁止继续写（分支不受限）
+  const ss = useSessionStore.getState();
+  const cur = ss.activeId ? ss.sessions.find((x) => x.id === ss.activeId) : null;
+  if (cur?.locked) {
+    return `该会话已整理锁定（第 ${cur.chainIndex ?? 1} 卷），请从续集会话继续，或创建分支独立发展`;
+  }
   const provider = ps.providers.find((p) => p.id === ps.activeProviderId);
   if (!provider) return "未配置模型服务，请先在设置中配置";
   if (ps.enabledProviders[provider.id] === false) return "当前模型服务已停用，请在设置中启用";
@@ -92,6 +101,8 @@ export function useChat() {
   const [streaming, setStreaming] = useState(false);
   const [toolRunning, setToolRunning] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  // 格式分析（章节/场景/对话推荐独立请求）进行中
+  const [analysingScene, setAnalysingScene] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
   const messagesRef = useRef<Message[]>([]);
@@ -104,6 +115,8 @@ export function useChat() {
   const activeProvider = providers.find((p) => p.id === activeProviderId);
   const activeWorldBook = useWorldStore((s) => s.activeBook);
   const [sessionCards, setSessionCards] = useState<LoadedExtractedCard[]>([]);
+  // 父卷消息缓存（续集触发式注入用：切换会话时预加载）
+  const parentMessagesRef = useRef<Message[]>([]);
   const activeGenPreset = useGenerationStore((s) =>
     s.activePresetId === "none" ? undefined : s.presets.find((p) => p.id === s.activePresetId) || s.presets[0],
   );
@@ -162,6 +175,16 @@ export function useChat() {
         }
       })
       .catch((e) => console.error("[db] loadSessionCharacterCards failed:", e));
+    // 预加载父卷消息（续集触发式注入用）
+    const pid = activeSession?.parentId ?? null;
+    parentMessagesRef.current = [];
+    if (pid) {
+      loadMessages(pid)
+        .then((msgs) => {
+          if (!cancelled) parentMessagesRef.current = msgs;
+        })
+        .catch(() => {});
+    }
     return () => { cancelled = true; };
   }, [activeSession?.id]);
 
@@ -170,10 +193,18 @@ export function useChat() {
       const result: ApiMessage[] = [];
       let hist = history;
       const basePrompt = activeSession?.systemPrompt || "";
-      // 固定回复模板（仅冒险会话）：要求 AI 按【场景信息】【正文】【对话推荐】输出，驱动版面更新
-      const sceneTemplate = activeSession?.kind !== "blank"
-        ? `\n\n${SCENE_TEMPLATE_PROMPT}`
+      // 正文单独输出：不注入【场景信息】【对话推荐】模板（章节/场景/推荐由独立格式分析请求生成）
+      let sceneTemplate = activeSession?.kind !== "blank"
+        ? `\n\n【输出要求】直接输出故事正文本身。不要输出章节名、场景信息、对话推荐等任何区块标签，不要添加任何格式说明或前后缀。`
         : "";
+      // 叙事约束（插件设置页开关，默认关闭）：叙事防护 + 剧情推进，可独立开启
+      if (activeSession?.kind !== "blank") {
+        const ui = useUIStore.getState();
+        const guards: string[] = [];
+        if (ui.narrativeGuardOn) guards.push(buildNarrativeGuard());
+        if (ui.progressionGuardOn) guards.push(buildProgressionGuard());
+        if (guards.length > 0) sceneTemplate += "\n\n" + guards.join("\n\n");
+      }
       // 模型提示词注入：已应用且绑定当前模型的注入词，合并注入到 system prompt 最开头
       if (!isBlankSession && activeInjections.length > 0) {
         result.push({ role: "system", content: activeInjections.join("\n\n") });
@@ -196,7 +227,7 @@ export function useChat() {
         } else if (styleInstr) {
           result.push({ role: "system", content: styleInstr.trim() + sceneTemplate });
         }
-      // 长对话压缩：故事脉络摘要注入 + 历史截断（摘要点之后的消息才进入上下文）
+      // 长对话压缩：故事脉络摘要注入 + 历史截断（旧压缩会话兼容；摘要点之后的消息才进入上下文）
       if (!isBlankSession && activeSession?.contextSummary) {
         result.push({
           role: "system",
@@ -207,6 +238,84 @@ export function useChat() {
           const cutIdx = hist.findIndex((m) => m.id === lastSummarizedId);
           if (cutIdx >= 0) hist = hist.slice(cutIdx + 1);
         }
+      }
+      // 续集会话：剧情档案（当前卷 + 父卷）注入 + 旧卷触发片段 + 兜底（总量上限降级；冒险/空白会话均生效）
+      if (activeSession?.archive) {
+        const ss = useSessionStore.getState();
+        const parent = activeSession.parentId
+          ? ss.sessions.find((s) => s.id === activeSession.parentId)
+          : undefined;
+        const parts: string[] = [
+          `【剧情档案】以下为整理后的剧情档案，是续集剧情一致性的依据（正文中不要复述档案条目）：\n${activeSession.archive}`,
+        ];
+        if (parent?.archive) {
+          parts.push(`【上卷档案】\n${parent.archive}`);
+        }
+        let addedTrigger = false;
+        let addedFallback = false;
+        // 触发片段：当前对话文本关键词匹配父卷索引 → 注入相关旧消息（清洗标签）
+        const parentMsgs = parentMessagesRef.current;
+        if (parent?.contextIndex && parentMsgs.length > 0) {
+          let index: Record<string, string[]> = {};
+          try {
+            index = JSON.parse(parent.contextIndex);
+          } catch {
+            index = {};
+          }
+          const recentText = [...hist.slice(-2).map((m) => m.content), lastUserContent].join("\n");
+          const seen = new Set<string>();
+          const matched: Message[] = [];
+          for (const kw of Object.keys(index)) {
+            if (recentText.includes(kw)) {
+              for (const mid of index[kw]) {
+                if (!seen.has(mid)) {
+                  seen.add(mid);
+                  const msg = parentMsgs.find((m) => m.id === mid);
+                  if (msg && msg.role !== "system" && msg.content) matched.push(msg);
+                }
+              }
+            }
+          }
+          // 兜底：父卷最后 3 条（防关键词漏检导致细节断层；预算控制，手机弱网友好）
+          for (let i = parentMsgs.length - 1; i >= 0 && matched.length < 6; i--) {
+            const m = parentMsgs[i];
+            if (m.role !== "system" && m.content && !seen.has(m.id)) {
+              seen.add(m.id);
+              matched.push(m);
+            }
+          }
+          const clean = (m: Message, max: number) =>
+            (parseSceneReply(m.content).body || m.content).slice(0, max);
+          const triggerMsgs = matched.slice(0, 3);
+          if (triggerMsgs.length > 0) {
+            addedTrigger = true;
+            parts.push(
+              `【旧卷片段·相关回忆】以下为旧卷中与当前对话相关的片段：\n` +
+                triggerMsgs.map((m) => `${m.role === "user" ? "主角" : "AI"}：${clean(m, 600)}`).join("\n"),
+            );
+          }
+          const fallbackMsgs = matched.slice(3, 6);
+          if (fallbackMsgs.length > 0) {
+            addedFallback = true;
+            parts.push(
+              `【旧卷片段·最近进展】\n` +
+                fallbackMsgs.map((m) => `${m.role === "user" ? "主角" : "AI"}：${clean(m, 400)}`).join("\n"),
+            );
+          }
+        }
+        // 总量上限降级：超预算先丢兜底，再丢触发，保留档案（预算对手机弱网友好）
+        let joined = parts.join("\n\n");
+        const ARCHIVE_BUDGET = 4500;
+        if (joined.length > ARCHIVE_BUDGET && addedFallback) {
+          joined = parts.filter((p) => !p.startsWith("【旧卷片段·最近进展】")).join("\n\n");
+        }
+        if (joined.length > ARCHIVE_BUDGET && addedTrigger) {
+          joined = parts.filter((p) => !p.startsWith("【旧卷片段·相关回忆】")).join("\n\n");
+        }
+        if (joined.length > ARCHIVE_BUDGET) {
+          joined = joined.slice(0, ARCHIVE_BUDGET);
+        }
+        result.push({ role: "system", content: joined });
       }
       if (!isBlankSession && activeWorldBook) {
         const recentContext = [
@@ -229,9 +338,40 @@ export function useChat() {
           result.push({ role: "system", content: charCtx });
         }
       }
+      // 当前场景 + 角色后台进展：取最近一条带 sceneAnalysis 的消息注入正文模型
+      // （场景信息无条件注入保持连贯；后台进展玩家不可见，随 hiddenProgressOn 开关）
+      if (!isBlankSession) {
+        const ui = useUIStore.getState();
+        let prevAnalysis: ReturnType<typeof parseSceneAnalysis> | null = null;
+        for (let i = hist.length - 1; i >= 0; i--) {
+          const sa = hist[i]?.sceneAnalysis;
+          if (sa) {
+            prevAnalysis = parseSceneAnalysis(sa);
+            break;
+          }
+        }
+        if (prevAnalysis) {
+          const parts: string[] = [];
+          const sceneBits = [prevAnalysis.location, prevAnalysis.time, prevAnalysis.characters].filter(Boolean);
+          if (sceneBits.length > 0) {
+            parts.push(`【当前场景】${sceneBits.join(" · ")}${prevAnalysis.cause ? `（起因：${prevAnalysis.cause}）` : ""}`);
+          }
+          if (ui.hiddenProgressOn && prevAnalysis.hiddenProgress) {
+            parts.push(`【角色后台进展·玩家不可见】${prevAnalysis.hiddenProgress}`);
+          }
+          if (parts.length > 0) result.push({ role: "system", content: parts.join("\n") });
+        }
+      }
       for (const m of hist) {
         // 工具占位消息（空内容）不进入历史上下文
         if (m.role === "assistant" && m.tools && !m.content.trim()) continue;
+        // 历史 assistant 消息剥离旧模板标签（【章节名】【场景信息】【正文】【对话推荐】），
+        // 只保留正文——防止模型 few-shot 模仿历史格式继续输出标签；纯正文消息原样透传
+        if (m.role === "assistant" && !m.toolCalls && m.content.includes("【正文】")) {
+          const cleaned = parseSceneReply(m.content).body;
+          result.push({ role: "assistant", content: cleaned || m.content });
+          continue;
+        }
         result.push({ role: m.role, content: m.content });
       }
       if (images && images.length > 0) {
@@ -249,6 +389,70 @@ export function useChat() {
     },
     [activeSession, activeWorldBook, activeGenPreset, activeInjections, sessionCards, isBlankSession],
   );
+
+  // 格式分析（独立请求）：按设置解析执行模型 → analyzeScene → 更新消息内存 + 入库。
+  // 关闭/未配置/失败时静默（前端隐藏场景与推荐，章节名回落第一章）
+  const runSceneAnalysis = useCallback(async (msgId: string, body: string) => {
+    const fm = useUIStore.getState().formatModel;
+    if (!fm || fm.mode === "off") return;
+    const ps = useProviderStore.getState();
+    let provider = ps.providers.find((p) => p.id === ps.activeProviderId);
+    let model = ps.activeModel;
+    if (fm.mode === "custom") {
+      const cp = ps.providers.find((p) => p.id === fm.providerId);
+      if (!cp || !fm.model) return;
+      provider = cp;
+      model = fm.model;
+    }
+    if (!provider || !model) return;
+
+    // 当前章节名：最近一条带 sceneAnalysis 的消息
+    let prevChapter: string | undefined;
+    for (let i = messagesRef.current.length - 1; i >= 0; i--) {
+      const sa = messagesRef.current[i]?.sceneAnalysis;
+      if (sa) {
+        const parsed = parseSceneAnalysis(sa);
+        if (parsed?.chapterTitle) {
+          prevChapter = parsed.chapterTitle;
+          break;
+        }
+      }
+    }
+
+    setAnalysingScene(true);
+    try {
+      const includeHidden = useUIStore.getState().hiddenProgressOn;
+      const result = await analyzeScene({
+        baseUrl: provider.baseUrl,
+        apiKey: provider.apiKey,
+        model,
+        body,
+        currentChapterTitle: prevChapter,
+        includeHiddenProgress: includeHidden,
+      });
+      if (result && (result.suggestions.length > 0 || result.chapterTitle || result.location || result.characters)) {
+        const json = JSON.stringify(result);
+        // 分析请求消耗并入该消息 tokenUsage（↑ 分析 prompt，↓ 分析输出）
+        const prevUsage = messagesRef.current.find((m) => m.id === msgId)?.tokenUsage;
+        const usage = {
+          input: (prevUsage?.input ?? 0) + estimateTokens(buildAnalyzePrompt(body, prevChapter, includeHidden)),
+          output: (prevUsage?.output ?? 0) + estimateTokens(json),
+        };
+        setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, sceneAnalysis: json, tokenUsage: usage } : m)));
+        messagesRef.current = messagesRef.current.map((m) =>
+          m.id === msgId ? { ...m, sceneAnalysis: json, tokenUsage: usage } : m,
+        );
+        updateMessageSceneAnalysis(msgId, json).catch((e) =>
+          console.error("[db] updateMessageSceneAnalysis failed:", e),
+        );
+        updateMessageTokenUsage(msgId, JSON.stringify(usage)).catch((e) =>
+          console.error("[db] updateMessageTokenUsage failed:", e),
+        );
+      }
+    } finally {
+      setAnalysingScene(false);
+    }
+  }, []);
 
   const startStream = useCallback(
     (sessionId: string, apiMessages: ApiMessage[], tools?: ToolDefinition[]): Promise<{ toolCalls?: ToolCall[]; content: string; thinking: string }> => {
@@ -272,7 +476,8 @@ export function useChat() {
         let finalContent = "";
         let finalThinking = "";
         let resolvedToolCalls: ToolCall[] | undefined;
-        const thinkingEnabled = activeSession?.thinkingEnabled ?? false;
+        // 思考模式默认开启：仅当会话明确关闭（DB 存 0）时才关闭
+        const thinkingEnabled = activeSession?.thinkingEnabled ?? true;
         let pendingContent = "";
         let pendingThinking = "";
         let flushRafId: number | null = null;
@@ -356,6 +561,24 @@ export function useChat() {
 
             updateMessageContent(placeholderMsg.id, finalContent).catch(() => {});
             if (finalThinking) updateMessageThinking(placeholderMsg.id, finalThinking).catch(() => {});
+            // token 消耗估算（估算制：↑输入=apiMessages 文本，↓输出=正文+思考）
+            const inputTokens = apiMessages.reduce(
+              (t, m) => t + estimateTokens(typeof m.content === "string" ? m.content : JSON.stringify(m.content ?? "")),
+              0,
+            );
+            const outputTokens = estimateTokens(finalContent + (finalThinking || ""));
+            {
+              const usage = { input: inputTokens, output: outputTokens };
+              updateMessageTokenUsage(placeholderMsg.id, JSON.stringify(usage)).catch(() => {});
+              setMessages((prev) => prev.map((m) => (m.id === placeholderMsg.id ? { ...m, tokenUsage: usage } : m)));
+              messagesRef.current = messagesRef.current.map((m) =>
+                m.id === placeholderMsg.id ? { ...m, tokenUsage: usage } : m,
+              );
+            }
+            // 格式分析（独立请求）：正文完成后生成章节名/场景信息/对话推荐（仅冒险会话、未中断）
+            if (activeSession?.kind !== "blank" && !abortController.signal.aborted && finalContent.trim()) {
+              void runSceneAnalysis(placeholderMsg.id, finalContent);
+            }
             resolve({ content: finalContent, thinking: finalThinking });
           } catch (err: unknown) {
             if (err instanceof Error && err.name === "AbortError") {
@@ -381,7 +604,7 @@ export function useChat() {
         })();
       });
     },
-    [activeModel, activeProvider, activeSession, activeGenPreset, isBlankSession],
+    [activeModel, activeProvider, activeSession, activeGenPreset, isBlankSession, runSceneAnalysis],
   );
 
   const sendMessage = useCallback(
@@ -874,6 +1097,7 @@ export function useChat() {
     streaming,
     toolRunning,
     loadingMessages,
+    analysingScene,
     sendMessage,
     stopStreaming,
     clearMessages,
