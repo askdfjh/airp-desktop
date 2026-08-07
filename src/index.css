@@ -1301,7 +1301,7 @@ mark.seed-hl {
   padding: 8px 0;
   opacity: 0.5;
 }
-.seed-typing span {
+.seed-typing span:not(.seed-typing-label) {
   width: 5px;
   height: 5px;
   border-radius: 50%;
@@ -1310,6 +1310,13 @@ mark.seed-hl {
 }
 .seed-typing span:nth-child(2) { animation-delay: 0.2s; }
 .seed-typing span:nth-child(3) { animation-delay: 0.4s; }
+.seed-typing-label {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--seed-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 
 /* 长对话压缩状态条：整理中（提取角色 → 生成摘要），可停止 */
 .seed-compress-bar {
@@ -1495,6 +1502,7 @@ mark.seed-hl {
   background: var(--seed-glass);
   backdrop-filter: blur(20px);
   border-top: 1px solid var(--seed-border);
+  transition: transform 0.28s ease;
 }
 .seed-input-inner {
   max-width: 720px;
@@ -1755,7 +1763,7 @@ mark.seed-hl {
   color: var(--seed-muted);
   margin: 0 4px;
 }
-/* 上下文占用百分比按钮（整理故事入口）：图标 + 百分比文字，自适应宽度 */
+/* 上下文占用百分比按钮（保存记忆入口）：图标 + 百分比文字，自适应宽度 */
 .seed-func-btn.seed-func-pct {
   width: auto;
   padding: 0 10px;
@@ -2370,4 +2378,41 @@ mark.seed-hl {
 .seed-func-btn--active {
   background: color-mix(in srgb, var(--seed-accent) 15%, transparent) !important;
   color: var(--seed-accent) !important;
+}
+
+/* ===== 安卓优化 =====
+   backdrop-filter 在安卓 WebView 上每帧重采样背景，导致输入区/底栏隐藏-出现动画明显卡顿。
+   安卓下改用实体背景 + 更短过渡；并适配状态栏/手势条安全区。 */
+[data-platform="android"] .seed-input-area,
+[data-platform="android"] .seed-func-bar {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+[data-platform="android"] .seed-input-area {
+  background: var(--seed-bg);
+  transition: transform 0.16s ease;
+}
+/* 顶部信息条避让状态栏（安卓无自绘标题栏，内容从顶部开始；这些条是 relative/flow，用 padding 控制留白） */
+[data-platform="android"] .seed-info-badge {
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+}
+[data-platform="android"] .seed-scene-bar {
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) 12px 0;
+}
+[data-platform="android"] .seed-opening,
+[data-platform="android"] .seed-compress-bar {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
+}
+/* 底部手势条安全区：输入区 / 底栏留白，避免被系统导航条遮挡 */
+[data-platform="android"] .seed-input-inner {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+}
+[data-platform="android"] .seed-func-bar {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+}
+/* 触控目标：安卓下功能按钮稍大，便于点按 */
+[data-platform="android"] .seed-func-btn {
+  width: 36px;
+  height: 36px;
+  margin: 0 2px;
 }

@@ -8,7 +8,7 @@ import { useSessionStore } from "@/stores/sessionStore";
 import { useGenerationStore } from "@/stores/generationStore";
 import { setToolsEnabled } from "@/hooks/useChat";
 import { setAppSetting } from "@/lib/db";
-import { runCompression, stopCompress, AUTO_TRIGGER_TOKENS } from "@/lib/contextCompress";
+import { runCompression, stopCompress, CONTEXT_WINDOW_TOKENS, COMPRESS_ALLOW_PCT } from "@/lib/contextCompress";
 import { isThinkingModel } from "@/providers/openai";
 import { SessionPopup } from "./SessionPopup";
 import { SearchPanel } from "./SearchPanel";
@@ -55,8 +55,8 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
   // 思考模式默认开启：仅当会话明确关闭（DB 存 0）时才关闭
   const thinkingEnabled = activeSession?.thinkingEnabled ?? true;
   const isBlank = mode === "blank" || (activeSession?.kind ?? "adventure") === "blank";
-  // 上下文占用百分比（基于自动整理阈值）
-  const pct = Math.min(100, Math.round((historyTokens || 0) / AUTO_TRIGGER_TOKENS * 100));
+  // 上下文占用百分比（基于 128K 上下文窗口；达到 90% 才允许保存记忆）
+  const pct = Math.min(100, Math.round((historyTokens || 0) / CONTEXT_WINDOW_TOKENS * 100));
 
   // 点击外部 / Esc 关闭下拉
   useEffect(() => {
@@ -200,12 +200,20 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
   return (
     <>
       <div className="seed-func-bar" ref={barRef}>
-        {/* 上下文占用百分比（整理故事入口）：放最前，点击触发整理（冒险/空白会话均可用） */}
+        {/* 上下文占用百分比（保存记忆入口）：放最前，达到 90% 才可点击保存记忆（冒险/空白会话均可用） */}
         <button
           className={"seed-func-btn seed-func-pct" + (compressing ? " seed-compress-btn" : "")}
           disabled={false}
-          data-tooltip={compressing ? "停止整理（不保存任何变更）" : `上下文占用 ${pct}% · 整理故事（压缩上下文${isBlank ? "" : "，提取角色"}）`}
-          onClick={compressing ? stopCompress : () => void runCompression()}
+          data-tooltip={compressing ? "停止保存记忆（不保存任何变更）" : `上下文占用 ${pct}% · 保存记忆（达到 ${COMPRESS_ALLOW_PCT}% 后可压缩并保存剧情记忆）`}
+          onClick={compressing
+            ? stopCompress
+            : () => {
+                if (pct < COMPRESS_ALLOW_PCT) {
+                  notify(`上下文占用 ${pct}%，达到 ${COMPRESS_ALLOW_PCT}% 后即可保存记忆`);
+                  return;
+                }
+                void runCompression();
+              }}
         >
           {compressing ? <Square size={14} fill="currentColor" /> : (
             <>

@@ -20,12 +20,14 @@ function formatTime(ts: number): string {
 }
 
 function buildCharacterPrompt(c: Character, arcs: CharacterArc[]): string {
-  let p = `角色：${c.name}\n外貌：${c.appearance || "未知"}\n性格：${c.personality || "未知"}`;
-  if (c.background) p += `\n背景：${c.background}`;
+  const lines = [`角色：${c.name}`];
+  if (c.appearance) lines.push(`外貌：${c.appearance}`);
+  if (c.personality) lines.push(`性格：${c.personality}`);
+  if (c.background) lines.push(`背景：${c.background}`);
   if (arcs.length > 0) {
-    p += "\n经历：" + arcs.map(a => `${a.event}${a.description ? "（" + a.description + "）" : ""}`).join("，");
+    lines.push("经历：" + arcs.map(a => `${a.event}${a.description ? "（" + a.description + "）" : ""}`).join("，"));
   }
-  return p;
+  return lines.join("\n");
 }
 
 export function CharacterPanel() {
@@ -125,36 +127,36 @@ export function CharacterPanel() {
     setDetailId(id);
   };
 
-  // 多选角色 → 新建扮演会话：AI 同时扮演所选角色（按语境切换身份）
+  // 应用所选角色 → 新建扮演会话：单选=单人会话，多选=多人会话
   const applySelectedToSession = () => {
     if (selectedChars.size === 0) return;
     const picked = characters.filter((c) => selectedChars.has(c.id));
     if (picked.length === 0) return;
-    const parts: string[] = [`你现在扮演以下 ${picked.length} 个角色，在对话中根据语境切换身份，保持各自性格与设定一致，不要跳出角色：`];
-    picked.forEach((c) => {
-      parts.push(`【${c.name}】` + buildCharacterPrompt(c, []).replace(/^角色：.+?\n/, ""));
-    });
-    useSessionStore.getState().createRoleplaySession({
-      name: picked.length <= 2 ? picked.map((c) => c.name).join("、") : `${picked[0].name} 等 ${picked.length} 人`,
-      systemPrompt: parts.join("\n"),
-      intro: picked.map((c) => c.personality || c.tags.join("、")).filter(Boolean).join("；") || undefined,
-    });
-    useUIStore.getState().setSettingsOpen(false);
-  };
-
-  // 新建扮演会话：AI 完全以该角色身份对话（空白会话 + 自动开场自我介绍）
-  const roleplayFromCharacter = (c: Character) => {
-    const parts: string[] = [`你现在扮演「${c.name}」。`];
-    if (c.appearance) parts.push("外貌：" + c.appearance);
-    if (c.personality) parts.push("性格：" + c.personality);
-    if (c.background) parts.push("背景：" + c.background);
-    if (c.tags.length > 0) parts.push("标签：" + c.tags.join("、"));
-    parts.push("请完全以该角色身份与用户对话，保持性格与设定一致，不要跳出角色。");
-    useSessionStore.getState().createRoleplaySession({
-      name: c.name,
-      systemPrompt: parts.join("\n"),
-      intro: c.personality || c.tags.join("、"),
-    });
+    const ss = useSessionStore.getState();
+    if (picked.length === 1) {
+      const c = picked[0];
+      const parts: string[] = [`你现在扮演「${c.name}」。`];
+      if (c.appearance) parts.push("外貌：" + c.appearance);
+      if (c.personality) parts.push("性格：" + c.personality);
+      if (c.background) parts.push("背景：" + c.background);
+      if (c.tags.length > 0) parts.push("标签：" + c.tags.join("、"));
+      parts.push("请完全以该角色身份与用户对话，保持性格与设定一致，不要跳出角色。");
+      ss.createRoleplaySession({
+        name: c.name,
+        systemPrompt: parts.join("\n"),
+        intro: c.personality || c.tags.join("、"),
+      });
+    } else {
+      const parts: string[] = [`你现在扮演以下 ${picked.length} 个角色，在对话中根据语境切换身份，保持各自性格与设定一致，不要跳出角色：`];
+      picked.forEach((c) => {
+        parts.push(`【${c.name}】` + buildCharacterPrompt(c, []).replace(/^角色：.+?\n/, ""));
+      });
+      ss.createRoleplaySession({
+        name: picked.length <= 2 ? picked.map((c) => c.name).join("、") : `${picked[0].name} 等 ${picked.length} 人`,
+        systemPrompt: parts.join("\n"),
+        intro: picked.map((c) => c.personality || c.tags.join("、")).filter(Boolean).join("；") || undefined,
+      });
+    }
     useUIStore.getState().setSettingsOpen(false);
   };
 
@@ -230,6 +232,9 @@ export function CharacterPanel() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ fontSize: 11, fontWeight: 600, color: "var(--seed-muted)", textTransform: "uppercase", letterSpacing: "0.06em", padding: "2px 2px 0" }}>
                     预设角色 · {builtinChars.length}
+                  </div>
+                  <div style={{ fontSize: "var(--fs-9)", color: "var(--seed-muted)", opacity: 0.7, padding: "0 2px", lineHeight: 1.5 }}>
+                    内置预设内容仅供演示与功能参考
                   </div>
                   {builtinChars.map((c) => {
                     const isSelected = selectedChars.has(c.id);
@@ -312,7 +317,7 @@ export function CharacterPanel() {
           <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
             {extractedCards.length === 0 && (
               <div style={{ padding: "30px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>
-                暂无提取角色卡。对话足够长时点击底栏「整理故事」，将自动提取出场的重要角色。
+                暂无提取角色卡。对话足够长时点击底栏「保存记忆」，将自动记录出场的重要角色。
               </div>
             )}
             {extractedCards.map((c) => (
@@ -418,7 +423,7 @@ export function CharacterPanel() {
               <Users size={28} style={{ color: "var(--seed-accent)" }} />
             </div>
             <div className="seed-empty-title">选择一个角色</div>
-            <div className="seed-empty-sub">从左侧选择角色查看设定与经历，勾选多个可一并应用到当前会话</div>
+            <div className="seed-empty-sub">点击角色后按「应用」新建扮演会话（单选=单人，多选=多人）</div>
           </div>
         ) : (
           <>
@@ -444,13 +449,9 @@ export function CharacterPanel() {
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <button onClick={() => roleplayFromCharacter(selected)}
-                    style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 16px", borderRadius: 10, fontSize: "var(--fs-12)", fontWeight: 500, fontFamily: "inherit", background: "transparent", color: "var(--seed-accent)", border: "1px dashed var(--seed-accent-border)", cursor: "pointer" }}>
-                    <Send size={12} /> 新建扮演会话
-                  </button>
                   <button onClick={applySelectedToSession} disabled={selectedChars.size === 0}
                     style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 16px", borderRadius: 10, fontSize: "var(--fs-12)", fontWeight: 500, fontFamily: "inherit", background: selectedChars.size > 0 ? "var(--seed-accent)" : "var(--seed-hover-bg)", color: selectedChars.size > 0 ? "#fff" : "var(--seed-muted)", border: "none", cursor: selectedChars.size > 0 ? "pointer" : "not-allowed" }}>
-                    <Send size={12} /> 新建扮演会话（{selectedChars.size}）
+                    <Send size={12} /> 应用{selectedChars.size > 1 ? `（${selectedChars.size}）` : ""}
                   </button>
                 </div>
               </div>

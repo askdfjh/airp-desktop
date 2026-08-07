@@ -415,7 +415,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
     return get().scenarios.find((s) => s.id === id);
   },
 
-  // 世界书的中文主题（如「修仙/仙侠」）→ 预设场景的英文主题（cultivation），
+  // 规则书的中文主题（如「修仙/仙侠」）→ 预设场景的英文主题（cultivation），
   // 无映射时原样返回（如「现代都市·娱乐圈」等无预设场景的世界）
   resolveTheme: (theme: string) => {
     const alias: Record<string, string> = {

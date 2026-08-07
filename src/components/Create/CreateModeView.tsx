@@ -451,7 +451,7 @@ export function CreateModeView() {
           <div className="seed-input-row">
             <textarea
               className="seed-text-input"
-              placeholder={type === "character" ? "描述你想创建的角色" : "描述你想创建的世界"}
+              placeholder={type === "character" ? "描述你想创建的角色" : "描述你想创建的规则书"}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => {

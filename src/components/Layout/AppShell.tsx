@@ -341,7 +341,7 @@ export function AppShell() {
   // 欢迎页：首次启动且未配置模型服务时展示（配置或跳过后不再出现）
   if (showWelcome) {
     return (
-      <div className={`theme-${eff}`} style={{ height: "100vh", width: "100vw", overflow: "hidden", background: "var(--seed-bg)" }}>
+      <div data-platform={isAndroid ? "android" : "desktop"} className={`theme-${eff}`} style={{ height: "100vh", width: "100vw", overflow: "hidden", background: "var(--seed-bg)" }}>
         <TitleBar />
         {welcomeView === "home" ? (
           <WelcomeScreen onSkip={handleWelcomeSkip} onConfigure={handleWelcomeConfigure} />
@@ -367,7 +367,7 @@ export function AppShell() {
   // 开局流程：全屏覆盖，无 sidebar/header
   if (appPhase === "onboarding") {
     return (
-      <div className={`theme-${eff}`} style={{ height: "100vh", width: "100vw", overflow: "hidden", background: "var(--seed-bg)" }}>
+      <div data-platform={isAndroid ? "android" : "desktop"} className={`theme-${eff}`} style={{ height: "100vh", width: "100vw", overflow: "hidden", background: "var(--seed-bg)" }}>
         <TitleBar />
         <OnboardingFlow onExit={handleOnboardingExit} />
         {settingsOpen && <ProviderConfigPanel />}
@@ -389,7 +389,7 @@ export function AppShell() {
   // 对话模式：全屏沉浸式小说对话（DialogueNovel 内置 FunctionBar 与会话管理）
   // 设计稿 dialogue 页面无顶部 header，仅靠右上角 info-badge 与底部 FunctionBar
   return (
-    <div className={`theme-${eff}`} style={{ height: "100vh", width: "100vw", position: "relative", overflow: "hidden", background: "var(--seed-bg)" }}>
+    <div data-platform={isAndroid ? "android" : "desktop"} className={`theme-${eff}`} style={{ height: "100vh", width: "100vw", position: "relative", overflow: "hidden", background: "var(--seed-bg)" }}>
       {/* 自绘标题栏：无边框窗口的拖拽区 + 窗口控制按钮 */}
       <TitleBar />
 

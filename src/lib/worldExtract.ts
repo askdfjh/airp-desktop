@@ -54,7 +54,7 @@ function normalizeWorld(raw: Record<string, unknown>): WorldDraft | null {
     }
   }
   return {
-    name: name || "未命名世界",
+    name: name || "未命名规则书",
     theme: toStr(raw.theme),
     description: toStr(raw.description),
     tags: toStrArray(raw.tags),
@@ -89,7 +89,7 @@ export async function extractWorld(params: ExtractParams): Promise<WorldDraft | 
   const windowText = buildWindowText(messages);
 
   const systemPrompt =
-    "你是一位世界观架构师。请从用户的创建对话中提炼出完整的「世界设定」，用于世界书系统。" +
+    "你是一位世界观架构师。请从用户的创建对话中提炼出完整的「世界设定」，用于规则书系统。" +
     "只输出一个 JSON 对象，不要任何解释文字或 markdown 代码块。";
 
   let userPrompt =
@@ -97,7 +97,7 @@ export async function extractWorld(params: ExtractParams): Promise<WorldDraft | 
     "要求：\n" +
     "1. 只使用对话中明确提及的信息，不要编造；\n" +
     "2. 输出 JSON 对象，格式：\n" +
-    '{"name":"世界名","theme":"题材基调","description":"一句话简介","tags":["标签"],"entries":[{"category":"分类","title":"条目名","key":["触发关键词"],"content":"条目详细内容","position":"system|situation|last"}]}\n' +
+    '{"name":"规则书名","theme":"题材基调","description":"一句话简介","tags":["标签"],"entries":[{"category":"分类","title":"条目名","key":["触发关键词"],"content":"条目详细内容","position":"system|situation|last"}]}\n' +
     "3. entries 中的每条代表一条世界规则/设定，内容要具体完整（30-120字），触发关键词用对话中的专有名词（地点/物品/概念）；\n" +
     "4. 没有的信息填空字符串或空数组；\n" +
     "5. position 默认 system，情境规则用 situation，对话末尾追加的用 last。";

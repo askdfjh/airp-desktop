@@ -48,7 +48,7 @@ function template(params: {
     `世界简介：${params.worldDesc}\n` +
     `当前开局：${params.sceneName}。\n` +
     `开局核心：${params.sceneFocus}\n` +
-    "请严格遵守已启用的世界书设定，围绕{characterName}展开，描写场景、人物反应、冲突张力与可继续行动的余地。"
+    "请严格遵守已启用的规则书设定，围绕{characterName}展开，描写场景、人物反应、冲突张力与可继续行动的余地。"
   );
 }
 
@@ -66,7 +66,7 @@ function opening(params: {
 
 export function buildWorldOpeningScenarios(book: WorldBook): OpeningScenario[] {
   const worldName = compact(book.name, "自定义世界");
-  const worldDesc = clip(book.description || book.theme || "这个世界的规则与势力由世界书条目定义。", 160);
+  const worldDesc = clip(book.description || book.theme || "这个世界的规则与势力由规则书条目定义。", 160);
   const entries = book.entries.filter((e) => !e.disable && compact(e.title) && compact(e.content));
 
   const place = pickEntry(entries, [/地点|地域|城市|城|村|山|海|星|区域|势力范围|场所|空间/], 0);

@@ -44,6 +44,8 @@ export function DialogueNovel() {
   const [chapterName, setChapterName] = useState<string | null>(null);
   const [chapterNo, setChapterNo] = useState(1);
   const chapterInitRef = useRef(false);
+  // 重新生成锁定：regenerate 重写当前段，新回复的章节名变化只更新名称，不推进章节号
+  const regenerateLockRef = useRef(false);
   // 流式完成过渡动画：正文从模板全文切换到解析 body 时淡入，避免「突然截断」的突兀感
   const [settlingId, setSettlingId] = useState<string | null>(null);
   const lastStreamingRef = useRef(false);
@@ -141,6 +143,8 @@ export function DialogueNovel() {
       notify(blocker, "settings");
       return;
     }
+    // 新轮次：清除重新生成锁定（若上次 regenerate 中断残留，避免误吞章节推进）
+    regenerateLockRef.current = false;
     setInputValue("");
     sendMessage(text);
   };
@@ -203,7 +207,10 @@ export function DialogueNovel() {
 
   // Regenerate assistant message
   const handleRegenerate = (msgId: string) => {
-    if (!streaming) regenerate(msgId);
+    if (!streaming) {
+      regenerateLockRef.current = true;
+      regenerate(msgId);
+    }
   };
 
   // Info badge text
@@ -246,7 +253,7 @@ export function DialogueNovel() {
   const suggestions = sceneAnalysisData?.suggestions ?? [];
   const hasSceneAnalysis = !!sceneAnalysisData;
 
-  // 开局生成状态：已有开局消息且第一条 AI 回复尚未完成 → 显示「世界生成中...」/「完成规划」
+  // 开局生成状态：已有开局消息且第一条 AI 回复尚未完成 → 显示「规则书生成中...」/「完成规划」
   // 用 ref 记忆「开局已完成」，避免每次发送消息时（全局 streaming 变化）状态条反复出现
   const [openingDone, setOpeningDone] = useState(false);
   const openingDoneRef = useRef(false);
@@ -260,7 +267,24 @@ export function DialogueNovel() {
   const openingActive = !isBlank && !!openingMsg && !openingDone;
   const assistantStarted = openingActive && !!lastAssistantMsg?.content;
 
-  // 停止生成时若开局流尚未产出任何内容 → 删除开局消息，避免状态条永久卡在「世界生成中...」（表现为界面挂起）
+  // 回复等待计时：流式且尚无正文时点点点旁显示读秒（思考模式显示「规划中」）；完成/中断即停止
+  const typingActive = streaming && lastMsg?.role === "assistant" && !lastMsg.content && !openingActive;
+  const [typingSec, setTypingSec] = useState(0);
+  const typingStartRef = useRef(0);
+  useEffect(() => {
+    if (!typingActive) {
+      setTypingSec(0);
+      return;
+    }
+    typingStartRef.current = Date.now();
+    setTypingSec(0);
+    const t = setInterval(() => {
+      setTypingSec(Math.floor((Date.now() - typingStartRef.current) / 1000));
+    }, 200);
+    return () => clearInterval(t);
+  }, [typingActive]);
+
+  // 停止生成时若开局流尚未产出任何内容 → 删除开局消息，避免状态条永久卡在「规则书生成中...」（表现为界面挂起）
   useEffect(() => {
     if (streaming) return;
     if (openingMsg && !allVisible.some((m) => m.role === "assistant" && m.content)) {
@@ -296,11 +320,17 @@ export function DialogueNovel() {
   }, [lastAssistantMsg?.content, lastAssistantMsg?.sceneAnalysis]);
 
   // 动态章节名：读格式分析结果中的章节名；首次设置不跳号，之后变化章节号 +1；
+  // 重新生成（regenerate）时锁定：新回复章节名只更新名称，不推进章节号（重写当前段不应开新章）；
   // 无分析结果（未绑定/失败/旧消息）→ 保持「第一章」兜底
   useEffect(() => {
     if (isBlank) return;
     const title = sceneAnalysisData?.chapterTitle?.trim();
     if (!title) return;
+    if (regenerateLockRef.current) {
+      regenerateLockRef.current = false;
+      setChapterName(title);
+      return;
+    }
     if (!chapterInitRef.current) {
       chapterInitRef.current = true;
       setChapterName(title);
@@ -388,19 +418,19 @@ export function DialogueNovel() {
           ) : (
             <>
               <span className="seed-opening-spinner" />
-              世界生成中...
+              规则书生成中...
             </>
           )}
         </div>
       )}
 
-      {/* 长对话压缩状态条：整理中（提取角色 → 生成摘要），可停止 */}
+      {/* 长对话压缩状态条：保存记忆中（记录角色 → 生成摘要），可停止 */}
       {compressing && (
         <div className="seed-compress-bar">
           <span className="seed-opening-spinner" />
           <span>
-            正在整理故事脉络…
-            {compressStage === "extracting" ? "（提取角色中）" : compressStage === "summarizing" ? "（生成摘要中）" : ""}
+            正在保存记忆…
+            {compressStage === "extracting" ? "（记录角色中）" : compressStage === "summarizing" ? "（生成摘要中）" : ""}
           </span>
           <button className="seed-compress-stop" onClick={stopCompress} data-tooltip="停止整理（不保存任何变更）">停止</button>
         </div>
@@ -620,9 +650,15 @@ export function DialogueNovel() {
           })()}
 
           {/* Typing indicator when streaming but no content yet */}
-          {streaming && lastMsg?.role === "assistant" && !lastMsg.content && !openingActive && (
+          {typingActive && (
             <div className="seed-typing">
               <span /><span /><span />
+              <span className="seed-typing-label">
+                {typingSec >= 60
+                  ? `${Math.floor(typingSec / 60)}m ${typingSec % 60}s`
+                  : `${typingSec}s`}
+                {activeSession?.thinkingEnabled ? " · 规划中" : ""}
+              </span>
             </div>
           )}
 
@@ -647,7 +683,6 @@ export function DialogueNovel() {
           right: 0,
           bottom: 0,
           transform: inputHidden ? "translateY(calc(100% + 2px))" : "none",
-          transition: "transform 0.28s ease",
         }}
       >
         {/* 对话推荐条（输入框上方，可折叠）：与输入区同属底部浮层，一起隐藏/显示；
@@ -716,7 +751,7 @@ export function DialogueNovel() {
       {/* 自动压缩确认：对话过长时提示（含 token 估算与保留说明） */}
       {compressPrompt && compressPromptCallbacks && (
         <ConfirmDialog
-          title="对话较长，建议整理故事脉络"
+          title="对话较长，建议保存记忆"
           message={`当前会话已有 ${compressPrompt.count} 条消息。整理将新建一个续集会话（第 ${(() => {
             const cur = useSessionStore.getState().sessions.find((s) => s.id === compressPrompt.sessionId);
             return (cur?.chainIndex ?? 1) + 1;

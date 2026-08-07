@@ -9,7 +9,7 @@ import { PRESET_WORLDS, WORLD_BOOK_MAP } from "./WorldSelect";
 import { getWorldOpeningScenario } from "@/lib/worldOpeningScenarios";
 import { buildHotTropeHint, buildTropeOpeningDirective, buildTropeSystemPrompt } from "@/lib/popularTropes";
 import { getTopicOpeningScenario, getTopicOpeningScenarios } from "@/lib/topicOpenings";
-import { getTopicSchemesByAudience } from "@/lib/topicSchemes";
+import { getTopicScheme, getTopicSchemesByAudience } from "@/lib/topicSchemes";
 import { getWorldFoundation } from "@/lib/worldFoundations";
 import { TopicSelect } from "./TopicSelect";
 import { StyleModeSelect } from "./StyleModeSelect";
@@ -50,16 +50,20 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
     const selectedWorldName = ui.selectedWorldName;
     const selectedWorldId = ui.selectedWorldId;
     const worldState = useWorldStore.getState();
-    // 世界书激活推迟到这里（最后一步点"开始冒险"才执行）：中途退出开局流程不改变任何世界状态。
-    // 按当前选择的题材底座解析对应世界书，与 TopicSelect 的解析逻辑保持一致
+    // 规则书激活推迟到这里（最后一步点"开始冒险"才执行）：中途退出开局流程不改变任何世界状态。
+    // 规则书解析：默认底座用题材书（优先）→ 底座书兜底；切到扩展底座时用该底座书
     const foundation = getWorldFoundation(selectedWorldId);
+    const topic = getTopicScheme(ui.selectedTopicSchemeId);
+    const baseBookId = foundation.builtinBookId;
     const resolvedBookId =
-      foundation.builtinBookId ||
+      (selectedWorldId === topic?.worldBaseId ? topic?.worldBookId ?? baseBookId : baseBookId) ||
       worldState.books.find((b) => b.id === selectedWorldId || b.theme === selectedWorldId)?.id ||
       null;
     const selectedBook = resolvedBookId ? worldState.books.find((b) => b.id === resolvedBookId) || null : null;
     const selectedPresetWorld = PRESET_WORLDS.find((w) => w.id === selectedWorldId);
+    // 世界观 id：优先从规则书 id 反查 WORLD_BOOK_MAP（题材书/底座书均命中真实世界观），再兜底底座
     const worldviewId =
+      (resolvedBookId ? Object.entries(WORLD_BOOK_MAP).find(([, v]) => v === resolvedBookId)?.[0] : undefined) ||
       selectedPresetWorld?.id ||
       selectedBook?.theme ||
       worldviewIdForBase(selectedWorldId) ||
@@ -103,12 +107,12 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
           })
         : "";
     const mainEntryPrompt = selectedMainEntry
-      ? `【基础规则块】本次开局优先围绕「${selectedMainEntry.title}」展开。该条目只定义基础规则或舞台，不要把它误当成题材。条目内容：${selectedMainEntry.content}`
+      ? `【基础规则块·世界层】本次开局优先围绕「${selectedMainEntry.title}」展开。该条目仅定义世界基础规则与舞台，不要把它误当成题材；若与题材规则冲突，以题材规则为准。条目内容：${selectedMainEntry.content}`
       : selectedMainEntryName
-        ? `【基础规则块】本次开局优先围绕「${selectedMainEntryName}」展开。该条目只定义基础规则或舞台，不要把它误当成题材。`
+        ? `【基础规则块·世界层】本次开局优先围绕「${selectedMainEntryName}」展开。该条目仅定义世界基础规则与舞台；若与题材规则冲突，以题材规则为准。`
         : "";
     const stylePrompt = selectedStylePresetName
-      ? `【风格修饰】整体气质参考「${selectedStylePresetName}」，但不得覆盖世界观规则、基础规则块和题材引擎。`
+      ? `【风格修饰】整体气质参考「${selectedStylePresetName}」，但不得覆盖世界规则、基础规则块和题材引擎。`
       : "";
     const systemPrompt = isAIOpening
       ? [mainEntryPrompt, modePrompt, protagonistPrompt, tropePrompt, stylePrompt].filter(Boolean).join("\n\n")
@@ -156,7 +160,7 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
       updatedAt: now,
     };
 
-    // 开局全部设置完成后才激活所选世界书
+    // 开局全部设置完成后才激活所选规则书
     if (resolvedBookId) {
       await worldState.setActiveBook(resolvedBookId);
     } else {
@@ -191,8 +195,12 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
     const basePool = [topic.worldBaseId, ...topic.expandableWorldBaseIds];
     const worldBaseId = basePool[Math.floor(Math.random() * basePool.length)];
     const foundation = getWorldFoundation(worldBaseId);
-    // 世界书激活统一在 handleComplete 内执行（此处只计算 bookId 供 mainEntry 等使用）
-    const bookId = foundation.builtinBookId || books.find((b) => b.id === worldBaseId || b.theme === worldBaseId)?.id;
+    // 规则书激活统一在 handleComplete 内执行（此处只计算 bookId 供 mainEntry 等使用）；
+    // 默认底座用题材书（优先）→ 底座书兜底；随机落到扩展底座时用该底座书
+    const baseBookId = foundation.builtinBookId;
+    const bookId =
+      (worldBaseId === topic.worldBaseId ? topic.worldBookId ?? baseBookId : baseBookId) ||
+      books.find((b) => b.id === worldBaseId || b.theme === worldBaseId)?.id;
 
     const ui = useUIStore.getState();
     ui.setSelectedTopicScheme(topic.id, topic.label);

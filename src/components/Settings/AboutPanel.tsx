@@ -28,13 +28,23 @@ export function AboutPanel() {
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 18, fontWeight: 700, color: "var(--seed-fg)", marginBottom: 3 }}>关于灵叙 Narra</div>
             <div style={{ fontSize: 12, lineHeight: 1.7, color: "var(--seed-muted)" }}>
-              本软件是本地运行的 AI 创作与对话工具，支持桌面端和移动端共用数据结构与界面能力。
+              本软件是本地运行的文字创作与排版优化工具，支持桌面端与移动端共用数据结构与界面能力。
             </div>
           </div>
         </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+        <div style={{ padding: 16, borderRadius: 18, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, color: "var(--info)" }}>
+            <Scale size={15} />
+            <span style={{ fontSize: 13, fontWeight: 650, color: "var(--seed-fg)" }}>内置内容说明</span>
+          </div>
+          <div style={{ fontSize: 12, lineHeight: 1.7, color: "var(--seed-muted)" }}>
+            软件内置的预设内容（设定模板、角色示例、提示模板等）仅供演示与功能参考，不代表任何现实立场或专业意见；具体使用与创作内容由使用者自行负责。
+          </div>
+        </div>
+
         <div style={{ padding: 16, borderRadius: 18, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, color: "var(--success)" }}>
             <Gift size={15} />

@@ -68,7 +68,7 @@ export function DraftPreview() {
       return;
     }
     if (!isChar && !wd.name.trim()) {
-      ui.notify("世界名不能为空");
+      ui.notify("规则书名不能为空");
       return;
     }
     setSaving(true);
@@ -121,9 +121,9 @@ export function DraftPreview() {
           });
         }
         setSavedDraft({ ...wd, name, entries });
-        commitHistory("世界：" + name);
-        ui.notify(`世界「${name}」已保存（${entries.length} 条条目）`);
-        // 保存成功 → 自动进入开局流程：选中新世界，跳到视角选择（世界已定），
+        commitHistory("规则书：" + name);
+        ui.notify(`规则书「${name}」已保存（${entries.length} 条条目）`);
+        // 保存成功 → 自动进入开局流程：选中新规则书，跳到视角选择（世界已定），
         // 随后选角色 + 开局场景（自定义世界无预设场景时可选 AI 随机开局）即可开始冒险
         const uiStore = useUIStore.getState();
         uiStore.setCreateMode(null);
@@ -203,14 +203,14 @@ export function DraftPreview() {
           ) : (
             <>
               <div style={{ display: "flex", gap: 8 }}>
-                <input value={wd.name} onChange={(e) => setWD({ name: e.target.value })} placeholder="世界名称 *" style={fieldStyle({ flex: 1, fontWeight: 600 })} />
+                <input value={wd.name} onChange={(e) => setWD({ name: e.target.value })} placeholder="规则书名称 *" style={fieldStyle({ flex: 1, fontWeight: 600 })} />
                 <AutoInput value={wd.theme} onChange={(e) => setWD({ theme: e.target.value })} placeholder="题材基调" min={90} max={200} style={fieldStyle()} />
               </div>
               <AutoInput value={tagText(wd.tags)} onChange={(e) => setWD({ tags: parseTags(e.target.value) })} placeholder="标签（逗号分隔）" min={200} max={520} style={fieldStyle()} />
               <AutoTextarea value={wd.description} onChange={(e) => setWD({ description: e.target.value })} placeholder="一句话简介" style={fieldStyle({ minHeight: 44 })} maxHeight={200} />
 
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-                <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)" }}>世界条目（{wd.entries.length}）</span>
+                <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)" }}>规则书条目（{wd.entries.length}）</span>
                 <div style={{ flex: 1 }} />
                 <button
                   onClick={() => setWD({ entries: [...wd.entries, { category: "其他", title: "", key: [], content: "", position: "system", status: "new" }] })}

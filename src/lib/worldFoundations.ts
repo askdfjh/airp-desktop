@@ -20,7 +20,7 @@ export const WORLD_FOUNDATIONS: WorldFoundation[] = [
     id: "modern",
     label: "现代",
     description: "现实社会、都市生活、行业与家庭关系的通用底座。",
-    builtinBookId: "wb-builtin-urban",
+    builtinBookId: "wb-builtin-modern",
     aliases: ["现代", "现实", "都市", "城市"],
   },
   {

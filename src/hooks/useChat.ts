@@ -20,6 +20,9 @@ import { useGenerationStore } from "@/stores/generationStore";
 import { usePromptInjectionStore } from "@/stores/promptInjectionStore";
 import { loadSessionCharacterCards } from "@/lib/db";
 import { buildCharacterContext, type LoadedExtractedCard } from "@/lib/characterExtract";
+
+// 场景分析失败提示节流（模型服务不可用时避免每次回复都弹 toast）
+let lastSceneFailNotifyAt = 0;
 import { maybePromptCompress, isPostCompress } from "@/lib/contextCompress";
 
 let _toolsEnabled = false;
@@ -327,7 +330,7 @@ export function useChat() {
           result.push({ role: "system", content: world.text });
         }
       }
-      // 提取角色卡注入（世界书同机制）：角色出场触发词命中 → 注入；压缩后首条 forceAll 全量
+      // 提取角色卡注入（规则书同机制）：角色出场触发词命中 → 注入；压缩后首条 forceAll 全量
       if (!isBlankSession && sessionCards.length > 0) {
         const charRecent = [
           ...hist.slice(-2).map((m) => m.content),
@@ -448,6 +451,12 @@ export function useChat() {
         updateMessageTokenUsage(msgId, JSON.stringify(usage)).catch((e) =>
           console.error("[db] updateMessageTokenUsage failed:", e),
         );
+      } else if (!result) {
+        const now = Date.now();
+        if (now - lastSceneFailNotifyAt > 60_000) {
+          lastSceneFailNotifyAt = now;
+          useUIStore.getState().notify("场景生成失败：模型服务未返回结果（超时或服务不可用），已跳过场景信息");
+        }
       }
     } finally {
       setAnalysingScene(false);

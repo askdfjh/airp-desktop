@@ -53,7 +53,7 @@ const SECTION_RE = new RegExp(
 // 元操作类推荐（查看设定/图鉴/背景资料等）不属于剧情行动，一律过滤
 const META_DIRECT_RE = /(世界设定|世界观|背景设定|剧情背景|故事背景|图鉴|角色设定|人物设定|设定(?:介绍|详情|说明|列表|页面|面板|文档))/;
 const META_VERB_RE = /(查看|阅读|浏览|打开|翻开|了解|看看|进入|点开|观阅|详看|翻看)[^，。；、]{0,8}(设定|图鉴|资料|背景|世界|介绍|界面)/;
-// 世界书条目格式【分类·标题】及其派生（模型常把注入的世界书内容抄进推荐）
+// 规则书条目格式【分类·标题】及其派生（模型常把注入的规则书内容抄进推荐）
 const WORLD_BOOK_ENTRY_RE = /^【[^】]+(?:设定|资料|背景|图鉴)[^】]*】/;
 const WORLD_BOOK_TWO_SEG_RE = /^【[^】]+·[^】]+】/;
 
@@ -61,7 +61,7 @@ export function isMetaSuggestion(s: string): boolean {
   const t = s.trim();
   if (META_DIRECT_RE.test(t) || META_VERB_RE.test(t)) return true;
   if (WORLD_BOOK_ENTRY_RE.test(t)) return true;
-  // 以【分类·标题】开头且长度超过一般推荐项，判定为世界书条目被误抄
+  // 以【分类·标题】开头且长度超过一般推荐项，判定为规则书条目被误抄
   return WORLD_BOOK_TWO_SEG_RE.test(t) && t.length > 24;
 }
 

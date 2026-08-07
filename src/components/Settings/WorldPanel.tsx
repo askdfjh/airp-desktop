@@ -141,7 +141,7 @@ export function WorldPanel() {
         {/* View tabs */}
         <div style={{ display: "flex", gap: 4, padding: 4, background: "var(--seed-input-bg)", borderRadius: 12, border: "1px solid var(--seed-border)" }}>
           <button style={tabStyle(viewTab === "world")} onClick={() => setViewTab("world")}>
-            <Globe size={13} /> 世界
+            <Globe size={13} /> 规则书
             <span style={{ opacity: 0.7, fontSize: 11 }}>{books.length}</span>
           </button>
           <button style={tabStyle(viewTab === "trash")} onClick={() => setViewTab("trash")}>
@@ -156,13 +156,13 @@ export function WorldPanel() {
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderRadius: 10, background: "var(--seed-input-bg)", border: "1px solid var(--seed-border)" }}>
                 <Search size={12} style={{ color: "var(--seed-muted)", flexShrink: 0 }} />
-                <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="搜索世界..."
+                <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="搜索规则书..."
                   style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--seed-fg)", fontSize: "var(--fs-12)", fontFamily: "inherit", minWidth: 0 }}
                 />
               </div>
               <button
                 onClick={openCreateMode}
-                title="与 AI 对话式创建世界，完成后自动写入世界书条目"
+                title="与 AI 对话式创建规则书，完成后自动写入规则书条目"
                 style={{ ...btnPrimary, padding: "8px 14px" }}
               >
                 <Wand2 size={12} /> AI 创建
@@ -174,7 +174,10 @@ export function WorldPanel() {
               {builtinBooks.length > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ fontSize: "var(--fs-11)", fontWeight: 600, color: "var(--seed-muted)", textTransform: "uppercase", letterSpacing: "0.06em", padding: "2px 2px 0" }}>
-                    内置世界 · {builtinBooks.length}
+                    内置规则书 · {builtinBooks.length}
+                  </div>
+                  <div style={{ fontSize: "var(--fs-9)", color: "var(--seed-muted)", opacity: 0.7, padding: "0 2px", lineHeight: 1.5 }}>
+                    内置预设内容仅供演示与功能参考
                   </div>
                   {builtinBooks.map((book) => {
                     const isActive = activeBook?.id === book.id;
@@ -222,7 +225,7 @@ export function WorldPanel() {
               {myBooks.length > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ fontSize: "var(--fs-11)", fontWeight: 600, color: "var(--seed-muted)", textTransform: "uppercase", letterSpacing: "0.06em", padding: "2px 2px 0" }}>
-                    我的世界 · {myBooks.length}
+                    我的规则书 · {myBooks.length}
                   </div>
                   {myBooks.map((book) => {
                     const isActive = activeBook?.id === book.id;
@@ -270,7 +273,7 @@ export function WorldPanel() {
 
               {filtered.length === 0 && (
                 <div style={{ padding: "30px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>
-                  {searchQuery ? "未找到匹配的世界" : "暂无世界，点击右上角「AI 创建」，与 AI 对话生成世界"}
+                  {searchQuery ? "未找到匹配的规则书" : "暂无规则书，点击右上角「AI 创建」，与 AI 对话生成规则书"}
                 </div>
               )}
             </div>
@@ -280,11 +283,11 @@ export function WorldPanel() {
           <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
             {trashBooks.length === 0 && (
               <div style={{ padding: "30px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>
-                回收站为空。删除世界书后将在这里保留 30 天。
+                回收站为空。删除规则书后将在这里保留 30 天。
               </div>
             )}
             {trashBooks.map((t) => {
-              let name = "已删除世界";
+              let name = "已删除规则书";
               try {
                 const parsed = JSON.parse(t.data);
                 name = parsed.book?.name || name;
@@ -315,16 +318,16 @@ export function WorldPanel() {
             <div className="seed-empty-icon">
               <Trash2 size={28} style={{ color: "var(--seed-accent)" }} />
             </div>
-            <div className="seed-empty-title">世界回收站</div>
-            <div className="seed-empty-sub">从左侧选择已删除的世界进行恢复，或彻底删除（30 天后自动清理）</div>
+            <div className="seed-empty-title">规则书回收站</div>
+            <div className="seed-empty-sub">从左侧选择已删除的规则书进行恢复，或彻底删除（30 天后自动清理）</div>
           </div>
         ) : !selectedBook ? (
           <div className="seed-empty-state" style={{ flex: 1, background: "var(--seed-surface)", borderRadius: 18, border: "1px solid var(--seed-border)" }}>
             <div className="seed-empty-icon">
               <Globe size={28} style={{ color: "var(--seed-accent)" }} />
             </div>
-            <div className="seed-empty-title">还没有世界</div>
-            <div className="seed-empty-sub">点击上方「AI 创建」，与 AI 对话创建专属的故事宇宙，自动生成世界书条目</div>
+            <div className="seed-empty-title">还没有规则书</div>
+            <div className="seed-empty-sub">点击上方「AI 创建」，与 AI 对话创建专属的故事宇宙，自动生成规则书条目</div>
           </div>
         ) : (
           <>
@@ -357,14 +360,14 @@ export function WorldPanel() {
                       激活中
                     </button>
                   ) : (
-                    <button onClick={() => setActiveBook(selectedBook.id)} style={btnPrimary}>启用此世界</button>
+                    <button onClick={() => setActiveBook(selectedBook.id)} style={btnPrimary}>启用此规则书</button>
                   )}
                 </div>
               </div>
 
               {editingBook && (
                 <div style={{ padding: 12, borderRadius: 10, background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ fontSize: "var(--fs-12)", fontWeight: 600, marginBottom: 2 }}>编辑世界信息</div>
+                  <div style={{ fontSize: "var(--fs-12)", fontWeight: 600, marginBottom: 2 }}>编辑规则书信息</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <input value={editingBook.name} onChange={(e) => setEditingBook({...editingBook, name: e.target.value})} placeholder="名称"
                       style={{ flex: 1, minWidth: 140, ...inputStyle, fontSize: "var(--fs-11)" }} />
@@ -386,7 +389,7 @@ export function WorldPanel() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <FileText size={16} style={{ color: "var(--seed-accent)" }} />
-                  <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--seed-fg)" }}>世界条目</span>
+                  <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--seed-fg)" }}>规则书条目</span>
                   <span style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)" }}>({selectedBook.entries.length})</span>
                 </div>
               </div>
@@ -395,7 +398,7 @@ export function WorldPanel() {
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {selectedBook.entries.length === 0 && (
                   <div style={{ padding: "24px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)", background: "var(--seed-hover-bg)", borderRadius: 8 }}>
-                    暂无条目。可用「AI 创建」对话生成世界条目，或编辑世界后自动补充
+                    暂无条目。可用「AI 创建」对话生成规则书条目，或编辑规则书后自动补充
                   </div>
                 )}
                 {selectedBook.entries.map((entry) => (

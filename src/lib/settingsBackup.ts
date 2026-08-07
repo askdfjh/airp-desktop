@@ -60,8 +60,8 @@ export const BACKUP_GROUP_LABELS: Record<BackupGroupKey, string> = {
   templates: "Prompt 模板库",
   characterCards: "角色卡",
   characters: "角色设定",
-  worldRules: "世界规则",
-  worldBooks: "世界书与词条",
+  worldRules: "旧规则表（已废弃，仅兼容导入）",
+  worldBooks: "规则书与词条",
   conversations: "会话与消息（含收藏 / 回收站 / 角色弧光 / 提取角色卡）",
 };
 
@@ -151,23 +151,31 @@ export async function exportAllData(
   };
 }
 
-/** 校验导入文件是否为合法的 AIRP 备份 */
+/** 校验导入文件是否为合法的 AIRP 备份（兼容旧版本：app 标识、type、version、缺字段均放宽） */
 export function validateSettingsBackup(data: unknown): data is SettingsBackup {
   if (!data || typeof data !== "object") return false;
   const d = data as Record<string, unknown>;
-  if (d.app !== "AIRP" || d.type !== SETTINGS_BACKUP_TYPE || d.version !== SETTINGS_BACKUP_VERSION) return false;
-  if (!d.localStorage || typeof d.localStorage !== "object" || !d.database || typeof d.database !== "object") return false;
+  // app 标识：新版 "AIRP"，兼容旧标识（含 airp）
+  const appOk = d.app === "AIRP" || (typeof d.app === "string" && d.app.toLowerCase().includes("airp"));
+  // type：必须为 AIRP 备份类型（兼容历史 type 前缀）
+  const typeOk = typeof d.type === "string" && d.type.toLowerCase().includes("airp");
+  if (!appOk || !typeOk) return false;
+  // localStorage / database 允许缺失（旧版可能只存其一）
+  if (d.localStorage !== undefined && (typeof d.localStorage !== "object" || d.localStorage === null)) return false;
+  if (d.database !== undefined && (typeof d.database !== "object" || d.database === null)) return false;
   return true;
 }
 
-/** 备份实际包含的数据项（兼容旧版备份文件：无 groups 字段时按内容推导） */
+/** 备份实际包含的数据项（兼容旧版备份文件：无 groups 字段时按内容推导；localStorage/database 可能缺失） */
 export function getBackupGroups(data: SettingsBackup): BackupGroupKey[] {
   if (Array.isArray(data.groups) && data.groups.length > 0) {
     return ALL_BACKUP_GROUPS.filter((k) => (data.groups as string[]).includes(k));
   }
+  const ls = data.localStorage ?? {};
+  const dbSnap = data.database ?? {};
   const inferred = ALL_BACKUP_GROUPS.filter((key) => {
-    const hasLs = GROUP_LOCAL_STORAGE_KEYS[key].some((k) => k in data.localStorage);
-    const hasDb = GROUP_DB_TABLES[key].some((t) => data.database[t] !== undefined);
+    const hasLs = GROUP_LOCAL_STORAGE_KEYS[key].some((k) => k in ls);
+    const hasDb = GROUP_DB_TABLES[key].some((t) => dbSnap[t] !== undefined);
     return hasLs || hasDb;
   });
   if (data.conversations) inferred.push("conversations");
@@ -175,8 +183,10 @@ export function getBackupGroups(data: SettingsBackup): BackupGroupKey[] {
 }
 
 function countGroupItems(data: SettingsBackup, key: BackupGroupKey): number {  let n = 0;
+  const ls = data.localStorage ?? {};
+  const dbSnap = data.database ?? {};
   for (const lsKey of GROUP_LOCAL_STORAGE_KEYS[key]) {
-    const raw = data.localStorage[lsKey];
+    const raw = ls[lsKey];
     if (!raw) continue;
     try {
       const st = JSON.parse(raw)?.state;
@@ -189,7 +199,7 @@ function countGroupItems(data: SettingsBackup, key: BackupGroupKey): number {  l
     }
   }
   for (const t of GROUP_DB_TABLES[key]) {
-    const rows = data.database[t];
+    const rows = dbSnap[t];
     if (Array.isArray(rows)) n += rows.length;
   }
   return n;
@@ -204,9 +214,9 @@ export function countBackupGroupItems(data: SettingsBackup, key: BackupGroupKey)
 export function summarizeGroups(data: SettingsBackup, groups: BackupGroupKey[]): string[] {
   return groups.map((key) => {
     if (key === "worldBooks") {
-      const books = data.database.worldBooks?.length ?? 0;
-      const entries = data.database.worldBookEntries?.length ?? 0;
-      return `世界书与词条（${books} 本 / ${entries} 词条）`;
+      const books = data.database?.worldBooks?.length ?? 0;
+      const entries = data.database?.worldBookEntries?.length ?? 0;
+      return `规则书与词条（${books} 本 / ${entries} 词条）`;
     }
     if (key === "conversations") {
       const sessions = data.conversations?.sessions?.length ?? 0;
@@ -238,12 +248,12 @@ export function backupContentEquals(a: SettingsBackup, b: SettingsBackup, groups
   }
   const normLs = (d: SettingsBackup) => {
     const out: Record<string, string | null> = {};
-    for (const k of lsKeys) out[k] = d.localStorage[k] ?? null;
+    for (const k of lsKeys) out[k] = d.localStorage?.[k] ?? null;
     return JSON.stringify(out);
   };
   const normDb = (d: SettingsBackup) => {
     const out: Record<string, unknown> = {};
-    for (const t of tables) out[t] = d.database[t];
+    for (const t of tables) out[t] = d.database?.[t];
     return JSON.stringify(out);
   };
   if (normLs(a) !== normLs(b)) return false;
@@ -255,11 +265,13 @@ export function backupContentEquals(a: SettingsBackup, b: SettingsBackup, groups
 /** 导入备份：按勾选的组写回（localStorage + SQLite 表 + 会话合并），并重新水合各 store；不传 groups 则导入备份包含的全部组 */
 export async function importAllData(data: SettingsBackup, groups?: BackupGroupKey[]): Promise<void> {
   const selected = new Set(groups ?? getBackupGroups(data));
-  // 1. localStorage（仅处理选中组的键，未选中的不动）
+  const lsData = data.localStorage ?? {};
+  const dbData = data.database ?? {};
+  // 1. localStorage（仅处理选中组的键，未选中的不动；旧备份缺失时跳过）
   for (const key of ALL_BACKUP_GROUPS) {
     if (!selected.has(key)) continue;
     for (const lsKey of GROUP_LOCAL_STORAGE_KEYS[key]) {
-      const v = data.localStorage[lsKey];
+      const v = lsData[lsKey];
       if (v === null || v === undefined) {
         localStorage.removeItem(lsKey);
       } else {
@@ -274,7 +286,7 @@ export async function importAllData(data: SettingsBackup, groups?: BackupGroupKe
     for (const t of GROUP_DB_TABLES[key]) tables.add(t);
   }
   const snap: Partial<SettingsDbSnapshot> = {};
-  for (const t of tables) snap[t] = data.database[t];
+  for (const t of tables) snap[t] = dbData[t];
   await restoreSettingsTables(snap);
   // 3. 会话与消息合并恢复（同 ID 跳过，不覆盖现有）
   if (selected.has("conversations") && data.conversations) {

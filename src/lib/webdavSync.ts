@@ -18,7 +18,7 @@ export type SyncGroup = "worldbooks" | "charactercards" | "conversations";
 export const SYNC_GROUPS: SyncGroup[] = ["worldbooks", "charactercards", "conversations"];
 
 export const SYNC_GROUP_LABELS: Record<SyncGroup, string> = {
-  worldbooks: "世界书与词条",
+  worldbooks: "规则书与词条",
   charactercards: "角色卡与提取卡",
   conversations: "会话与消息",
 };
@@ -106,7 +106,7 @@ export function parseSyncFile(raw: string): SyncFile {
 export async function mergeSyncData(group: SyncGroup, data: unknown): Promise<string> {
   if (group === "worldbooks") {
     const { books, entries } = await mergeWorldBooks(data as WorldBooksData);
-    return `世界书 ${books} 本 / 词条 ${entries} 条`;
+    return `规则书 ${books} 本 / 词条 ${entries} 条`;
   }
   if (group === "charactercards") {
     const n = await mergeCharacterCards((data as CharacterCardsData).characterCards ?? []);

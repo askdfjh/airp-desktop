@@ -4,8 +4,9 @@ import { useWorldStore } from "@/stores/worldStore";
 import { inferWorldBookAudience, type WorldAudienceFilter } from "@/lib/worldAudience";
 import { getCompatibleTropes, worldviewLabelForId } from "@/lib/popularTropes";
 
-// 预设世界 → 内置世界书 id 映射（没有内置书的世界不注入任何条目）
+// 预设世界 → 内置规则书 id 映射（没有内置书的世界不注入任何条目）
 export const WORLD_BOOK_MAP: Record<string, string> = {
+  modern: "wb-builtin-modern",
   cultivation: "wb-builtin-xianxia",
   fantasy: "wb-builtin-fantasy",
   urban: "wb-builtin-urban",
@@ -238,7 +239,7 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: (filter: WorldA
     setSelected(id);
     setSelectedWorld(id, name);
     setSelectedTrope(null, null);
-    // 同步激活对应的世界书：仅激活当前选中的世界，避免上一本书的条目继续注入
+    // 同步激活对应的规则书：仅激活当前选中的世界，避免上一本书的条目继续注入
     const bookId = WORLD_BOOK_MAP[id] || books.find((b) => b.id === id || b.theme === id)?.id;
     if (bookId) {
       await setActiveBook(bookId);
@@ -278,7 +279,7 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: (filter: WorldA
           灵叙 Narra
         </div>
         <h1 style={{ fontSize: 40, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--seed-fg)", marginBottom: 12, lineHeight: 1.2 }}>
-          选择你的世界
+          选择你的规则书
         </h1>
         <p style={{ fontSize: 16, color: "var(--seed-muted)", maxWidth: 400, margin: "0 auto" }}>
           每一个世界都有独特的规则与命运，选择你想要踏入的领域，开始你的角色扮演之旅
@@ -346,7 +347,7 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: (filter: WorldA
                 fontSize: 11, padding: "3px 9px", borderRadius: 999,
                 background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-muted)",
               }}>
-                世界观 · {worldviewLabelForId(world.id)}
+                规则书 · {worldviewLabelForId(world.id)}
               </span>
               {getCompatibleTropes({ worldviewId: world.id, audience: world.gender, worldText: world.name })
                 .slice(0, 2)
@@ -363,11 +364,11 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: (filter: WorldA
         ))}
       </div>
 
-      {/* 我的世界：自定义世界书列表 */}
+      {/* 我的规则书：自定义规则书列表 */}
       {showCustom && (
         <div style={{ margin: "8px 0 24px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 18 }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--seed-fg)" }}>我的世界</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--seed-fg)" }}>我的规则书</span>
             <button
               onClick={() => useUIStore.getState().setCreateMode("world")}
               style={{
@@ -381,7 +382,7 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: (filter: WorldA
                 <line x1="12" y1="5" x2="12" y2="19" />
                 <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
-              AI 创建世界
+              AI 创建规则书
             </button>
             <button
               onClick={() => setShowCustom(false)}
@@ -403,7 +404,7 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: (filter: WorldA
               textAlign: "center", padding: "30px 0", borderRadius: 14,
               border: "1px dashed var(--seed-border)", color: "var(--seed-muted)", fontSize: 13,
             }}>
-              还没有自定义世界，点击「AI 创建世界」生成一个
+              还没有自定义规则书，点击「AI 创建规则书」生成一个
             </div>
           ) : (
             <div data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 20, justifyContent: "center", maxWidth: 900, margin: "0 auto", width: "100%" }}>
@@ -427,7 +428,7 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: (filter: WorldA
                       fontSize: 11, padding: "3px 9px", borderRadius: 999,
                       background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-muted)",
                     }}>
-                      世界观 · 自定义
+                      规则书 · 自定义
                     </span>
                     {getCompatibleTropes({ worldviewId: b.theme || b.id, audience: inferWorldBookAudience(b), worldText: [b.name, b.theme, b.description, ...b.tags].join(" ") })
                       .slice(0, 2)

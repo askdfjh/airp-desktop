@@ -78,7 +78,7 @@ export function CreateHistory({ onClose }: Props) {
             <div style={{ padding: "40px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-11)", lineHeight: 1.6 }}>
               暂无创建历史。
               <br />
-              创建并保存角色/世界后，
+              创建并保存角色/规则书后，
               <br />
               可在这里重新载入继续修改。
             </div>

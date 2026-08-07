@@ -37,7 +37,7 @@ export interface ExtractParams {
   messages: Message[];
   /** 玩家角色名（提取时排除） */
   playerCharacterName?: string;
-  /** 当前世界书名称（写入 prompt 上下文） */
+  /** 当前规则书名称（写入 prompt 上下文） */
   worldBookName?: string;
   /** 调用 LLM 所需的 Provider 信息 */
   provider: { model: string; baseUrl: string; apiKey: string };
@@ -249,7 +249,7 @@ function normalizeText(s: string): string {
 }
 
 /**
- * 角色卡关键词注入（世界书同机制）：角色触发词（名/别称）出现在最近对话 → 注入该角色卡。
+  * 角色卡关键词注入（规则书同机制）：角色触发词（名/别称）出现在最近对话 → 注入该角色卡。
  * forceAll 为 true 时（压缩后首条请求）全量注入，帮助 AI 重建上下文。
  */
 export function buildCharacterContext(

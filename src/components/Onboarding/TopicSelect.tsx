@@ -142,8 +142,12 @@ export function TopicSelect() {
     setSelected(topic.id);
     setSelectedBase(worldBaseId);
     setOnboardingAudience(audienceFilter);
+    // 规则书解析：默认底座用题材书（优先）→ 底座书兜底；切到扩展底座时用该底座书
     const foundation = getWorldFoundation(worldBaseId);
-    const bookId = foundation.builtinBookId || books.find((b) => b.id === worldBaseId || b.theme === worldBaseId)?.id;
+    const baseBookId = foundation.builtinBookId;
+    const bookId =
+      (worldBaseId === topic.worldBaseId ? topic.worldBookId ?? baseBookId : baseBookId) ||
+      books.find((b) => b.id === worldBaseId || b.theme === worldBaseId)?.id;
     const selectedBook = bookId ? books.find((b) => b.id === bookId) || null : null;
     const mainEntry = pickMainEntries(selectedBook)[0] || null;
 
@@ -156,7 +160,7 @@ export function TopicSelect() {
     setSelectedMode(null);
     setSelectedCharacter(null, null);
     setPlayerName("");
-    // 注意：世界书激活推迟到 OnboardingFlow.handleComplete（最后一步点"开始冒险"才执行），
+    // 注意：规则书激活推迟到 OnboardingFlow.handleComplete（最后一步点"开始冒险"才执行），
     // 中途退出开局流程不改变任何世界状态
   };
 

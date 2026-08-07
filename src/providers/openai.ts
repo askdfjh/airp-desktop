@@ -105,27 +105,62 @@ export async function* chatStream(
   params?: Record<string, unknown>,
 ): AsyncGenerator<ChatStreamChunk> {
   const url = `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
-
-  const body: Record<string, unknown> = { model, messages, stream: true, ...params };
   const hasTools = tools && tools.length > 0;
-  if (thinkingEnabled && !hasTools) {
-    body.thinking = { type: "enabled" };
-  }
-  if (hasTools) {
-    body.tools = tools;
-    body.tool_choice = "auto";
-    if (thinkingEnabled) {
-      console.log("[chatStream] thinking mode disabled because tools are active (API incompatibility)");
+
+  const makeBody = (p: Record<string, unknown>) => {
+    const b: Record<string, unknown> = { model, messages, stream: true, ...p };
+    if (thinkingEnabled && !hasTools) {
+      b.thinking = { type: "enabled" };
+    }
+    if (hasTools) {
+      b.tools = tools;
+      b.tool_choice = "auto";
+      if (thinkingEnabled) {
+        console.log("[chatStream] thinking mode disabled because tools are active (API incompatibility)");
+      }
+    }
+    return b;
+  };
+
+  // 400 降级步骤：部分上游（如 Gemini 中转）不接受非标准参数/特定参数，被拒后依次剔除重试一次
+  const DEGRADE_STEPS: ((b: Record<string, unknown>) => void)[] = [
+    (b) => { delete b.top_k; delete b.min_p; },
+    (b) => { delete b.thinking; },
+    (b) => { delete b.max_tokens; },
+  ];
+
+  let current = { ...(params || {}) };
+  for (let attempt = 0; attempt <= DEGRADE_STEPS.length; attempt++) {
+    const body = makeBody(current);
+    console.log("[chatStream] body:", JSON.stringify({ ...body, messages: undefined }, null, 2).slice(0, 500));
+    if (tools && tools.length > 0) {
+      console.log("[chatStream] tools sent:", tools.map((t) => t.function?.name));
+    }
+    try {
+      yield* readStream(body, url, apiKey, signal);
+      return;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const is400 = /400|Bad Request|invalid argument|not supported|unsupported|unknown parameter|unknown argument|Unrecognized request argument/i.test(msg);
+      if (is400 && attempt < DEGRADE_STEPS.length) {
+        console.log(`[chatStream] 400 降级重试 (${attempt + 1}/${DEGRADE_STEPS.length}):`, msg.slice(0, 150));
+        DEGRADE_STEPS[attempt](current);
+        continue;
+      }
+      throw e;
     }
   }
+  yield { content: "", done: true };
+}
 
-  console.log("[chatStream] body:", JSON.stringify({ ...body, messages: undefined }, null, 2).slice(0, 500));
-  if (tools && tools.length > 0) {
-    console.log("[chatStream] tools sent:", tools.map(t => t.function?.name));
-  }
-
+/** 单次流式请求（invoke Rust 后端 + Channel 收流 + SSE 解析），支持 400 重试时重建 */
+async function* readStream(
+  body: Record<string, unknown>,
+  url: string,
+  apiKey: string,
+  signal?: AbortSignal,
+): AsyncGenerator<ChatStreamChunk> {
   const requestId = crypto.randomUUID();
-  let cleanup: (() => void) | undefined;
 
   // 统一走 Rust 后端流式转发（chat_completions_stream）：绕过 WebView2 CORS，
   // 所有 Provider 行为一致，错误信息明确（不再出现模糊的 Failed to fetch）
@@ -151,7 +186,6 @@ export async function* chatStream(
     void invoke("chat_stream_abort", { requestId });
   };
   signal?.addEventListener("abort", onAbort);
-  cleanup = () => signal?.removeEventListener("abort", onAbort);
 
   void invoke("chat_completions_stream", {
     requestId,
@@ -166,7 +200,7 @@ export async function* chatStream(
       streamDone = true;
     });
 
-  const next: NextChunk = async () => {
+  const next = async (): Promise<{ done: boolean; value: Uint8Array | null }> => {
     while (!streamDone && queue.length === 0 && !streamError) {
       if (signal?.aborted) return { done: true, value: null };
       await new Promise<void>((resolve) => setTimeout(resolve, 15));
@@ -235,7 +269,7 @@ export async function* chatStream(
                 },
               });
             }
-            console.log("[chatStream] tool_calls received:", toolCalls.map(t => t.function?.name));
+            console.log("[chatStream] tool_calls received:", toolCalls.map((t) => t.function?.name));
             toolCallsMap.clear();
             yield { content: "", done: true, toolCalls };
             return;
@@ -255,14 +289,14 @@ export async function* chatStream(
             },
           });
         }
-        console.log("[chatStream] tool_calls recovered (no finish_reason):", toolCalls.map(t => t.function?.name));
+        console.log("[chatStream] tool_calls recovered (no finish_reason):", toolCalls.map((t) => t.function?.name));
         toolCallsMap.clear();
         yield { content: "", done: true, toolCalls };
         return;
       }
     }
   } finally {
-    cleanup?.();
+    signal?.removeEventListener("abort", onAbort);
   }
   yield { content: "", done: true };
 }

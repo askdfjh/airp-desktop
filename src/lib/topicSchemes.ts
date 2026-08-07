@@ -22,6 +22,8 @@ export interface TopicScheme {
   worldBaseId: Exclude<WorldBaseId, "custom">;
   expandableWorldBaseIds: Exclude<WorldBaseId, "custom">[];
   tropeId: Exclude<HotTropeId, "none">;
+  /** 题材专属规则书 id：仅在该题材使用默认底座时生效；切到扩展底座时以底座书为准 */
+  worldBookId?: string;
   description: string;
   entryHints: string[];
   openingSeeds: TopicOpeningSeed[];
@@ -140,6 +142,7 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
     worldBaseId: "modern",
     expandableWorldBaseIds: ["future", "cultivation"],
     tropeId: "apocalypse",
+    worldBookId: "wb-builtin-apocalypse",
     description: "灾变、生存、秩序崩塌和资源压力。",
     entryHints: ["灾变", "断电", "物资", "避难所", "队伍信任"],
     openingSeeds: [
@@ -188,6 +191,7 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
     worldBaseId: "modern",
     expandableWorldBaseIds: ["infinite"],
     tropeId: "rules",
+    worldBookId: "wb-builtin-rulehorror",
     description: "规则、禁忌、纸条、异常空间和生存解谜。",
     entryHints: ["规则", "禁忌", "纸条", "异常空间", "生存解谜"],
     openingSeeds: [
@@ -248,6 +252,7 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
     worldBaseId: "modern",
     expandableWorldBaseIds: ["ancient"],
     tropeId: "rules",
+    worldBookId: "wb-builtin-folklore",
     description: "民俗、禁忌、乡土怪事、仪式和真相。",
     entryHints: ["民俗", "禁忌", "乡土怪事", "仪式", "真相"],
     openingSeeds: [
@@ -392,6 +397,7 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
     worldBaseId: "modern",
     expandableWorldBaseIds: [],
     tropeId: "entertainment",
+    worldBookId: "wb-builtin-entertainment",
     description: "热搜、人设、片场、选秀、经纪人和公关危机。",
     entryHints: ["热搜", "人设", "片场", "选秀", "经纪人", "公关危机"],
     openingSeeds: [
@@ -422,6 +428,7 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
     worldBaseId: "modern",
     expandableWorldBaseIds: ["ancient"],
     tropeId: "marriage",
+    worldBookId: "wb-builtin-romance",
     description: "甜宠、先婚后爱、破镜重圆、救赎和契约关系。",
     entryHints: ["甜宠", "先婚后爱", "破镜重圆", "救赎", "契约关系"],
     openingSeeds: [
@@ -440,6 +447,7 @@ export const TOPIC_SCHEMES: TopicScheme[] = [
     worldBaseId: "modern",
     expandableWorldBaseIds: [],
     tropeId: "era",
+    worldBookId: "wb-builtin-retro",
     description: "七八十年代、家庭、物资、下乡和工厂。",
     entryHints: ["七八十年代", "家庭", "物资", "下乡", "工厂"],
     openingSeeds: [

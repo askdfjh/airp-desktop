@@ -25,7 +25,7 @@ type NavKey = "models" | "character" | "world" | "plugins" | "tools" | "generati
 const NAV_ITEMS: { key: NavKey; icon: React.ComponentType<{ size?: number }>; label: string }[] = [
   { key: "models", icon: NarraModel, label: "模型服务" },
   { key: "character", icon: NarraCharacter, label: "角色" },
-  { key: "world", icon: NarraWorld, label: "世界观" },
+  { key: "world", icon: NarraWorld, label: "规则书" },
   { key: "generation", icon: NarraAppearance, label: "输出" },
   { key: "tools", icon: NarraTools, label: "外部工具" },
   { key: "plugins", icon: NarraMcp, label: "插件" },
@@ -34,7 +34,7 @@ const NAV_ITEMS: { key: NavKey; icon: React.ComponentType<{ size?: number }>; la
 ];
 
 const NAV_LABELS: Record<NavKey, string> = {
-  models: "模型服务", character: "角色", world: "世界观", plugins: "插件", tools: "外部工具", generation: "输出预设", data: "数据管理", about: "关于",
+  models: "模型服务", character: "角色", world: "规则书", plugins: "插件", tools: "外部工具", generation: "输出预设", data: "数据管理", about: "关于",
 };
 
 const NAV_SUBTITLES: Record<NavKey, string> = {

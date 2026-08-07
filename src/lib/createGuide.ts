@@ -1,7 +1,7 @@
 /**
  * 创建模式引导大纲与系统提示词模板。
  * 创建模式上下文隔离：只注入 ① 破限词(用户启用) ② 引导大纲 ③ 引导规则。
- * 不注入世界书 / 文风预设 / 角色卡 / 场景模板。
+ * 不注入规则书 / 文风预设 / 角色卡 / 场景模板。
  */
 
 export type CreateType = "character" | "world";
@@ -14,7 +14,7 @@ export interface GuideQuestion {
 
 export const GUIDE_LABEL: Record<CreateType, string> = {
   character: "角色",
-  world: "世界",
+  world: "规则书",
 };
 
 export const CHARACTER_GUIDE: GuideQuestion[] = [
@@ -31,9 +31,9 @@ export const CHARACTER_GUIDE: GuideQuestion[] = [
 ];
 
 export const WORLD_GUIDE: GuideQuestion[] = [
-  { key: "name", question: "这个世界叫什么名字？" },
-  { key: "tone", question: "世界的题材和基调是什么？（如：修仙、科幻末世、都市异能、西幻史诗）" },
-  { key: "rules", question: "世界的核心规则或超自然法则是什么？（如：灵根体系、基因锁、魔法回路）" },
+  { key: "name", question: "这本规则书（世界设定）叫什么名字？" },
+  { key: "tone", question: "规则书的题材和基调是什么？（如：修仙、科幻末世、都市异能、西幻史诗）" },
+  { key: "rules", question: "规则书的核心规则或超自然法则是什么？（如：灵根体系、基因锁、魔法回路）" },
   { key: "geography", question: "世界的地理环境大致是怎样的？（区域、标志地点、地貌特点）" },
   { key: "factions", question: "世界有哪些主要势力、组织或派系？" },
   { key: "history", question: "世界有什么重要的历史事件或背景故事？" },

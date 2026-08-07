@@ -9,10 +9,10 @@ import { useWorldStore } from "@/stores/worldStore";
 
 /** 压缩时保留的最近消息条数（原文不摘要） */
 export const KEEP_RECENT = 30;
-/** 自动触发阈值：消息条数 */
-export const AUTO_TRIGGER_COUNT = 60;
-/** 自动触发阈值：历史总估算 token */
-export const AUTO_TRIGGER_TOKENS = 12000;
+/** 模型上下文窗口（token）基准：按主流 128K 计（上下文占用百分比的分母） */
+export const CONTEXT_WINDOW_TOKENS = 128000;
+/** 达到窗口的此百分比（%）才提示 / 允许保存记忆 */
+export const COMPRESS_ALLOW_PCT = 90;
 /** 压缩超时（毫秒） */
 export const COMPRESS_TIMEOUT_MS = 90_000;
 /** 「暂不整理」后再次提醒的冷却时间（毫秒） */
@@ -150,7 +150,7 @@ export function buildContextIndex(chars: ExtractedCharacterInfo[], window: Messa
 }
 
 /**
- * 压缩会话（整理故事）：
+ * 压缩会话（保存记忆）：
  * ① 提取主要 NPC（保存到续集会话，与基线卡合并）② 生成剧情档案（衔接父卷）③ 建关键词索引
  * ④ 创建续集会话（继承设定 + 复制前卷基线卡 + 写入档案/索引）⑤ 原会话锁定只读。
  * 任一步失败（非中止）不阻塞整体：角色提取失败则只生成档案；续集创建失败则整体失败并回滚。
@@ -163,7 +163,7 @@ export async function compressSession(ctx: CompressContext): Promise<CompressRes
     return { ok: false, reason: "没有可整理的内容（已全部在最近保留范围内）", charactersSaved: 0, windowCount: 0, keptCount: kept.length, estimatedTokens };
   }
 
-  // 第 1 步：提取主要 NPC（仅冒险会话；空白会话跳过——不提取角色、不关联世界书）
+  // 第 1 步：提取主要 NPC（仅冒险会话；空白会话跳过——不提取角色、不关联规则书）
   let chars: ExtractedCharacterInfo[] = [];
   const isBlankSession = session.kind === "blank";
   if (!isBlankSession) {
@@ -259,8 +259,9 @@ export function maybePromptCompress(sessionId: string, messages: Message[]): boo
   const ss = useSessionStore.getState();
   const session = ss.sessions.find((x) => x.id === sessionId);
   if (!session) return false;
-  if (messages.length < AUTO_TRIGGER_COUNT) return false;
-  if (estimateHistoryTokens(messages) < AUTO_TRIGGER_TOKENS) return false;
+  // 达到窗口 90% 才提示（不自动压缩，仅弹窗询问；未到 90% 不打扰）
+  const pct = estimateHistoryTokens(messages) / CONTEXT_WINDOW_TOKENS * 100;
+  if (pct < COMPRESS_ALLOW_PCT) return false;
   if (Date.now() - ui.lastCompressDeclineAt < REMIND_COOLDOWN_MS) return false;
 
   const { window } = computeCompressWindow(session, messages);
@@ -287,7 +288,7 @@ export function maybePromptCompress(sessionId: string, messages: Message[]): boo
 /** 执行压缩（手动按钮 / 自动确认后）。压缩期间全局锁定，禁止其他操作。 */
 export async function runCompression(): Promise<CompressResult> {
   const ui = useUIStore.getState();
-  if (ui.compressing) return { ok: false, reason: "正在整理中，请稍候", charactersSaved: 0, windowCount: 0, keptCount: 0, estimatedTokens: 0 };
+  if (ui.compressing) return { ok: false, reason: "正在保存记忆中，请稍候", charactersSaved: 0, windowCount: 0, keptCount: 0, estimatedTokens: 0 };
 
   // 模型服务检查（与发送拦截一致）
   const ps = useProviderStore.getState();

@@ -109,7 +109,7 @@ export function WorldInfoPanel({ anchorRef, onClose }: WorldInfoPanelProps) {
           <p style={{ fontSize: 12, color: "var(--seed-muted)", textAlign: "center", padding: "16px 0", margin: 0, lineHeight: 1.6 }}>
             当前对话未关联世界
             <br />
-            可在「设置 → 世界」中选择
+            可在「设置 → 规则书」中选择
           </p>
         ) : (
           <>
@@ -149,7 +149,7 @@ export function WorldInfoPanel({ anchorRef, onClose }: WorldInfoPanelProps) {
                 flexShrink: 0,
               }}
             >
-              <span style={{ flex: 1, textAlign: "left" }}>世界设定条目（{visibleEntries.length}）</span>
+              <span style={{ flex: 1, textAlign: "left" }}>规则书条目（{visibleEntries.length}）</span>
               {entriesOpen ? (
                 <ChevronUp size={14} style={{ color: "var(--seed-muted)" }} />
               ) : (

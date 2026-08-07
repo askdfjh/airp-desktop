@@ -10,12 +10,12 @@ export interface PresetWorldBook {
   entries: Omit<WorldBookEntry, "id" | "uid" | "createdAt" | "updatedAt">[];
 }
 
-// 修仙世界 - 男频热门
+// 修仙 - 男频热门
 const xianxia: PresetWorldBook = {
   id: "wb-builtin-xianxia",
-  name: "修仙世界",
+  name: "修仙",
   theme: "玄幻修仙",
-  description: "以中国传统道教文化为基础的修仙世界，包含炼气、筑基、金丹、元婴等境界体系",
+  description: "以中国传统道教文化为基础的修仙体系，包含炼气、筑基、金丹、元婴等境界体系",
   tags: ["修仙", "玄幻", "东方", "男频"],
   violationWords: ["手机", "电脑", "现代", "科技", "网络", "电"],
   entries: [
@@ -141,7 +141,7 @@ const xianxia: PresetWorldBook = {
     },
     {
       category: "世界观",
-      title: "修仙世界基本法则",
+      title: "修仙基本法则",
       key: ["修仙", "修道", "仙缘"],
       content: "修仙者以飞升成仙为终极目标。天道有常，因果循环。修道者需看破虚妄，累积功德，最终超脱凡尘。逆天而行者必遭天谴。",
       constant: true,
@@ -421,9 +421,9 @@ const scifi: PresetWorldBook = {
 // 无限流 - 男频热门
 const infinite: PresetWorldBook = {
   id: "wb-builtin-infinite",
-  name: "无限流世界",
+  name: "无限流",
   theme: "无限流",
-  description: "穿梭于各个影视、小说、游戏世界完成任务的无限流世界观",
+  description: "穿梭于各个影视、小说、游戏世界完成任务的无限流设定",
   tags: ["无限流", "诸天", "副本", "男频"],
   violationWords: [],
   entries: [
@@ -553,7 +553,7 @@ const infinite: PresetWorldBook = {
 // 娱乐圈 - 女频热门
 const entertainment: PresetWorldBook = {
   id: "wb-builtin-entertainment",
-  name: "娱乐圈世界",
+  name: "娱乐圈",
   theme: "现代都市·娱乐圈",
   description: "现代都市背景下的明星、艺人、偶像、演员的娱乐圈生态",
   tags: ["娱乐圈", "明星", "都市", "女频"],
@@ -877,9 +877,9 @@ const palace: PresetWorldBook = {
 // 恋爱模拟 - 女频热门
 const romance: PresetWorldBook = {
   id: "wb-builtin-romance",
-  name: "恋爱模拟世界",
+  name: "恋爱模拟",
   theme: "现代都市·甜宠",
-  description: "现代都市背景下的浪漫恋爱模拟世界，甜宠、傲娇、霸道总裁等经典设定",
+  description: "现代都市背景下的浪漫恋爱模拟设定，甜宠、傲娇、霸道总裁等经典设定",
   tags: ["恋爱", "甜宠", "都市", "女频"],
   violationWords: ["灵气", "修仙", "法术", "魔法", "丧尸", "末日"],
   entries: [
@@ -1033,7 +1033,7 @@ const romance: PresetWorldBook = {
 // 末日求生 - 男频热门
 const apocalypse: PresetWorldBook = {
   id: "wb-builtin-apocalypse",
-  name: "末日求生世界",
+  name: "末日求生",
   theme: "末日·丧尸/废土",
   description: "丧尸横行或核战废土的末日世界观，人类在废墟中求生",
   tags: ["末日", "丧尸", "废土", "男频"],
@@ -1594,10 +1594,107 @@ const retro: PresetWorldBook = {
   ],
 };
 
+// 现代都市 - 通用底座（中立舞台，不含任何异能/超自然设定）
+const modern: PresetWorldBook = {
+  id: "wb-builtin-modern",
+  name: "现代都市",
+  theme: "现代都市",
+  description: "以现实现代城市为蓝本的通用世界：通勤、职场、家庭、社交与城市的日常生活运转。不含异能、修仙、超自然等特殊设定",
+  tags: ["现代", "都市", "现实", "通用"],
+  violationWords: ["灵气", "异能", "觉醒", "法术", "修仙", "魔法", "御剑", "妖兽", "炼气", "斗气", "魔法阵", "精神力", "灵根", "丹田"],
+  entries: [
+    {
+      category: "世界概要",
+      title: "都市日常",
+      key: ["现代", "都市", "城市", "生活"],
+      content: "这是一个普通的现代城市：写字楼、地铁、商圈、居民区、学校与医院按正常秩序运转。人们上班通勤、吃饭购物、娱乐社交，一切遵循现实世界的社会规则与常识。",
+      constant: true,
+      selective: false,
+      order: 10,
+      position: "system",
+      insertionDepth: 100,
+      disable: false,
+    },
+    {
+      category: "城市地理",
+      title: "城市布局",
+      key: ["小区", "商圈", "写字楼", "地铁", "街道"],
+      content: "城市由多个功能区构成：中央商务区、老城区、住宅区、大学城与近郊。地铁与公交线网覆盖全城，打车与共享单车也是常见出行方式。",
+      constant: false,
+      selective: false,
+      order: 20,
+      position: "system",
+      insertionDepth: 50,
+      disable: false,
+    },
+    {
+      category: "社会规则",
+      title: "职场规则",
+      key: ["公司", "上班", "同事", "领导", "加班", "面试", "裁员"],
+      content: "职场遵循现实规则：简历、面试、合同、考勤、项目、KPI。办公室有层级与站队，加班与内卷常见，裁员与跳槽是普通人的现实议题。",
+      constant: false,
+      selective: false,
+      order: 30,
+      position: "system",
+      insertionDepth: 50,
+      disable: false,
+    },
+    {
+      category: "社会规则",
+      title: "人情世故",
+      key: ["相亲", "结婚", "亲戚", "邻居", "同学会", "人情"],
+      content: "人际关系遵循现代社会的现实逻辑：家庭有代际摩擦，亲戚有攀比与催婚，邻里保持分寸感，同学会藏着体面与攀比。人情往来有来有往，边界感是成年人的默契。",
+      constant: false,
+      selective: false,
+      order: 40,
+      position: "system",
+      insertionDepth: 50,
+      disable: false,
+    },
+    {
+      category: "经济体系",
+      title: "收入与消费",
+      key: ["工资", "房租", "房贷", "存款", "物价", "工资卡"],
+      content: "经济遵循现实规则：工资月结，房租房贷是主要开支，外卖、网购、会员订阅构成日常消费。普通人面对房价、彩礼、养娃与养老的现实压力。",
+      constant: false,
+      selective: false,
+      order: 50,
+      position: "system",
+      insertionDepth: 40,
+      disable: false,
+    },
+    {
+      category: "社会规则",
+      title: "法律与秩序",
+      key: ["警察", "报警", "合同", "法律", "派出所", "法院"],
+      content: "社会运行依靠现实法律与秩序：报警、立案、合同纠纷、劳动仲裁、起诉都是可行的维权路径。警方按流程办案，正义有时迟到但不依靠超自然力量。",
+      constant: false,
+      selective: false,
+      order: 60,
+      position: "system",
+      insertionDepth: 40,
+      disable: false,
+    },
+    {
+      category: "生活方式",
+      title: "娱乐社交",
+      key: ["聚餐", "KTV", "酒吧", "剧本杀", "演唱会", "追星"],
+      content: "休闲娱乐是现实选项：朋友聚餐、KTV、酒吧、剧本杀、密室逃脱、演唱会与追星。社交媒体是日常交流的主阵地，网络舆论能影响现实生活。",
+      constant: false,
+      selective: false,
+      order: 70,
+      position: "system",
+      insertionDepth: 40,
+      disable: false,
+    },
+  ],
+};
+
 export const PRESET_WORLD_BOOKS: PresetWorldBook[] = [
   xianxia,
   fantasy,
   urban,
+  modern,
   infinite,
   scifi,
   apocalypse,

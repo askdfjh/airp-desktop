@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Download, Upload, ShieldAlert, CheckCircle2, Loader2, Check, Globe, CloudUpload, CloudDownload, RefreshCw, Clock } from "lucide-react";
+import { Download, Upload, ShieldAlert, CheckCircle2, Loader2, Check, Globe, CloudUpload, CloudDownload, RefreshCw, Clock, Bug } from "lucide-react";
+import { buildDebugExport } from "@/lib/debugExport";
 import { testConnection, listCloudBackups, uploadCloudBackup, downloadCloudBackup, cleanupCloudBackups, findLatestCloudBackup, summarizeBackup, type CloudBackupMeta } from "@/lib/webdavClient";
 import { loadSyncConfig, saveSyncConfig, loadBackupRetention, saveBackupRetention, type SyncConfig, type BackupRetention } from "@/lib/webdavSync";
 import { save, open } from "@tauri-apps/plugin-dialog";
@@ -57,7 +58,7 @@ export function DataPanel() {
     setBusy("export");
     setImportError(null);
     try {
-      const defaultName = `airp-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      const defaultName = `narra-backup-${new Date().toISOString().slice(0, 10)}.json`;
       const path = await save({
         title: "导出所选数据",
         defaultPath: defaultName,
@@ -71,6 +72,30 @@ export function DataPanel() {
     } catch (e) {
       console.error("[settings] export failed:", e);
       notify("导出失败：" + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // 导出诊断信息（不含任何密钥）：完整请求上下文/注入/统计，供开发者定位问题
+  const handleDebugExport = async () => {
+    if (busy) return;
+    setBusy("export");
+    setImportError(null);
+    try {
+      const data = await buildDebugExport();
+      const defaultName = `narra-debug-${new Date().toISOString().slice(0, 10)}.json`;
+      const path = await save({
+        title: "导出诊断信息",
+        defaultPath: defaultName,
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+      if (!path) return;
+      await writeTextFile(path, JSON.stringify(data, null, 2));
+      notify("诊断信息已导出（不含密钥），可发送给开发者分析");
+    } catch (e) {
+      console.error("[debug] export failed:", e);
+      notify("诊断导出失败：" + (e instanceof Error ? e.message : String(e)));
     } finally {
       setBusy(null);
     }
@@ -90,7 +115,7 @@ export function DataPanel() {
       const raw = await readTextFile(path);
       const parsed: unknown = JSON.parse(raw);
       if (!validateSettingsBackup(parsed)) {
-        setImportError("不是有效的 AIRP 备份文件");
+        setImportError("不是有效的备份文件");
         return;
       }
       openImportDialog(parsed, `本地文件 ${path.split(/[\\/]/).pop() || path}`);
@@ -271,7 +296,7 @@ export function DataPanel() {
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: "var(--fs-14)", fontWeight: 600, color: "var(--seed-fg)" }}>导出数据</div>
             <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", marginTop: 2 }}>
-              勾选要导出的内容（设置、世界书、对话记录），保存为 JSON 文件，可用于全量备份或迁移到其他设备
+               勾选要导出的内容（设置、规则书、对话记录），保存为 JSON 文件，可用于全量备份或迁移到其他设备
             </div>
           </div>
         </div>
@@ -345,6 +370,15 @@ export function DataPanel() {
           {busy === "export" ? <Loader2 size={14} className="seed-spin" /> : <Download size={14} />}
           导出所选数据（{selectedGroups.size} 项）
         </button>
+        <button
+          onClick={handleDebugExport}
+          disabled={busy !== null}
+          title="导出完整请求上下文与注入明细（不含密钥），供开发者定位回复异常"
+          style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 18px", borderRadius: 999, border: "1px dashed var(--seed-accent-border)", cursor: "pointer", background: "transparent", color: "var(--seed-accent)", fontSize: "var(--fs-12)", fontWeight: 600, opacity: busy ? 0.55 : 1 }}
+        >
+          <Bug size={14} />
+          导出诊断信息
+        </button>
       </div>
 
       {/* 导入 */}
@@ -356,7 +390,7 @@ export function DataPanel() {
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: "var(--fs-14)", fontWeight: 600, color: "var(--seed-fg)" }}>导入数据</div>
             <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", marginTop: 2 }}>
-              导入前可查看备份包含的内容并勾选；设置类内容覆盖现有配置，世界书 / 角色卡 / 会话以合并方式导入（已存在的保留，不覆盖）
+               导入前可查看备份包含的内容并勾选；设置类内容覆盖现有配置，规则书 / 角色卡 / 会话以合并方式导入（已存在的保留，不覆盖）
             </div>
           </div>
         </div>
@@ -413,7 +447,7 @@ export function DataPanel() {
 
         <div style={{ marginBottom: 12 }}>
           <ComplianceNotice>
-            云端备份会把所选数据上传到你的 WebDAV 服务，其中可能包含对话、角色、世界书、模型配置或密钥。请确认云盘账号安全，并避免同步无权保存或传播的数据。
+             云端备份会把所选数据上传到你的 WebDAV 服务，其中可能包含对话、角色、规则书、模型配置或密钥。请确认云盘账号安全，并避免同步无权保存或传播的数据。
           </ComplianceNotice>
         </div>
 
@@ -683,7 +717,7 @@ export function DataPanel() {
             <div style={{ display: "flex", gap: 8, padding: "10px 12px", borderRadius: 12, background: "color-mix(in srgb, #f59e0b 7%, transparent)", border: "1px solid color-mix(in srgb, #f59e0b 28%, transparent)", marginBottom: 16 }}>
               <ShieldAlert size={13} style={{ color: "#f59e0b", flexShrink: 0, marginTop: 1 }} />
               <span style={{ fontSize: "var(--fs-10)", color: "var(--seed-muted)", lineHeight: 1.55 }}>
-                设置类内容（模型服务 / 界面偏好 / 提示词等）将覆盖现有配置；世界书 / 角色卡 / 会话以合并方式导入，已存在的保留不覆盖
+                 设置类内容（模型服务 / 界面偏好 / 提示词等）将覆盖现有配置；规则书 / 角色卡 / 会话以合并方式导入，已存在的保留不覆盖
               </span>
             </div>
 

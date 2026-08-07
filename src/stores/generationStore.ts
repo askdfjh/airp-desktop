@@ -35,7 +35,7 @@ export const BUILTIN_PRESETS: GenerationPreset[] = [
     id: "creative",
     name: "创意迸发",
     description: "高随机性，天马行空的展开，适合奇遇、脑洞与反套路剧情",
-    temperature: 1.3,
+    temperature: 1.0,
     topP: 0.98,
     topK: 80,
     minP: 0.02,
@@ -156,7 +156,7 @@ export const useGenerationStore = create<GenerationState>()(
           };
         }),
     }),
-    { name: "airp-generation-v1", version: 5, migrate: (persisted: unknown) => {
+    { name: "airp-generation-v1", version: 6, migrate: (persisted: unknown) => {
       const old = (persisted ?? {}) as Partial<GenerationState>;
       const presets = Array.isArray(old?.presets) ? old.presets : [];
       // 清除 dm-master + 旧 jailbreak 字段

@@ -292,6 +292,9 @@ export function TemplatePicker({ open, onClose, onInsert, anchorRef }: TemplateP
 
       {/* Template list */}
       <div style={{ flex: 1, overflowY: "auto", padding: 6 }}>
+        <div style={{ fontSize: "var(--fs-9)", color: "var(--seed-muted)", opacity: 0.7, padding: "0 4px 6px", lineHeight: 1.5 }}>
+          内置预设内容仅供演示与功能参考
+        </div>
         {filteredTemplates.length === 0 && (
           <div style={{ padding: "30px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>
             {searchQuery ? "未找到匹配的模板" : "该分类下暂无模板"}

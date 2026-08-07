@@ -1,6 +1,7 @@
 import type { WorldAudience } from "@/lib/worldAudience";
 
 export type WorldviewId =
+  | "modern"
   | "cultivation"
   | "fantasy"
   | "urban"
@@ -47,6 +48,7 @@ export interface HotTrope {
 }
 
 export const WORLDVIEW_LABELS: Record<WorldviewId, string> = {
+  modern: "现代都市",
   cultivation: "修炼体系",
   fantasy: "玄幻大陆",
   urban: "现代都市",
@@ -60,7 +62,7 @@ export const WORLDVIEW_LABELS: Record<WorldviewId, string> = {
   retro: "年代生活",
   romance: "现代情感",
   entertainment: "现代娱乐",
-  custom: "自定义世界",
+  custom: "自定义",
 };
 
 export const HOT_TROPES: HotTrope[] = [
@@ -71,7 +73,7 @@ export const HOT_TROPES: HotTrope[] = [
     hook: "第一章出现系统面板、任务、奖励与代价。",
     rule: "系统只能作为推进剧情的工具，不要替代世界原本的力量体系；奖励要有代价或限制。",
     audiences: ["all"],
-    compatibleWorldviews: ["cultivation", "fantasy", "urban", "infinite", "scifi", "apocalypse", "folklore", "retro", "entertainment", "custom"],
+    compatibleWorldviews: ["modern", "cultivation", "fantasy", "urban", "infinite", "scifi", "apocalypse", "folklore", "retro", "entertainment", "custom"],
     keywords: [/系统流|签到流|任务系统|系统提示|开局系统|打卡系统|成就面板|面板/],
   },
   {
@@ -81,7 +83,7 @@ export const HOT_TROPES: HotTrope[] = [
     hook: "主角回到命运转折点，带着记忆抢先改命。",
     rule: "前世记忆只提供信息差，不直接破坏世界规则；第一章要给出明确的改命目标。",
     audiences: ["all"],
-    compatibleWorldviews: ["cultivation", "fantasy", "urban", "apocalypse", "folklore", "palace", "zhaidou", "retro", "romance", "entertainment", "custom"],
+    compatibleWorldviews: ["modern", "cultivation", "fantasy", "urban", "apocalypse", "folklore", "palace", "zhaidou", "retro", "romance", "entertainment", "custom"],
     keywords: [/重生|回档|回到.*年|再活一次|逆转人生|改命/],
   },
   {
@@ -91,7 +93,7 @@ export const HOT_TROPES: HotTrope[] = [
     hook: "主角醒来进入新身份，立刻面对身份危机或原剧情节点。",
     rule: "不要引用具体作品、人物或原书名；只保留“错位身份”和“剧情节点”的抽象结构。",
     audiences: ["all"],
-    compatibleWorldviews: ["cultivation", "fantasy", "urban", "scifi", "apocalypse", "palace", "zhaidou", "retro", "romance", "entertainment", "custom"],
+    compatibleWorldviews: ["modern", "cultivation", "fantasy", "urban", "scifi", "apocalypse", "palace", "zhaidou", "retro", "romance", "entertainment", "custom"],
     keywords: [/穿书|穿越|穿到|穿成|路人甲|炮灰|反派自救|新身份/],
   },
   {
@@ -101,7 +103,7 @@ export const HOT_TROPES: HotTrope[] = [
     hook: "副本、任务、倒计时和陌生队友同时出现。",
     rule: "副本规则必须清晰可验证；不要把副本设定写成某个已有作品的复刻。",
     audiences: ["all"],
-    compatibleWorldviews: ["infinite", "urban", "apocalypse", "folklore", "rulehorror", "scifi", "custom"],
+    compatibleWorldviews: ["modern", "infinite", "urban", "apocalypse", "folklore", "rulehorror", "scifi", "custom"],
     keywords: [/无限流|副本|轮回者|通关|任务面板|倒计时/],
   },
   {
@@ -111,7 +113,7 @@ export const HOT_TROPES: HotTrope[] = [
     hook: "灾变初夜、物资争夺、避难所选择或队伍分裂。",
     rule: "先写生存压力，再写能力优势；物资、地点和队友关系要具体。",
     audiences: ["all"],
-    compatibleWorldviews: ["urban", "cultivation", "scifi", "apocalypse", "infinite", "rulehorror", "custom"],
+    compatibleWorldviews: ["modern", "urban", "cultivation", "scifi", "apocalypse", "infinite", "rulehorror", "custom"],
     keywords: [/末世|丧尸|天灾|求生|避难所|灾变|物资/],
   },
   {
@@ -121,7 +123,7 @@ export const HOT_TROPES: HotTrope[] = [
     hook: "纸条、禁忌、异常现象与第一次试探。",
     rule: "规则要服务当前世界观，避免直接套用具体作品的名词、组织、仪式或人物。",
     audiences: ["all"],
-    compatibleWorldviews: ["rulehorror", "folklore", "urban", "infinite", "apocalypse", "custom"],
+    compatibleWorldviews: ["modern", "rulehorror", "folklore", "urban", "infinite", "apocalypse", "custom"],
     keywords: [/规则怪谈|规则|禁忌|纸条|怪谈|诡异守则/],
   },
   {
@@ -131,7 +133,7 @@ export const HOT_TROPES: HotTrope[] = [
     hook: "资质测试、灵气复苏、战力面板或第一场越级挑战。",
     rule: "升级路径要和世界力量体系一致，第一章只给短期目标，不要一步封顶。",
     audiences: ["male"],
-    compatibleWorldviews: ["cultivation", "fantasy", "urban", "infinite", "scifi", "apocalypse", "custom"],
+    compatibleWorldviews: ["modern", "cultivation", "fantasy", "urban", "infinite", "scifi", "apocalypse", "custom"],
     keywords: [/高武|武道|灵气复苏|升级流|战力|觉醒|资质测试|修炼等级/],
   },
   {
@@ -141,7 +143,7 @@ export const HOT_TROPES: HotTrope[] = [
     hook: "被轻视、被退婚、被逐出或被当众羞辱后，第一步反击。",
     rule: "重点写压迫、目标和反击节奏；不要把人物关系写成具体书的桥段。",
     audiences: ["male"],
-    compatibleWorldviews: ["cultivation", "fantasy", "urban", "palace", "custom"],
+    compatibleWorldviews: ["modern", "cultivation", "fantasy", "urban", "palace", "custom"],
     keywords: [/退婚流|退婚|逆袭|废柴|被逐出|当众羞辱|赘婿|战神回归/],
   },
   {
@@ -151,7 +153,7 @@ export const HOT_TROPES: HotTrope[] = [
     hook: "开局一间店、一块地、一座领地或一个濒危组织。",
     rule: "经营目标要具体，第一位客人、第一笔订单或第一场危机要马上出现。",
     audiences: ["male", "female"],
-    compatibleWorldviews: ["cultivation", "fantasy", "urban", "scifi", "retro", "palace", "zhaidou", "custom"],
+    compatibleWorldviews: ["modern", "cultivation", "fantasy", "urban", "scifi", "retro", "palace", "zhaidou", "custom"],
     keywords: [/经营|基建|开店|店铺|领地|工坊|种田|发家致富/],
   },
   {
@@ -161,7 +163,7 @@ export const HOT_TROPES: HotTrope[] = [
     hook: "协议、领证、同居、公开场合和关系误判。",
     rule: "感情推进要靠冲突和相处，不要直接跳到无条件宠爱。",
     audiences: ["female"],
-    compatibleWorldviews: ["romance", "urban", "palace", "zhaidou", "custom"],
+    compatibleWorldviews: ["modern", "romance", "urban", "palace", "zhaidou", "custom"],
     keywords: [/先婚后爱|契约婚姻|协议婚姻|闪婚|婚后|联姻/],
   },
   {
@@ -181,7 +183,7 @@ export const HOT_TROPES: HotTrope[] = [
     hook: "回到旧年代，家庭风波、第一桶金和生活改善同时展开。",
     rule: "时代细节要具体，爽点来自选择、手艺、资源调配和关系修复。",
     audiences: ["female", "male"],
-    compatibleWorldviews: ["retro", "urban", "custom"],
+    compatibleWorldviews: ["modern", "retro", "urban", "custom"],
     keywords: [/年代文|重生年代|八零|七零|六零|下乡|赶山|赶海/],
   },
   {
@@ -191,7 +193,7 @@ export const HOT_TROPES: HotTrope[] = [
     hook: "热搜、片场、选秀、经纪人、公关危机或翻红机会。",
     rule: "行业事件要具体，主角要有可展示的能力或选择，而不只是被动挨骂。",
     audiences: ["female"],
-    compatibleWorldviews: ["entertainment", "romance", "urban", "custom"],
+    compatibleWorldviews: ["modern", "entertainment", "romance", "urban", "custom"],
     keywords: [/娱乐圈|选秀|热搜|片场|经纪人|明星|公关危机/],
   },
   {
@@ -201,7 +203,7 @@ export const HOT_TROPES: HotTrope[] = [
     hook: "温暖相遇、误会解除、共同生活或互相救场。",
     rule: "甜感来自行动细节和关系递进，避免无缘由的单向宠溺。",
     audiences: ["female"],
-    compatibleWorldviews: ["romance", "retro", "zhaidou", "palace", "custom"],
+    compatibleWorldviews: ["modern", "romance", "retro", "zhaidou", "palace", "custom"],
     keywords: [/甜宠|治愈|双向奔赴|破镜重圆|久别重逢|日常/],
   },
 ];
@@ -214,8 +216,9 @@ export function resolveWorldviewId(id: string | null | undefined): WorldviewId {
     修仙: "cultivation",
     玄幻: "fantasy",
     东方玄幻: "fantasy",
-    都市: "urban",
-    现代都市: "urban",
+     都市: "urban",
+     现代都市: "modern",
+     "现代都市·异能": "urban",
     无限流: "infinite",
     副本: "infinite",
     科幻: "scifi",
@@ -430,7 +433,7 @@ export function buildTropeSystemPrompt(params: {
   if (!trope) return "";
   const worldview = worldviewLabelForId(params.worldviewId);
   return (
-    `【题材方向】本次采用「${trope.label}」作为叙事引擎，但世界观仍以「${worldview}」的规则为准。\n` +
+    `【题材方向】本次采用「${trope.label}」作为叙事引擎。规则书仅提供世界基础规则与舞台；题材规则是本故事引擎，二者冲突时以题材规则为准，题材可覆盖规则书条目（世界名为「${worldview}」）。\n` +
     `第一钩子：${trope.hook}\n` +
     `执行规则：${trope.rule}\n` +
     "不要引用、复刻或暗示任何具体小说、影视、游戏的书名、人名、组织名、专有名词或标志性桥段。"
@@ -446,7 +449,7 @@ export function buildTropeOpeningDirective(params: {
   const worldview = worldviewLabelForId(params.worldviewId);
   return (
     `\n\n【开局题材校准】本次开局不要只按世界观随机出场景，而要把「${trope.label}」作为叙事引擎嵌入第一幕；` +
-    `世界基础规则仍以「${worldview}」为准。第一处事件钩子请围绕：${trope.hook}` +
+    `世界基础规则仅作舞台（世界名「${worldview}」），与题材规则冲突时以题材规则为准。第一处事件钩子请围绕：${trope.hook}` +
     "不要出现任何具体作品名、角色名、组织名或专有设定。"
   );
 }

@@ -310,6 +310,8 @@ fn http_clear_cookies(args: ClearCookieArgs) -> Result<String, String> {
 fn exit_app(app: tauri::AppHandle) {
   app.exit(0);
 }
+// 注意：tauri.localhost 资源（安卓/桌面 debug exe）由 generate_context! 编译期嵌入 dist，
+// 改前端后必须触发 lib 重编译（touch/注释变更），否则增量构建不会重新嵌入
 
 /// 进行中的流式聊天请求（request_id → 取消标志），供 chat_stream_abort 中断
 static STREAM_CANCELS: OnceLock<Mutex<HashMap<String, Arc<AtomicBool>>>> = OnceLock::new();

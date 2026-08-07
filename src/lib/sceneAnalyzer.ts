@@ -53,9 +53,17 @@ export async function analyzeScene(params: {
   signal?: AbortSignal;
 }): Promise<SceneAnalysis | null> {
   const { baseUrl, apiKey, model, body, currentChapterTitle, includeHiddenProgress, signal } = params;
+  // 注意：Gemini 类上游要求 messages 至少包含一条 contents（user/assistant），纯 system 会被拒 400
   const messages: ApiMessage[] = [
     { role: "system", content: buildAnalyzePrompt(body, currentChapterTitle, includeHiddenProgress ?? true) },
+    { role: "user", content: "请分析上面要求中的故事正文，并严格按格式输出 JSON。" },
   ];
+  // 超时保护：格式分析是次要请求，模型服务挂起/不可用时不能无限转圈（45s 未返回即放弃）
+  const controller = new AbortController();
+  const timeoutMs = 45_000;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const onOuterAbort = () => controller.abort();
+  signal?.addEventListener("abort", onOuterAbort);
   let out = "";
   try {
     for await (const chunk of chatStream(
@@ -65,7 +73,7 @@ export async function analyzeScene(params: {
       apiKey,
       false,
       undefined,
-      signal,
+      controller.signal,
       { temperature: 0.3, max_tokens: 1500 },
     )) {
       if (chunk.done) break;
@@ -74,6 +82,9 @@ export async function analyzeScene(params: {
   } catch (e) {
     console.error("[sceneAnalyze] failed:", e instanceof Error ? e.message : String(e));
     return null;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onOuterAbort);
   }
   if (out.trim()) console.log("[sceneAnalyze] output:", out.slice(0, 400));
   return parseSceneAnalysis(out);

@@ -908,11 +908,11 @@ export async function deleteCharacter(id: string): Promise<void> {
 }
 
 export const DEFAULT_CHARACTER_PRESETS: Omit<Character, "createdAt" | "updatedAt">[] = [
-  { id: "char-architect", name: "架构师", appearance: "专业严谨，逻辑清晰", personality: "善于系统化思考，权衡取舍，先理清约束再给方案", background: "", tags: ["架构", "技术", "设计"], isBuiltin: true },
-  { id: "char-translator", name: "翻译", appearance: "语言功底扎实，表达准确", personality: "严谨细致，兼顾信达雅，主动说明关键译法取舍", background: "", tags: ["翻译", "语言", "本地化"], isBuiltin: true },
-  { id: "char-fullstack", name: "全栈程序员", appearance: "技术全面，动手能力强", personality: "务实高效，优先给出可运行的代码与清晰步骤", background: "", tags: ["编程", "开发", "调试"], isBuiltin: true },
-  { id: "char-docwriter", name: "文档工程师", appearance: "条理清晰，注重细节", personality: "结构分明，步骤可执行，术语统一", background: "", tags: ["文档", "写作", "规范"], isBuiltin: true },
-  { id: "char-analyst", name: "数据分析师", appearance: "数据敏感，结论先行", personality: "用数据说话，先给结论再给依据，图表解读到位", background: "", tags: ["数据", "分析", "洞察"], isBuiltin: true },
+  { id: "char-architect", name: "架构师", appearance: "", personality: "善于系统化思考，权衡取舍，先理清约束再给方案", background: "", tags: ["架构", "技术", "设计"], isBuiltin: true },
+  { id: "char-translator", name: "翻译", appearance: "", personality: "严谨细致，兼顾信达雅，主动说明关键译法取舍", background: "", tags: ["翻译", "语言", "本地化"], isBuiltin: true },
+  { id: "char-fullstack", name: "全栈程序员", appearance: "", personality: "务实高效，优先给出可运行的代码与清晰步骤", background: "", tags: ["编程", "开发", "调试"], isBuiltin: true },
+  { id: "char-docwriter", name: "文档工程师", appearance: "", personality: "结构分明，步骤可执行，术语统一", background: "", tags: ["文档", "写作", "规范"], isBuiltin: true },
+  { id: "char-analyst", name: "数据分析师", appearance: "", personality: "用数据说话，先给结论再给依据，图表解读到位", background: "", tags: ["数据", "分析", "洞察"], isBuiltin: true },
 ];
 
 const PRESET_IDS = new Set(DEFAULT_CHARACTER_PRESETS.map(p => p.id));
@@ -1418,7 +1418,7 @@ export async function updateWorldBook(id: string, fields: Partial<Pick<WorldBook
   );
 }
 
-/** 复制世界书为可编辑副本（含全部条目，isBuiltin=false），返回新 id。 */
+/** 复制规则书为可编辑副本（含全部条目，isBuiltin=false），返回新 id。 */
 export async function duplicateWorldBook(sourceId: string): Promise<string | null> {
   const books = await loadWorldBooks(true);
   const source = books.find((b) => b.id === sourceId);
@@ -1573,7 +1573,22 @@ export async function initBuiltinWorldBooks(): Promise<void> {
       "SELECT id FROM world_books WHERE id = $1 LIMIT 1;",
       [preset.id]
     );
-    if (existing.length > 0) continue;
+    if (existing.length > 0) {
+      // 已存在：同步最新内置定义（内置规则书不可编辑，直接覆盖元信息并重建条目，保证命名/内容随版本更新）
+      await getDb().execute(
+        "UPDATE world_books SET name = $2, theme = $3, description = $4, tags = $5, violationWords = $6, updatedAt = $7 WHERE id = $1;",
+        [preset.id, preset.name, preset.theme, preset.description, JSON.stringify(preset.tags), JSON.stringify(preset.violationWords), now]
+      );
+      await getDb().execute("DELETE FROM world_book_entries WHERE bookId = $1;", [preset.id]);
+      let uid = 1;
+      for (const entry of preset.entries) {
+        await getDb().execute(
+          'INSERT INTO world_book_entries (id, bookId, uid, category, title, "key", keysecondary, content, constant, selective, "order", position, insertion_depth, disable, linkedCharacterIds, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17);',
+          [crypto.randomUUID(), preset.id, uid++, entry.category || "", entry.title, JSON.stringify(entry.key), JSON.stringify(entry.keysecondary || []), entry.content, entry.constant ? 1 : 0, entry.selective ? 1 : 0, entry.order, entry.position, entry.insertionDepth || 50, entry.disable ? 1 : 0, JSON.stringify(entry.linkedCharacterIds || []), now, now]
+        );
+      }
+      continue;
+    }
 
     await getDb().execute(
       "INSERT INTO world_books (id, name, theme, description, tags, isActive, isBuiltin, violationWords, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, 0, 1, $6, $7, $8);",
@@ -1644,6 +1659,55 @@ function normalizeSettingValue(col: string, v: unknown): string | number | null 
   return String(v);
 }
 
+/* ---------- 兼容导入 helper ---------- */
+
+const SQL_QUOTED_COLS = new Set(["key", "order", "position", "value", "constant", "selective", "disable"]);
+function sqlColName(c: string): string {
+  return SQL_QUOTED_COLS.has(c) ? `"${c}"` : c;
+}
+
+/**
+ * 兼容导入：按备份行实际存在的列 + 指定默认值动态 INSERT OR IGNORE。
+ * 旧备份缺新列（如 sessions.kind / messages.sceneAnalysis 等）时不再因 NOT NULL 失败，
+ * 缺失列走默认值；新备份全列正常还原。无 id 的行跳过。
+ */
+export async function insertRowIgnore(
+  db: Database,
+  table: string,
+  columns: string[],
+  row: Record<string, unknown>,
+  defaults: Record<string, unknown> = {},
+): Promise<void> {
+  if (!row || typeof row !== "object" || !("id" in row)) return;
+  const present = new Set<string>();
+  for (const c of columns) if (c in row) present.add(c);
+  for (const c of Object.keys(defaults)) present.add(c);
+  const cols = [...present];
+  if (cols.length === 0) return;
+  const values = cols.map((c) => {
+    const v = row[c];
+    if (v === undefined || v === null) {
+      const d = defaults[c];
+      return d === undefined ? null : normalizeSettingValue(c, d);
+    }
+    return normalizeSettingValue(c, v);
+  });
+  const sql = `INSERT OR IGNORE INTO ${table} (${cols.map(sqlColName).join(", ")}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(", ")});`;
+  await db.execute(sql, values);
+}
+
+/** 各设置表的列白名单（兼容导入用） */
+const SETTINGS_TABLE_COLUMNS: Record<string, { columns: string[]; defaults: Record<string, unknown> }> = {
+  app_settings: { columns: ["key", "value"], defaults: {} },
+  mcp_servers: { columns: ["id", "name", "url", "transportType", "config", "status", "createdAt", "updatedAt"], defaults: { name: "", url: "", transportType: "http", config: "{}", status: "unknown", createdAt: 0, updatedAt: 0 } },
+  prompt_templates: { columns: ["id", "title", "content", "category", "isBuiltin", "createdAt", "updatedAt"], defaults: { title: "", content: "", category: "", isBuiltin: 0, createdAt: 0, updatedAt: 0 } },
+  character_cards: { columns: ["id", "name", "description", "systemPrompt", "emoji", "tags", "isBuiltin", "createdAt", "updatedAt", "personality", "scenario", "firstMes", "mesExample", "worldBookId", "characterBookEntries", "isExtracted", "triggerWords", "deleted", "deletedAt"], defaults: { name: "", description: "", systemPrompt: "", emoji: "🎭", tags: "[]", isBuiltin: 0, createdAt: 0, updatedAt: 0, personality: "", scenario: "", firstMes: "", mesExample: "", worldBookId: null, characterBookEntries: "[]", isExtracted: 0, triggerWords: "[]", deleted: 0, deletedAt: null } },
+  characters: { columns: ["id", "name", "appearance", "personality", "background", "tags", "avatar", "isBuiltin", "createdAt", "updatedAt"], defaults: { name: "", appearance: "", personality: "", background: "", tags: "[]", avatar: "", isBuiltin: 0, createdAt: 0, updatedAt: 0 } },
+  world_rules: { columns: ["id", "name", "description", "rules", "isActive", "isBuiltin", "createdAt", "updatedAt"], defaults: { name: "", description: "", rules: "", isActive: 0, isBuiltin: 0, createdAt: 0, updatedAt: 0 } },
+  world_books: { columns: ["id", "name", "theme", "description", "tags", "isActive", "isBuiltin", "violationWords", "createdAt", "updatedAt"], defaults: { name: "", theme: "", description: "", tags: "[]", isActive: 0, isBuiltin: 0, violationWords: "[]", createdAt: 0, updatedAt: 0 } },
+  world_book_entries: { columns: ["id", "bookId", "uid", "category", "title", "key", "keysecondary", "content", "constant", "selective", "order", "position", "insertion_depth", "disable", "linkedCharacterIds", "createdAt", "updatedAt"], defaults: { bookId: "", uid: 0, category: "", title: "", key: "[]", keysecondary: "[]", content: "", constant: 0, selective: 0, order: 100, position: "system", insertion_depth: 50, disable: 0, linkedCharacterIds: "[]", createdAt: 0, updatedAt: 0 } },
+};
+
 /** 导出所选设置表（原始行，含 isBuiltin 等标记，保证导入后可完整还原；不传则导出全部设置表） */
 export async function snapshotSettingsTables(
   tables: (keyof SettingsDbSnapshot)[] = SETTINGS_SNAPSHOT_TABLES
@@ -1668,77 +1732,23 @@ export async function restoreSettingsTables(snap: Partial<SettingsDbSnapshot>): 
   if (snap.mcpServers !== undefined) await db.execute("DELETE FROM mcp_servers;");
   if (snap.appSettings !== undefined) await db.execute("DELETE FROM app_settings;");
 
-  if (snap.appSettings !== undefined) {
-    for (const row of snap.appSettings) {
-      await db.execute("INSERT INTO app_settings (key, value) VALUES ($1, $2);", [
-        normalizeSettingValue("key", row.key), normalizeSettingValue("value", row.value),
-      ]);
-    }
-  }
-  if (snap.mcpServers !== undefined) {
-    for (const row of snap.mcpServers) {
-      await db.execute(
-        "INSERT INTO mcp_servers (id, name, url, transportType, config, status, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);",
-        ["id", "name", "url", "transportType", "config", "status", "createdAt", "updatedAt"].map((c) => normalizeSettingValue(c, row[c]))
-      );
-    }
-  }
-  if (snap.promptTemplates !== undefined) {
-    for (const row of snap.promptTemplates) {
-      await db.execute(
-        "INSERT INTO prompt_templates (id, title, content, category, isBuiltin, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7);",
-        ["id", "title", "content", "category", "isBuiltin", "createdAt", "updatedAt"].map((c) => normalizeSettingValue(c, row[c]))
-      );
-    }
-  }
-  if (snap.characterCards !== undefined) {
-    for (const row of snap.characterCards) {
-      // 旧备份可能缺 isExtracted / triggerWords 列：缺失时给默认值
-      const ccVal = (c: string, fallback: string | number | null) =>
-        row[c] === undefined || row[c] === null ? fallback : normalizeSettingValue(c, row[c]);
-      await db.execute(
-        'INSERT INTO character_cards (id, name, description, systemPrompt, emoji, tags, isBuiltin, createdAt, updatedAt, personality, scenario, firstMes, mesExample, worldBookId, characterBookEntries, isExtracted, triggerWords, deleted, deletedAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19);',
-        [
-          ccVal("id", ""), ccVal("name", ""), ccVal("description", ""), ccVal("systemPrompt", ""),
-          ccVal("emoji", "🎭"), ccVal("tags", "[]"), ccVal("isBuiltin", 0), ccVal("createdAt", 0),
-          ccVal("updatedAt", 0), ccVal("personality", ""), ccVal("scenario", ""), ccVal("firstMes", ""),
-          ccVal("mesExample", ""), ccVal("worldBookId", null), ccVal("characterBookEntries", "[]"),
-          ccVal("isExtracted", 0), ccVal("triggerWords", "[]"),
-          ccVal("deleted", 0), ccVal("deletedAt", null),
-        ]
-      );
-    }
-  }
-  if (snap.characters !== undefined) {
-    for (const row of snap.characters) {
-      await db.execute(
-        "INSERT INTO characters (id, name, appearance, personality, background, tags, avatar, isBuiltin, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);",
-        ["id", "name", "appearance", "personality", "background", "tags", "avatar", "isBuiltin", "createdAt", "updatedAt"].map((c) => normalizeSettingValue(c, row[c]))
-      );
-    }
-  }
-  if (snap.worldRules !== undefined) {
-    for (const row of snap.worldRules) {
-      await db.execute(
-        "INSERT INTO world_rules (id, name, description, rules, isActive, isBuiltin, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);",
-        ["id", "name", "description", "rules", "isActive", "isBuiltin", "createdAt", "updatedAt"].map((c) => normalizeSettingValue(c, row[c]))
-      );
-    }
-  }
-  if (snap.worldBooks !== undefined) {
-    for (const row of snap.worldBooks) {
-      await db.execute(
-        "INSERT INTO world_books (id, name, theme, description, tags, isActive, isBuiltin, violationWords, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);",
-        ["id", "name", "theme", "description", "tags", "isActive", "isBuiltin", "violationWords", "createdAt", "updatedAt"].map((c) => normalizeSettingValue(c, row[c]))
-      );
-    }
-  }
-  if (snap.worldBookEntries !== undefined) {
-    for (const row of snap.worldBookEntries) {
-      await db.execute(
-        'INSERT INTO world_book_entries (id, bookId, uid, category, title, "key", keysecondary, content, constant, selective, "order", position, insertion_depth, disable, linkedCharacterIds, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17);',
-        ["id", "bookId", "uid", "category", "title", "key", "keysecondary", "content", "constant", "selective", "order", "position", "insertion_depth", "disable", "linkedCharacterIds", "createdAt", "updatedAt"].map((c) => normalizeSettingValue(c, row[c]))
-      );
+  const tableOf: Record<keyof SettingsDbSnapshot, string> = {
+    appSettings: "app_settings",
+    mcpServers: "mcp_servers",
+    promptTemplates: "prompt_templates",
+    characterCards: "character_cards",
+    characters: "characters",
+    worldRules: "world_rules",
+    worldBooks: "world_books",
+    worldBookEntries: "world_book_entries",
+  };
+  for (const key of SETTINGS_SNAPSHOT_TABLES) {
+    const rows = snap[key];
+    if (rows === undefined) continue;
+    const cfg = SETTINGS_TABLE_COLUMNS[tableOf[key]];
+    if (!cfg) continue;
+    for (const row of rows) {
+      await insertRowIgnore(db, tableOf[key], cfg.columns, row, cfg.defaults);
     }
   }
 }
@@ -1770,47 +1780,47 @@ export async function snapshotConversations(): Promise<ConversationsSnapshot> {
 /** 用备份数据合并恢复对话数据：同 ID 的会话/消息跳过（不覆盖现有），缺失的插入；回收站状态按备份还原。 */
 export async function restoreConversations(snap: ConversationsSnapshot): Promise<void> {
   const db = getDb();
-  for (const row of snap.sessions) {
-    await db.execute(
-      "INSERT OR IGNORE INTO sessions (id, title, systemPrompt, providerId, model, thinkingEnabled, createdAt, updatedAt, deleted, deletedAt, kind, contextSummary, summaryUpdatedAt, summaryCount, lastSummarizedMessageId, chainId, chainIndex, parentId, locked, archive, contextIndex) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21);",
-      ["id", "title", "systemPrompt", "providerId", "model", "thinkingEnabled", "createdAt", "updatedAt", "deleted", "deletedAt", "kind", "contextSummary", "summaryUpdatedAt", "summaryCount", "lastSummarizedMessageId", "chainId", "chainIndex", "parentId", "locked", "archive", "contextIndex"].map((c) => normalizeSettingValue(c, row[c]))
-    );
+
+  const sessionsCfg = {
+    columns: ["id", "title", "systemPrompt", "providerId", "model", "thinkingEnabled", "createdAt", "updatedAt", "deleted", "deletedAt", "kind", "contextSummary", "summaryUpdatedAt", "summaryCount", "lastSummarizedMessageId", "chainId", "chainIndex", "parentId", "locked", "archive", "contextIndex"],
+    defaults: { title: "会话", systemPrompt: "", providerId: "", model: "", thinkingEnabled: 1, createdAt: 0, updatedAt: 0, deleted: 0, deletedAt: null, kind: "adventure", contextSummary: null, summaryUpdatedAt: null, summaryCount: 0, lastSummarizedMessageId: null, chainId: null, chainIndex: null, parentId: null, locked: 0, archive: null, contextIndex: null },
+  };
+  for (const row of snap.sessions ?? []) {
+    await insertRowIgnore(db, "sessions", sessionsCfg.columns, row, sessionsCfg.defaults);
   }
-  for (const row of snap.messages) {
-    await db.execute(
-      "INSERT OR IGNORE INTO messages (id, sessionId, role, content, thinking, images, opening, tools, sceneAnalysis, tokenUsage, createdAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);",
-      ["id", "sessionId", "role", "content", "thinking", "images", "opening", "tools", "sceneAnalysis", "tokenUsage", "createdAt"].map((c) => normalizeSettingValue(c, row[c]))
-    );
+
+  const messagesCfg = {
+    columns: ["id", "sessionId", "role", "content", "thinking", "images", "opening", "tools", "sceneAnalysis", "tokenUsage", "createdAt"],
+    defaults: { sessionId: "", role: "assistant", content: "", thinking: null, images: null, opening: 0, tools: null, sceneAnalysis: null, tokenUsage: null, createdAt: 0 },
+  };
+  for (const row of snap.messages ?? []) {
+    await insertRowIgnore(db, "messages", messagesCfg.columns, row, messagesCfg.defaults);
   }
-  for (const row of snap.favorites) {
-    await db.execute(
-      "INSERT OR IGNORE INTO favorites (id, sessionId, createdAt) VALUES ($1, $2, $3);",
-      ["id", "sessionId", "createdAt"].map((c) => normalizeSettingValue(c, row[c]))
-    );
+
+  const favoritesCfg = { columns: ["id", "sessionId", "createdAt"], defaults: { sessionId: "", createdAt: 0 } };
+  for (const row of snap.favorites ?? []) {
+    await insertRowIgnore(db, "favorites", favoritesCfg.columns, row, favoritesCfg.defaults);
   }
-  for (const row of snap.sessionCharacters) {
-    await db.execute(
-      "INSERT OR IGNORE INTO session_characters (id, sessionId, characterId, worldContext, arcClearedAt, createdAt) VALUES ($1, $2, $3, $4, $5, $6);",
-      ["id", "sessionId", "characterId", "worldContext", "arcClearedAt", "createdAt"].map((c) => normalizeSettingValue(c, row[c]))
-    );
+
+  const sessionCharsCfg = { columns: ["id", "sessionId", "characterId", "worldContext", "arcClearedAt", "createdAt"], defaults: { sessionId: "", characterId: "", worldContext: "", arcClearedAt: null, createdAt: 0 } };
+  for (const row of snap.sessionCharacters ?? []) {
+    await insertRowIgnore(db, "session_characters", sessionCharsCfg.columns, row, sessionCharsCfg.defaults);
   }
+
+  const sessionCardsCfg = { columns: ["id", "sessionId", "characterCardId", "worldBookId", "createdAt"], defaults: { sessionId: "", characterCardId: "", worldBookId: null, createdAt: 0 } };
   for (const row of snap.sessionCharacterCards ?? []) {
-    await db.execute(
-      "INSERT OR IGNORE INTO session_character_cards (id, sessionId, characterCardId, worldBookId, createdAt) VALUES ($1, $2, $3, $4, $5);",
-      ["id", "sessionId", "characterCardId", "worldBookId", "createdAt"].map((c) => normalizeSettingValue(c, row[c]))
-    );
+    await insertRowIgnore(db, "session_character_cards", sessionCardsCfg.columns, row, sessionCardsCfg.defaults);
   }
-  for (const row of snap.characterArcs) {
-    await db.execute(
-      "INSERT OR IGNORE INTO character_arcs (id, characterId, sessionId, worldContext, event, description, turnCount, createdAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);",
-      ["id", "characterId", "sessionId", "worldContext", "event", "description", "turnCount", "createdAt"].map((c) => normalizeSettingValue(c, row[c]))
-    );
+
+  const arcsCfg = { columns: ["id", "characterId", "sessionId", "worldContext", "event", "description", "turnCount", "createdAt"], defaults: { characterId: "", sessionId: "", worldContext: "", event: "", description: "", turnCount: 0, createdAt: 0 } };
+  for (const row of snap.characterArcs ?? []) {
+    await insertRowIgnore(db, "character_arcs", arcsCfg.columns, row, arcsCfg.defaults);
   }
 }
 
 /* ---------- 同步合并导入（WebDAV 云端下载用，INSERT OR IGNORE 不覆盖现有） ---------- */
 
-/** 合并导入世界书 + 词条；返回 (新世界书数, 新词条数) */
+/** 合并导入规则书 + 词条；返回 (新规则书数, 新词条数) */
 export async function mergeWorldBooks(snap: {
   worldBooks?: Record<string, unknown>[];
   worldBookEntries?: Record<string, unknown>[];

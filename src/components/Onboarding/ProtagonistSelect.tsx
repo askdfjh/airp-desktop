@@ -88,12 +88,20 @@ export function ProtagonistSelect({ onComplete }: Props) {
   };
 
   const randomScenario = () => {
-    const pool = scenarios.length > 0 ? scenarios : [];
-    const scenario = pool[Math.floor(Math.random() * pool.length)];
-    if (scenario) {
+    // 固定展示的开局（当前频道/底座过滤后的预设）不参与随机：
+    // 从同题材、同底座的「全部频道」池随机一个未被展示的开局；若预设开局已全部展示完，则用 AI 随机开局（即兴生成，不展示预设场景）
+    const shownIds = new Set(scenarios.map((s) => s.id));
+    const fullPool = getTopicOpeningScenarios(selectedTopicSchemeId, selectedWorldId, "all");
+    const candidates = fullPool.filter((s) => !shownIds.has(s.id));
+    if (candidates.length > 0) {
+      const scenario = candidates[Math.floor(Math.random() * candidates.length)];
       setRandomPicked(true);
       setSelectedScenarioLocal(scenario.id);
       setSelectedScenario(scenario.id, scenario.name);
+    } else {
+      setRandomPicked(true);
+      setSelectedScenarioLocal("ai-random");
+      setSelectedScenario("ai-random", "AI 随机开局");
     }
   };
 
@@ -189,10 +197,10 @@ export function ProtagonistSelect({ onComplete }: Props) {
               </svg>
             </div>
             <div className="seed-card-title" style={{ marginBottom: 8 }}>
-              {randomPicked && randomResult ? `已随机：${randomResult.name}` : "随机一个开局"}
+              {randomPicked && randomResult ? `已随机：${randomResult.name}` : randomPicked ? "已随机：AI 随机开局" : "随机一个开局"}
             </div>
             <div className="seed-card-desc" style={{ marginBottom: 14 }}>
-              {randomPicked && randomResult ? randomResult.description : "在当前题材与背景的组合开局里随机。"}
+              {randomPicked && randomResult ? randomResult.description : randomPicked ? "由 AI 即兴生成全新开局，与预设不同。" : "在当前题材与背景的组合开局里随机。"}
             </div>
           </div>
 

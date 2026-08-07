@@ -67,7 +67,7 @@ export function buildWorldContext(
     sections.push(line);
   };
 
-  const header = `【世界设定·${book.name}】`;
+  const header = `【世界规则·${book.name}】（世界基础规则：仅定义舞台与底层设定；若与题材规则冲突，以题材规则为准）`;
   total += header.length;
 
   for (const e of constants.slice(0, opts.maxConstantEntries)) {
