@@ -18,8 +18,9 @@ import { DraftPreview } from "./DraftPreview";
 import { CreateHistory } from "./CreateHistory";
 import { ConfirmDialog } from "@/components/Layout/ConfirmDialog";
 import type { Message } from "@/types";
+import type { AnimPhase } from "@/hooks/useAnimatedVisibility";
 
-export function CreateModeView() {
+export function CreateModeView({ phase = "in" }: { phase?: AnimPhase }) {
   const ui = useUIStore();
   // Android 无自绘标题栏（TitleBar 不渲染），创建模式从顶部 0 开始；桌面端避开 40px 标题栏
   const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
@@ -349,7 +350,7 @@ export function CreateModeView() {
 
   return (
     <div
-      className={`theme-${ui.effectiveTheme()}`}
+      className={`theme-${ui.effectiveTheme()} ` + (phase === "in" ? "anim-sheet-in" : phase === "out" ? "anim-sheet-out" : "anim-init")}
       style={{
         position: "fixed",
         top: isAndroid ? 0 : 40,

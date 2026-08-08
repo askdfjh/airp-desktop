@@ -1,5 +1,6 @@
 import { LogOut } from "lucide-react";
 import { useEffect } from "react";
+import type { AnimPhase } from "@/hooks/useAnimatedVisibility";
 
 interface ConfirmDialogProps {
   title: string;
@@ -8,6 +9,8 @@ interface ConfirmDialogProps {
   cancelLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
+  /** 进出场动画阶段：由父级 useAnimatedVisibility 控制 */
+  phase?: AnimPhase;
 }
 
 export function ConfirmDialog({
@@ -17,6 +20,7 @@ export function ConfirmDialog({
   cancelLabel = "取消",
   onConfirm,
   onCancel,
+  phase = "in",
 }: ConfirmDialogProps) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -29,17 +33,17 @@ export function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className={"fixed inset-0 z-50 flex items-center justify-center " + (phase === "in" ? "anim-overlay-in" : phase === "out" ? "anim-overlay-out" : "anim-init")}
       style={{
         background: "rgba(0,0,0,0.45)",
         backdropFilter: "blur(8px)",
         WebkitBackdropFilter: "blur(8px)",
-        animation: "seed-fade-in-up 0.18s ease-out",
         zIndex: 2000,
       }}
       onClick={onCancel}
     >
       <div
+        className={phase === "in" ? "anim-modal-in" : phase === "out" ? "anim-modal-out" : "anim-init"}
         style={{
           width: 360,
           maxWidth: "calc(100vw - 32px)",
@@ -49,7 +53,6 @@ export function ConfirmDialog({
           border: "1px solid var(--seed-border)",
           borderRadius: 16,
           boxShadow: "0 16px 64px rgba(0,0,0,0.5)",
-          animation: "seed-fade-in-up 0.22s ease-out",
         }}
         onClick={(e) => e.stopPropagation()}
       >

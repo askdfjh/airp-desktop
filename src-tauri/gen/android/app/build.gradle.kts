@@ -38,22 +38,6 @@ android {
         }
         getByName("release") {
             isMinifyEnabled = true
-            // 正式 keystore 签名（keystore 与密码在本地 gradle.properties，gen/ 目录已被 gitignore，不会入库）
-            val ksPath = project.findProperty("airp.android.keystorePath") as String?
-            val ksPass = project.findProperty("airp.android.keystorePass") as String?
-            val ksAlias = project.findProperty("airp.android.keystoreAlias") as String?
-            val ksAliasPass = project.findProperty("airp.android.keystoreAliasPass") as String?
-            if (ksPath != null && ksPass != null) {
-                signingConfig = signingConfigs.create("release") {
-                    storeFile = file(ksPath)
-                    storePassword = ksPass
-                    keyAlias = ksAlias ?: "airp"
-                    keyPassword = ksAliasPass ?: ksPass
-                }
-            } else if (project.findProperty("airp.android.allowDebugReleaseSigning") == "true") {
-                // 无正式 keystore 时，可显式传入 -Pairp.android.allowDebugReleaseSigning=true 使用 debug keystore
-                signingConfig = signingConfigs.getByName("debug")
-            }
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
                     .plus(getDefaultProguardFile("proguard-android-optimize.txt"))

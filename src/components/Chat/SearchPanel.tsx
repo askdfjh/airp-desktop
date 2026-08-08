@@ -1,16 +1,19 @@
 import { useState, useEffect, useRef } from "react";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useKeyboardShift } from "@/hooks/useKeyboardShift";
+import type { AnimPhase } from "@/hooks/useAnimatedVisibility";
 
 interface Props {
   onClose: () => void;
+  /** 进出场动画阶段：由父级 useAnimatedVisibility 控制 */
+  phase?: AnimPhase;
 }
 
 /**
  * 全局消息搜索：按关键词搜索历史消息与会话标题，点击结果跳转到对应消息。
  * 样式与 SessionPopup 一致（seed-* 设计 token + 全屏遮罩 + 居中面板）。
  */
-export function SearchPanel({ onClose }: Props) {
+export function SearchPanel({ onClose, phase = "in" }: Props) {
   const kbdShift = useKeyboardShift();
   const results = useSessionStore((s) => s.searchResults);
   const searching = useSessionStore((s) => s.searching);
@@ -109,6 +112,7 @@ export function SearchPanel({ onClose }: Props) {
       ref={overlayRef}
       data-popover-overlay
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
+      className={phase === "in" ? "anim-overlay-in" : phase === "out" ? "anim-overlay-out" : "anim-init"}
       style={{
         position: "fixed",
         inset: "0px",
@@ -121,10 +125,10 @@ export function SearchPanel({ onClose }: Props) {
         justifyContent: "center",
         paddingTop: 0,
         paddingBottom: kbdShift > 0 ? kbdShift + 16 : 0,
-        animation: "seed-fade-in-up 0.2s ease-out",
       }}
     >
       <div
+        className={phase === "in" ? "anim-modal-in" : phase === "out" ? "anim-modal-out" : "anim-init"}
         style={{
           width: "min(560px, 94vw)",
           minWidth: 0,
@@ -138,7 +142,6 @@ export function SearchPanel({ onClose }: Props) {
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          animation: "seed-fade-in-up 0.25s ease-out",
         }}
       >
         {/* Header */}

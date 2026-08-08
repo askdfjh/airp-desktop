@@ -53,7 +53,7 @@ export function MessageBubble({ message, streaming, onDelete, onEdit, onRegenera
 
   useEffect(() => {
     if (isThinkingStreaming) {
-      setThinkingOpen(true);
+      // 思考流式中不自动展开：实时思考显示在底部「规划中」迷你窗口，避免重复展示
       return;
     }
     if (!streaming && message.thinking && thinkingOpen && !userToggledRef.current) {
@@ -278,7 +278,7 @@ export function MessageBubble({ message, streaming, onDelete, onEdit, onRegenera
                     onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-tertiary)"; }}
                   >
                     <Brain size={12} />
-                    <span>思考过程</span>
+                    <span>{isThinkingStreaming ? "规划中" : "规划完成"}</span>
                     {isThinkingStreaming && (
                       <span className="flex items-center gap-1" style={{ marginLeft: 2 }}>
                         <span className="typing-dot inline-b" style={{ width: 4, height: 4, borderRadius: "50%" }} />

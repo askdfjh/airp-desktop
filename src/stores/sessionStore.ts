@@ -31,6 +31,10 @@ interface SessionState {
   setActive: (id: string) => void;
   updateTimestamp: (id: string) => void;
   updateSessionModel: (id: string, providerId: string, model: string, thinkingSupported?: boolean) => void;
+  /** 切换会话格式类型：blank(空白对话) ↔ adventure(冒险格式：章节/场景/文风) */
+  setSessionKind: (id: string, kind: "blank" | "adventure") => void;
+  /** 空白会话的格式开关：仅启用格式分析（章节/场景/推荐），不改变内容注入（保持空白） */
+  setFormatEnabled: (id: string, enabled: boolean) => void;
   favorite: (sessionId: string) => Promise<void>;
   unfavorite: (favoriteId: string) => void;
   isFavorited: (sessionId: string) => boolean;
@@ -139,6 +143,30 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }));
     updateSession(id, { providerId, model, thinkingEnabled: thinkingSupported !== undefined ? (thinkingSupported ? 1 : 0) : undefined, updatedAt: now } as any).catch((e) =>
       console.error("[db] updateSessionModel failed:", e)
+    );
+  },
+
+  setSessionKind: (id, kind) => {
+    const now = Date.now();
+    set((st) => ({
+      sessions: st.sessions.map((s) =>
+        s.id === id ? { ...s, kind, updatedAt: now } : s
+      ),
+    }));
+    updateSession(id, { kind, updatedAt: now } as any).catch((e) =>
+      console.error("[db] setSessionKind failed:", e)
+    );
+  },
+
+  setFormatEnabled: (id, enabled) => {
+    const now = Date.now();
+    set((st) => ({
+      sessions: st.sessions.map((s) =>
+        s.id === id ? { ...s, formatEnabled: enabled, updatedAt: now } : s
+      ),
+    }));
+    updateSession(id, { formatEnabled: enabled ? 1 : 0, updatedAt: now } as any).catch((e) =>
+      console.error("[db] setFormatEnabled failed:", e)
     );
   },
 

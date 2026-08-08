@@ -57,6 +57,7 @@ export async function initDb(): Promise<void> {
   await db.execute(`ALTER TABLE sessions ADD COLUMN locked INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
   await db.execute(`ALTER TABLE sessions ADD COLUMN archive TEXT;`).catch(() => {});
   await db.execute(`ALTER TABLE sessions ADD COLUMN contextIndex TEXT;`).catch(() => {});
+  await db.execute(`ALTER TABLE sessions ADD COLUMN formatEnabled INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
   // 回收站：软删除标记 + 删除时间
   await db.execute(`ALTER TABLE sessions ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
   await db.execute(`ALTER TABLE sessions ADD COLUMN deletedAt INTEGER;`).catch(() => {});
@@ -290,6 +291,7 @@ interface SessionRow {
   locked?: number | null;
   archive?: string | null;
   contextIndex?: string | null;
+  formatEnabled?: number | null;
 }
 
 interface MessageRow {
@@ -328,6 +330,7 @@ function rowToSession(r: SessionRow): Session {
     locked: r.locked === 1,
     archive: r.archive ?? undefined,
     contextIndex: r.contextIndex ?? undefined,
+    formatEnabled: r.formatEnabled === 1,
   };
 }
 
@@ -362,8 +365,8 @@ export async function loadSessions(): Promise<Session[]> {
 export async function insertSession(s: Session): Promise<void> {
   console.log("[db] insertSession", s.id, s.title);
   await getDb().execute(
-    "INSERT INTO sessions (id, title, systemPrompt, providerId, model, thinkingEnabled, createdAt, updatedAt, kind, contextSummary, summaryUpdatedAt, summaryCount, lastSummarizedMessageId, chainId, chainIndex, parentId, locked, archive, contextIndex) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19);",
-    [s.id, s.title, s.systemPrompt, s.providerId, s.model, s.thinkingEnabled ? 1 : 0, s.createdAt, s.updatedAt, s.kind === "blank" ? "blank" : "adventure", s.contextSummary ?? "", s.summaryUpdatedAt ?? null, s.summaryCount ?? 0, s.lastSummarizedMessageId ?? null, s.chainId ?? null, s.chainIndex ?? null, s.parentId ?? null, s.locked ? 1 : 0, s.archive ?? null, s.contextIndex ?? null]
+    "INSERT INTO sessions (id, title, systemPrompt, providerId, model, thinkingEnabled, createdAt, updatedAt, kind, contextSummary, summaryUpdatedAt, summaryCount, lastSummarizedMessageId, chainId, chainIndex, parentId, locked, archive, contextIndex, formatEnabled) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20);",
+    [s.id, s.title, s.systemPrompt, s.providerId, s.model, s.thinkingEnabled ? 1 : 0, s.createdAt, s.updatedAt, s.kind === "blank" ? "blank" : "adventure", s.contextSummary ?? "", s.summaryUpdatedAt ?? null, s.summaryCount ?? 0, s.lastSummarizedMessageId ?? null, s.chainId ?? null, s.chainIndex ?? null, s.parentId ?? null, s.locked ? 1 : 0, s.archive ?? null, s.contextIndex ?? null, s.formatEnabled ? 1 : 0]
   );
 }
 
@@ -428,8 +431,10 @@ export async function hardDeleteSession(id: string): Promise<void> {
   await getDb().execute("DELETE FROM sessions WHERE id = $1;", [id]);
 }
 
-const SESSION_FIELDS = ["title", "systemPrompt", "providerId", "model", "thinkingEnabled", "updatedAt", "contextSummary", "summaryUpdatedAt", "summaryCount", "lastSummarizedMessageId", "chainId", "chainIndex", "parentId", "locked", "archive", "contextIndex"] as const;
+const SESSION_FIELDS = ["title", "systemPrompt", "providerId", "model", "thinkingEnabled", "updatedAt", "contextSummary", "summaryUpdatedAt", "summaryCount", "lastSummarizedMessageId", "chainId", "chainIndex", "parentId", "locked", "archive", "contextIndex", "formatEnabled"] as const;
 type SessionUpdateField = (typeof SESSION_FIELDS)[number];
+
+const SESSION_BOOL_FIELDS = new Set(["locked", "thinkingEnabled", "formatEnabled"]);
 
 /** 更新会话字段（白名单过滤，安全）。 */
 export async function updateSession(
@@ -439,7 +444,7 @@ export async function updateSession(
   const valid = SESSION_FIELDS.filter((k) => k in fields);
   if (valid.length === 0) return;
   const sets = valid.map((k, i) => `${k} = $${i + 1}`).join(", ");
-  const values = valid.map((k) => (k === "locked" ? (fields[k] ? 1 : 0) : (fields[k] as string | number)));
+  const values = valid.map((k) => (SESSION_BOOL_FIELDS.has(k) ? (fields[k] ? 1 : 0) : (fields[k] as string | number)));
   await getDb().execute(
     `UPDATE sessions SET ${sets} WHERE id = $${valid.length + 1};`,
     [...values, id]

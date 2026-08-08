@@ -2,18 +2,21 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "re
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useWorldStore } from "@/stores/worldStore";
 import { useUIStore } from "@/stores/uiStore";
+import type { AnimPhase } from "@/hooks/useAnimatedVisibility";
 
 interface WorldInfoPanelProps {
   /** 触发按钮，浮层锚定在其上方 */
   anchorRef: RefObject<HTMLElement | null>;
   onClose: () => void;
+  /** 进出场动画阶段：由父级 useAnimatedVisibility 控制 */
+  phase?: AnimPhase;
 }
 
 /**
  * 世界信息浮层：紧凑展示当前世界，设定条目默认收起，点击展开/收起。
  * 点击触发按钮或外部 / Esc 关闭。
  */
-export function WorldInfoPanel({ anchorRef, onClose }: WorldInfoPanelProps) {
+export function WorldInfoPanel({ anchorRef, onClose, phase = "in" }: WorldInfoPanelProps) {
   const activeBook = useWorldStore((s) => s.activeBook);
   const selectedWorldName = useUIStore((s) => s.selectedWorldName);
   const [entriesOpen, setEntriesOpen] = useState(false);
@@ -59,7 +62,7 @@ export function WorldInfoPanel({ anchorRef, onClose }: WorldInfoPanelProps) {
   return (
     <div
       ref={panelRef}
-      className="seed-card"
+      className={"seed-card " + (phase === "in" ? "anim-pop-in" : phase === "out" ? "anim-pop-out" : "anim-init")}
       style={{
         position: "fixed",
         zIndex: 6000,
@@ -70,7 +73,6 @@ export function WorldInfoPanel({ anchorRef, onClose }: WorldInfoPanelProps) {
         flexDirection: "column",
         overflow: "hidden",
         ...(pos ? { bottom: pos.bottom, right: pos.right } : {}),
-        animation: "seed-fade-in-up 0.18s ease-out",
       }}
     >
       {/* Header：纯文字居中展示当前世界（无需图标与关闭按钮，点击外部/再点按钮即可关闭） */}

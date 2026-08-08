@@ -1296,12 +1296,13 @@ mark.seed-hl {
 /* Typing indicator */
 .seed-typing {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 5px;
   padding: 8px 0;
   opacity: 0.5;
 }
-.seed-typing span:not(.seed-typing-label) {
+.seed-typing span:not(.seed-typing-label):not(.seed-thinking-mini) {
   width: 5px;
   height: 5px;
   border-radius: 50%;
@@ -1317,6 +1318,52 @@ mark.seed-hl {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+/* 规划中·迷你思考窗口：小字低对比、不显眼，实时滚动显示思考过程（防误以为卡住） */
+.seed-thinking-mini {
+  flex: 0 0 100%;
+  margin-top: 4px;
+  padding: 6px 10px;
+  max-height: 76px;
+  overflow-y: auto;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--seed-muted);
+  opacity: 0.65;
+  background: color-mix(in srgb, var(--seed-accent) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--seed-accent) 12%, transparent);
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-align: left;
+  pointer-events: auto;
+}
+
+/* Markdown 原始 HTML：details/summary 折叠块（模型输出 <details> 时正常折叠） */
+details {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--seed-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--seed-hover-bg) 60%, transparent);
+}
+summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--seed-fg);
+  user-select: none;
+  list-style: none;
+}
+summary::-webkit-details-marker { display: none; }
+summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform 0.15s ease;
+  color: var(--seed-muted);
+}
+details[open] summary::before { transform: rotate(90deg); }
+details[open] summary { margin-bottom: 6px; }
+details > :not(summary) { margin-top: 6px; }
 
 /* 长对话压缩状态条：整理中（提取角色 → 生成摘要），可停止 */
 .seed-compress-bar {
@@ -2415,4 +2462,104 @@ mark.seed-hl {
   width: 36px;
   height: 36px;
   margin: 0 2px;
+}
+
+/* ===== 统一动画体系（2026-08 新增）=====
+   规则：
+   - 只动画 transform + opacity（合成器友好，不触发 layout/paint）
+   - 同类型界面用同一套开/关动效（in/out 镜像）
+   - 时长分级：菜单 < 弹窗 < 全屏面板
+   - 进入用 --anim-ease-out（快起慢落），退出用 --anim-ease-in（干脆利落）
+   - 退出动画类统一 pointer-events:none，防止动画期间重复点击
+   - 配合 useAnimatedVisibility hook 使用（负责延迟卸载） */
+:root {
+  --anim-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --anim-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --anim-micro: 140ms;
+  --anim-base: 220ms;
+  --anim-panel: 300ms;
+}
+
+/* --- 遮罩：纯淡入淡出 --- */
+/* init：挂载初始静止透明（不播动画），避免打开时闪现 */
+.anim-init { opacity: 0; }
+.anim-overlay-in  { animation: anim-overlay-in  var(--anim-base) ease-out both; }
+.anim-overlay-out { animation: anim-overlay-out 180ms var(--anim-ease-in) both; pointer-events: none; }
+@keyframes anim-overlay-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes anim-overlay-out { from { opacity: 1; } to { opacity: 0; } }
+
+/* --- 居中弹窗：聚焦放大浮现 / 收缩回落 --- */
+.anim-modal-in  { animation: anim-modal-in  var(--anim-base) var(--anim-ease-out) both; }
+.anim-modal-out { animation: anim-modal-out 200ms var(--anim-ease-in) both; pointer-events: none; }
+@keyframes anim-modal-in {
+  from { opacity: 0; transform: scale(0.94) translateY(14px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes anim-modal-out {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to   { opacity: 0; transform: scale(0.96) translateY(10px); }
+}
+
+/* --- 全屏面板：从底部升起 / 向下滑落 --- */
+.anim-sheet-in  { animation: anim-sheet-in  var(--anim-panel) var(--anim-ease-out) both; }
+.anim-sheet-out { animation: anim-sheet-out 260ms var(--anim-ease-in) both; pointer-events: none; }
+@keyframes anim-sheet-in {
+  from { opacity: 0; transform: translateY(36px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes anim-sheet-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(28px) scale(0.99); }
+}
+
+/* --- 锚点浮层（按钮上方弹出）：轻快展开 --- */
+/* transform-origin 底部：浮层从下方按钮处展开，而非中心缩放 */
+.anim-pop-in, .anim-pop-out { transform-origin: bottom center; }
+.anim-pop-in  { animation: anim-pop-in  var(--anim-micro) var(--anim-ease-out) both; }
+.anim-pop-out { animation: anim-pop-out 120ms var(--anim-ease-in) both; pointer-events: none; }
+@keyframes anim-pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes anim-pop-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(6px) scale(0.98); }
+}
+
+/* --- 侧边抽屉：横向滑入/滑出 --- */
+.anim-drawer-in  { animation: anim-drawer-in  240ms var(--anim-ease-out) both; }
+.anim-drawer-out { animation: anim-drawer-out 200ms var(--anim-ease-in) both; pointer-events: none; }
+@keyframes anim-drawer-in  { from { opacity: 0; transform: translateX(-240px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes anim-drawer-out { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(-240px); } }
+
+/* --- 内容切换（tab/步骤过渡）：400ms 柔和淡入上移 --- */
+.anim-content-in  { animation: anim-content-in  400ms var(--anim-ease-out) both; }
+.anim-content-out { animation: anim-content-out 150ms var(--anim-ease-in) both; }
+@keyframes anim-content-in  { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes anim-content-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-6px); } }
+
+/* --- 安卓档位：时长缩短 ~30%，全屏面板去掉 scale（低端机缩放大图层开销高）--- */
+[data-platform="android"] .anim-overlay-in  { animation-duration: 160ms; }
+[data-platform="android"] .anim-overlay-out { animation-duration: 140ms; }
+[data-platform="android"] .anim-modal-in    { animation-duration: 180ms; }
+[data-platform="android"] .anim-modal-out   { animation-duration: 160ms; }
+[data-platform="android"] .anim-sheet-in    { animation-duration: 220ms; animation-name: anim-sheet-in-android; }
+[data-platform="android"] .anim-sheet-out   { animation-duration: 200ms; animation-name: anim-sheet-out-android; }
+[data-platform="android"] .anim-pop-in      { animation-duration: 120ms; }
+[data-platform="android"] .anim-pop-out     { animation-duration: 100ms; }
+[data-platform="android"] .anim-drawer-in   { animation-duration: 200ms; }
+[data-platform="android"] .anim-drawer-out  { animation-duration: 160ms; }
+@keyframes anim-sheet-in-android  { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes anim-sheet-out-android { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(24px); } }
+
+/* --- 尊重系统"减少动态效果"：全部动画关闭（配合 hook 的 0ms 卸载）--- */
+@media (prefers-reduced-motion: reduce) {
+  .anim-overlay-in, .anim-overlay-out,
+  .anim-modal-in, .anim-modal-out,
+  .anim-sheet-in, .anim-sheet-out,
+  .anim-pop-in, .anim-pop-out,
+  .anim-drawer-in, .anim-drawer-out,
+  .anim-content-in, .anim-content-out {
+    animation: none;
+  }
 }

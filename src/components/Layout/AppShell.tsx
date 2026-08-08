@@ -14,6 +14,7 @@ import { useEffect, useState, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ConfirmDialog } from "@/components/Layout/ConfirmDialog";
 import { isAndroid, registerBackHandler, dispatchBack } from "@/lib/androidBack";
+import { useAnimatedVisibility } from "@/hooks/useAnimatedVisibility";
 import { TitleBar } from "@/components/Layout/TitleBar";
 import { WelcomeScreen } from "@/components/Layout/WelcomeScreen";
 import { WelcomeApiSetup } from "@/components/Layout/WelcomeApiSetup";
@@ -68,6 +69,8 @@ export function AppShell() {
   });
   const providerCount = useProviderStore((s) => s.providers.length);
   const setSettingsOpen = useUIStore((s) => s.setSettingsOpen);
+  // 设置面板进出场动画：300ms 与 .anim-sheet-in/out 时长一致（全屏面板档）
+  const settingsAnim = useAnimatedVisibility(settingsOpen, 300);
   const [welcomeView, setWelcomeView] = useState<"home" | "setup">("home");
   const [dbReady, setDbReady] = useState<boolean | null>(null);
   const showWelcome = dbReady === true && !welcomeSeen && providerCount === 0 && !settingsOpen;
@@ -77,6 +80,13 @@ export function AppShell() {
   const [showRemoveAllConfirm, setShowRemoveAllConfirm] = useState(false);
   const phaseInitializedRef = useRef(false);
   const lastBackRef = useRef(0);
+
+  // 其余浮层的进出场动画（时长与对应 CSS 动画一致）
+  const exitConfirmAnim = useAnimatedVisibility(showExitConfirm, 220);
+  const deleteAnim = useAnimatedVisibility(!!deleteTarget, 220);
+  const removeAllAnim = useAnimatedVisibility(showRemoveAllConfirm, 220);
+  const createAnim = useAnimatedVisibility(!!createMode, 300);
+  const sidebarAnim = useAnimatedVisibility(sidebarOpen && !settingsOpen, 240);
 
   // 应用启动：初始化 SQLite 并加载历史会话
   useEffect(() => {
@@ -348,9 +358,10 @@ export function AppShell() {
         ) : (
           <WelcomeApiSetup onBack={() => setWelcomeView("home")} onSaved={handleWelcomeApiSaved} />
         )}
-        {settingsOpen && <ProviderConfigPanel />}
-        {showExitConfirm && (
+        {settingsAnim.mounted && <ProviderConfigPanel phase={settingsAnim.phase} />}
+        {exitConfirmAnim.mounted && (
           <ConfirmDialog
+            phase={exitConfirmAnim.phase}
             title="退出应用"
             message="确定要退出吗？"
             confirmLabel="退出"
@@ -359,7 +370,7 @@ export function AppShell() {
             onCancel={handleExitCancel}
           />
         )}
-        {createMode && <CreateModeView />}
+        {createAnim.mounted && <CreateModeView phase={createAnim.phase} />}
       </div>
     );
   }
@@ -370,9 +381,10 @@ export function AppShell() {
       <div data-platform={isAndroid ? "android" : "desktop"} className={`theme-${eff}`} style={{ height: "100vh", width: "100vw", overflow: "hidden", background: "var(--seed-bg)" }}>
         <TitleBar />
         <OnboardingFlow onExit={handleOnboardingExit} />
-        {settingsOpen && <ProviderConfigPanel />}
-        {showExitConfirm && (
+        {settingsAnim.mounted && <ProviderConfigPanel phase={settingsAnim.phase} />}
+        {exitConfirmAnim.mounted && (
           <ConfirmDialog
+            phase={exitConfirmAnim.phase}
             title="退出应用"
             message="确定要退出吗？"
             confirmLabel="退出"
@@ -381,7 +393,7 @@ export function AppShell() {
             onCancel={handleExitCancel}
           />
         )}
-        {createMode && <CreateModeView />}
+        {createAnim.mounted && <CreateModeView phase={createAnim.phase} />}
       </div>
     );
   }
@@ -397,25 +409,29 @@ export function AppShell() {
       <DialogueNovel />
 
       {/* 传统 Sidebar：默认不显示，仅当用户从 FunctionBar 外的途径打开时渲染 */}
-      {sidebarOpen && !settingsOpen && (
-        <div style={{
-          position: "absolute", top: 0, left: 0, bottom: 0, zIndex: 150,
-          display: "flex", flexDirection: "column",
-          width: 240, minWidth: 240,
-          background: "var(--seed-glass)", backdropFilter: "blur(20px)",
-          borderRight: "1px solid var(--seed-border)",
-          boxShadow: "4px 0 24px rgba(0,0,0,0.3)",
-        }}>
+      {sidebarAnim.mounted && (
+        <div
+          className={sidebarAnim.phase === "in" ? "anim-drawer-in" : sidebarAnim.phase === "out" ? "anim-drawer-out" : "anim-init"}
+          style={{
+            position: "absolute", top: 0, left: 0, bottom: 0, zIndex: 150,
+            display: "flex", flexDirection: "column",
+            width: 240, minWidth: 240,
+            background: "var(--seed-glass)", backdropFilter: "blur(20px)",
+            borderRight: "1px solid var(--seed-border)",
+            boxShadow: "4px 0 24px rgba(0,0,0,0.3)",
+          }}
+        >
           <div className="glass-sidebar" style={{ flex: 1 }}>
             <SessionList onDeleteRequest={(id, title) => setDeleteTarget({ id, title })} onRemoveAllRequest={() => setShowRemoveAllConfirm(true)} />
           </div>
         </div>
       )}
 
-      {settingsOpen && <ProviderConfigPanel />}
+      {settingsAnim.mounted && <ProviderConfigPanel phase={settingsAnim.phase} />}
 
-      {showExitConfirm && (
+      {exitConfirmAnim.mounted && (
         <ConfirmDialog
+          phase={exitConfirmAnim.phase}
           title="退出应用"
           message="确定要退出吗？"
           confirmLabel="退出"
@@ -425,10 +441,11 @@ export function AppShell() {
         />
       )}
 
-      {deleteTarget && (
+      {deleteAnim.mounted && (
         <ConfirmDialog
+          phase={deleteAnim.phase}
           title="删除对话"
-          message={`确定要删除「${deleteTarget.title}」吗？删除后可在回收站中恢复。`}
+          message={`确定要删除「${deleteTarget?.title}」吗？删除后可在回收站中恢复。`}
           confirmLabel="删除"
           cancelLabel="取消"
           onConfirm={handleDeleteConfirm}
@@ -436,8 +453,9 @@ export function AppShell() {
         />
       )}
 
-      {showRemoveAllConfirm && (
+      {removeAllAnim.mounted && (
         <ConfirmDialog
+          phase={removeAllAnim.phase}
           title="清空所有对话"
           message="确定要删除所有对话吗？删除后可在回收站中恢复。"
           confirmLabel="清空"
@@ -447,7 +465,7 @@ export function AppShell() {
         />
       )}
 
-      {createMode && <CreateModeView />}
+      {createAnim.mounted && <CreateModeView phase={createAnim.phase} />}
     </div>
   );
 }

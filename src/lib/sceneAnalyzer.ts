@@ -1,5 +1,6 @@
 import { chatStream, type ApiMessage } from "@/providers/openai";
 import { isMetaSuggestion } from "@/lib/sceneTemplate";
+import { logError } from "@/lib/appLog";
 
 /** 格式分析结果：章节名 + 场景信息 + 对话推荐 + 角色后台进展（独立 API 请求生成） */
 export interface SceneAnalysis {
@@ -11,6 +12,12 @@ export interface SceneAnalysis {
   suggestions: string[];
   /** 其他主要角色在幕后的进展（玩家不可见，注入下一轮正文生成上下文） */
   hiddenProgress?: string;
+}
+
+/** 场景分析调用结果：成功时含 SceneAnalysis，失败时 error 携带真实原因 */
+export interface SceneAnalysisResult {
+  analysis: SceneAnalysis | null;
+  error?: string;
 }
 
 export function buildAnalyzePrompt(
@@ -51,17 +58,17 @@ export async function analyzeScene(params: {
   currentChapterTitle?: string;
   includeHiddenProgress?: boolean;
   signal?: AbortSignal;
-}): Promise<SceneAnalysis | null> {
+}): Promise<SceneAnalysisResult> {
   const { baseUrl, apiKey, model, body, currentChapterTitle, includeHiddenProgress, signal } = params;
   // 注意：Gemini 类上游要求 messages 至少包含一条 contents（user/assistant），纯 system 会被拒 400
   const messages: ApiMessage[] = [
     { role: "system", content: buildAnalyzePrompt(body, currentChapterTitle, includeHiddenProgress ?? true) },
-    { role: "user", content: "请分析上面要求中的故事正文，并严格按格式输出 JSON。" },
+    { role: "user", content: "请分析上面要求中的故事文本，并严格按格式输出 JSON。" },
   ];
   // 超时保护：格式分析是次要请求，模型服务挂起/不可用时不能无限转圈（45s 未返回即放弃）
   const controller = new AbortController();
   const timeoutMs = 45_000;
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(new Error("场景分析请求超时")), timeoutMs);
   const onOuterAbort = () => controller.abort();
   signal?.addEventListener("abort", onOuterAbort);
   let out = "";
@@ -76,18 +83,41 @@ export async function analyzeScene(params: {
       controller.signal,
       { temperature: 0.3, max_tokens: 1500 },
     )) {
+      if (controller.signal.aborted) break;
       if (chunk.done) break;
       out += chunk.content;
+      // 兼容思考型模型（如 deepseek-v4 系列经中转）：输出可能走 reasoning_content 通道，
+      // content 为空时收集 thinking 作为分析结果，避免「模型未返回任何内容」
+      if (!chunk.content && chunk.thinking) out += chunk.thinking;
+    }
+    if (controller.signal.aborted) {
+      // 外层用户主动中止：视为放弃分析，不算失败
+      if (signal?.aborted) return { analysis: null };
+      throw new Error("场景分析请求超时或已中止");
     }
   } catch (e) {
-    console.error("[sceneAnalyze] failed:", e instanceof Error ? e.message : String(e));
-    return null;
+    const msg = e instanceof Error ? e.message : String(e);
+    if (signal?.aborted) return { analysis: null };
+    console.error("[sceneAnalyze] failed:", msg);
+    logError("sceneAnalyze", "场景分析请求失败", { model, reason: msg, bodyLen: body.length });
+    return { analysis: null, error: msg };
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener("abort", onOuterAbort);
   }
+  if (!out.trim()) {
+    console.error("[sceneAnalyze] 未返回任何内容");
+    logError("sceneAnalyze", "场景分析未返回任何内容", { model, bodyLen: body.length });
+    return { analysis: null, error: "模型未返回任何内容" };
+  }
+  const analysis = parseSceneAnalysis(out);
+  if (!analysis) {
+    console.error("[sceneAnalyze] JSON 解析失败:", out.slice(0, 600));
+    logError("sceneAnalyze", "场景分析返回无法解析为 JSON", { model, len: out.length, head: out.slice(0, 300) });
+    return { analysis: null, error: "模型返回内容无法解析为场景信息" };
+  }
   if (out.trim()) console.log("[sceneAnalyze] output:", out.slice(0, 400));
-  return parseSceneAnalysis(out);
+  return { analysis };
 }
 
 /** 容错解析分析 JSON：先整体解析（纯 JSON 输出），再剥代码块、取首尾大括号；失败时打印原始输出便于诊断。 */

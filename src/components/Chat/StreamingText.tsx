@@ -3,11 +3,13 @@ import { useState, useEffect, useRef } from "react";
 interface StreamingTextProps {
   content: string;
   active: boolean;
+  /** 实时追赶模式（思考过程等场景）：积压超过阈值时直接跳到最新内容，避免显示长期滞后 */
+  live?: boolean;
   style?: React.CSSProperties;
   className?: string;
 }
 
-export function StreamingText({ content, active, style, className }: StreamingTextProps) {
+export function StreamingText({ content, active, live, style, className }: StreamingTextProps) {
   const [count, setCount] = useState(active ? 0 : content.length);
   const rafRef = useRef<number | null>(null);
   const countRef = useRef(count);
@@ -31,8 +33,19 @@ export function StreamingText({ content, active, style, className }: StreamingTe
       const target = content.length;
       const cur = countRef.current;
       frameRef.current++;
-      // 每 2 帧推进 1 个字（速度减半，更平滑）；积压极大时每帧 +1 加速补齐
       const backlog = target - cur;
+      // 实时追赶模式（思考过程）：固定快速步长平滑输出——
+      // 上游按句/块到达，打字机将其抹平成逐字显示（与正文一致）；步长固定避免
+      // 逐字过慢（滞后停着），也不做比例追赶（避免一句话一句话跳变）
+      if (live) {
+        const step = backlog > 800 ? 6 : backlog > 300 ? 3 : 2;
+        const next = Math.min(target, cur + step);
+        countRef.current = next;
+        setCount(next);
+        rafRef.current = requestAnimationFrame(tick);
+        return;
+      }
+      // 每 2 帧推进 1 个字（速度减半，更平滑）；积压极大时每帧 +1 加速补齐
       const shouldAdvance = backlog > 500 ? true : frameRef.current % 2 === 0;
       if (shouldAdvance && cur < target) {
         const step = backlog > 1000 ? 3 : backlog > 500 ? 2 : 1;

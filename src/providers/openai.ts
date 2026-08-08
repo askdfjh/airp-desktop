@@ -1,4 +1,5 @@
 import type { ChatStreamChunk, ToolDefinition, ToolCall } from "@/types";
+import { logError, logWarn } from "@/lib/appLog";
 
 export async function fetchAvailableModels(
   baseUrl: string,
@@ -23,6 +24,7 @@ export async function fetchAvailableModels(
     });
     if (!res.ok) {
       const err = await res.text().catch(() => "Unknown error");
+      logError("fetchModels", "获取模型列表失败", { url: baseUrl, status: res.status, reason: err.slice(0, 300) });
       throw new Error(`获取模型列表失败 ${res.status}: ${err}`);
     }
     jsonText = await res.text();
@@ -144,9 +146,11 @@ export async function* chatStream(
       const is400 = /400|Bad Request|invalid argument|not supported|unsupported|unknown parameter|unknown argument|Unrecognized request argument/i.test(msg);
       if (is400 && attempt < DEGRADE_STEPS.length) {
         console.log(`[chatStream] 400 降级重试 (${attempt + 1}/${DEGRADE_STEPS.length}):`, msg.slice(0, 150));
+        logWarn("chatStream", "400 降级重试", { attempt: attempt + 1, of: DEGRADE_STEPS.length, reason: msg.slice(0, 300) });
         DEGRADE_STEPS[attempt](current);
         continue;
       }
+      logError("chatStream", "流式请求失败（已穷尽降级）", { reason: msg.slice(0, 300) });
       throw e;
     }
   }
@@ -205,7 +209,10 @@ async function* readStream(
       if (signal?.aborted) return { done: true, value: null };
       await new Promise<void>((resolve) => setTimeout(resolve, 15));
     }
-    if (streamError) throw streamError;
+    if (streamError) {
+      logError("chatStream", "Rust 后端流式失败", { reason: streamError.message.slice(0, 300) });
+      throw streamError;
+    }
     if (queue.length > 0) return { done: false, value: queue.shift()! };
     return { done: true, value: null };
   };

@@ -50,6 +50,8 @@ export interface Session {
   updatedAt: number;
   deletedAt?: number;
   kind?: "adventure" | "blank";
+  /** 空白会话独立格式开关：仅启用章节/场景/推荐格式分析，不注入世界书/角色卡/文风（内容保持空白） */
+  formatEnabled?: boolean;
   // 长对话压缩：故事脉络摘要（增量追加）+ 压缩状态
   contextSummary?: string;
   summaryUpdatedAt?: number;

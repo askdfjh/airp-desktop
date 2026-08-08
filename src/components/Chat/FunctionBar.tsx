@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Brain, ChevronDown, Check, Feather, Search, WrapText, Square, Wifi, Settings } from "lucide-react";
+import { Brain, ChevronDown, Check, Feather, Search, WrapText, Square, Wifi, Settings, Sparkles } from "lucide-react";
 import { NarraTheme, NarraFont, NarraSession, NarraWorldInfo } from "@/components/icons/NarraIcon";
 import { useUIStore } from "@/stores/uiStore";
 import { useProviderStore } from "@/stores/providerStore";
@@ -14,6 +14,7 @@ import { SessionPopup } from "./SessionPopup";
 import { SearchPanel } from "./SearchPanel";
 import { WorldInfoPanel } from "./WorldInfoPanel";
 import { registerBackHandler } from "@/lib/androidBack";
+import { useAnimatedVisibility } from "@/hooks/useAnimatedVisibility";
 
 type OpenMenu = "provider" | "model" | "style" | null;
 
@@ -24,13 +25,19 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
   const { providers, activeProviderId, activeModel, setActiveProvider, setActiveModel, enabledProviders } = useProviderStore();
   const { presets, activePresetId, setActivePreset } = useGenerationStore();
   const activePreset = presets.find((p) => p.id === activePresetId) || null;
-  const { activeId, updateSessionModel, toggleThinking } = useSessionStore();
+  const { activeId, updateSessionModel, toggleThinking, setFormatEnabled, setSessionKind } = useSessionStore();
   const activeSession = useSessionStore((s) =>
     s.activeId ? s.sessions.find((ss) => ss.id === s.activeId) : null,
   );
   const [showSessionPopup, setShowSessionPopup] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showWorldInfo, setShowWorldInfo] = useState(false);
+  // 会话弹窗进出场动画：220ms 与 .anim-overlay-in/out、.anim-modal-in/out 时长一致
+  const sessionAnim = useAnimatedVisibility(showSessionPopup, 220);
+  // 搜索面板：Modal 档（220ms）
+  const searchAnim = useAnimatedVisibility(showSearch, 220);
+  // 世界信息浮层：Popover 档（140ms）
+  const worldInfoAnim = useAnimatedVisibility(showWorldInfo, 140);
   const compressing = useUIStore((s) => s.compressing);
   const worldBtnRef = useRef<HTMLButtonElement>(null);
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
@@ -42,10 +49,39 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
   };
   const menuPortalRef = useRef<HTMLDivElement>(null);
   const openChipEl = openMenu ? chipRefs[openMenu].current : null;
-  const chipRect = openChipEl ? openChipEl.getBoundingClientRect() : null;
+  // 二级菜单：Popover 档（140ms）；退出动画期间保留最后的菜单类型与锚点位置（openMenu 已置 null 时内容仍可渲染）
+  const menuAnim = useAnimatedVisibility(openMenu !== null, 140);
+  const lastMenuRef = useRef<OpenMenu>(null);
+  if (openMenu) lastMenuRef.current = openMenu;
+  const chipRectRef = useRef<DOMRect | null>(null);
+  if (openChipEl) chipRectRef.current = openChipEl.getBoundingClientRect();
+  const renderMenuType = menuAnim.mounted ? (openMenu ?? lastMenuRef.current) : null;
+  const renderRect = menuAnim.mounted ? chipRectRef.current : null;
   const eff = effectiveTheme();
 
   const showToast = (msg: string) => notify(msg);
+
+  // 章节排版切换：开启 = 冒险会话 或 空白会话开启章节排版；关闭 = 回到空白纯对话
+  const toggleTextFormat = () => {
+    if (!activeId) return;
+    setOpenMenu(null);
+    const s = activeSession;
+    if (!s) return;
+    if (s.kind !== "blank" || s.formatEnabled) {
+      // 当前开启 → 关闭
+      if (s.kind !== "blank") {
+        setSessionKind(activeId, "blank");
+        notify("已切换为空白对话（关闭文字排版）");
+      } else {
+        setFormatEnabled(activeId, false);
+        notify("已关闭文字排版");
+      }
+    } else {
+      // 当前关闭 → 开启：空白会话启用章节排版（格式分析，不注入世界书/角色卡/文风）
+      setFormatEnabled(activeId, true);
+      notify("已开启文字排版，重新输入后生效");
+    }
+  };
 
   const activeProvider = providers.find((p) => p.id === activeProviderId) || null;
   const availableProviders = providers.filter(
@@ -55,6 +91,8 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
   // 思考模式默认开启：仅当会话明确关闭（DB 存 0）时才关闭
   const thinkingEnabled = activeSession?.thinkingEnabled ?? true;
   const isBlank = mode === "blank" || (activeSession?.kind ?? "adventure") === "blank";
+  // 文本格式开启：冒险会话，或空白会话开启了格式开关（formatEnabled）
+  const hasFormat = !isBlank || !!activeSession?.formatEnabled;
   // 上下文占用百分比（基于 128K 上下文窗口；达到 90% 才允许保存记忆）
   const pct = Math.min(100, Math.round((historyTokens || 0) / CONTEXT_WINDOW_TOKENS * 100));
 
@@ -305,6 +343,18 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
           <Search size={16} />
         </button>
 
+        {/* 章节排版开关：空白会话开启后仅启用章节分隔线；冒险会话可切回空白对话 */}
+        <button
+          className={"seed-func-btn" + (hasFormat ? " seed-func-btn--active" : "")}
+          disabled={compressing}
+          data-tooltip={hasFormat
+            ? "文字排版已开启（重新输入后生效），点击关闭"
+            : "文字排版，打开重新输入有效"}
+          onClick={toggleTextFormat}
+        >
+          <Sparkles size={16} />
+        </button>
+
         {/* World info：空白会话不显示世界规则入口 */}
         {!isBlank && (
           <button ref={worldBtnRef} className={"seed-func-btn" + (showWorldInfo ? " seed-func-btn--active" : "")} disabled={compressing} data-tooltip="世界信息" onClick={() => { setOpenMenu(null); setShowWorldInfo((v) => !v); }}>
@@ -314,18 +364,19 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
       </div>
 
       {/* 模型/服务/文风 下拉菜单：portal 到 body，fixed 定位，避免窄屏滚动栏裁剪 */}
-      {openMenu && chipRect && createPortal(
+      {renderMenuType && renderRect && createPortal(
         <div className={`theme-${eff}`} ref={menuPortalRef}>
           <div
+            className={menuAnim.phase === "in" ? "anim-pop-in" : menuAnim.phase === "out" ? "anim-pop-out" : "anim-init"}
             style={{
               ...menuStyle,
               position: "fixed",
-              bottom: window.innerHeight - chipRect.top + 6,
-              left: Math.max(8, Math.min(chipRect.left, window.innerWidth - (openMenu === "style" ? 260 : 240) - 8)),
-              ...(openMenu === "style" ? { minWidth: 220, maxWidth: 260 } : {}),
+              bottom: window.innerHeight - renderRect.top + 6,
+              left: Math.max(8, Math.min(renderRect.left, window.innerWidth - (renderMenuType === "style" ? 260 : 240) - 8)),
+              ...(renderMenuType === "style" ? { minWidth: 220, maxWidth: 260 } : {}),
             }}
           >
-            {openMenu === "provider" && (
+            {renderMenuType === "provider" && (
               <>
                 {availableProviders.length === 0 && (
                   <div style={{ padding: "8px 10px", fontSize: 12, color: "var(--seed-muted)" }}>
@@ -346,7 +397,7 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
                 ))}
               </>
             )}
-            {openMenu === "model" && activeProvider && (
+            {renderMenuType === "model" && activeProvider && (
               <>
                 {models.length === 0 && (
                   <div style={{ padding: "8px 10px", fontSize: 12, color: "var(--seed-muted)" }}>
@@ -367,7 +418,7 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
                 ))}
               </>
             )}
-            {openMenu === "style" && !isBlank && (
+            {renderMenuType === "style" && !isBlank && (
               <>
                 {presets.map((p) => {
                   const act = p.id === activePresetId;
@@ -427,25 +478,25 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
       )}
 
       {/* Session popup */}
-      {showSessionPopup && createPortal(
+      {sessionAnim.mounted && createPortal(
         <div className={`theme-${eff}`}>
-          <SessionPopup onClose={() => setShowSessionPopup(false)} />
+          <SessionPopup phase={sessionAnim.phase} onClose={() => setShowSessionPopup(false)} />
         </div>,
         document.body
       )}
 
       {/* Search panel */}
-      {showSearch && createPortal(
+      {searchAnim.mounted && createPortal(
         <div className={`theme-${eff}`}>
-          <SearchPanel onClose={() => setShowSearch(false)} />
+          <SearchPanel phase={searchAnim.phase} onClose={() => setShowSearch(false)} />
         </div>,
         document.body
       )}
 
       {/* World info panel (read-only) */}
-      {showWorldInfo && !isBlank && createPortal(
+      {worldInfoAnim.mounted && !isBlank && createPortal(
         <div className={`theme-${eff}`}>
-          <WorldInfoPanel anchorRef={worldBtnRef} onClose={() => setShowWorldInfo(false)} />
+          <WorldInfoPanel phase={worldInfoAnim.phase} anchorRef={worldBtnRef} onClose={() => setShowWorldInfo(false)} />
         </div>,
         document.body
       )}

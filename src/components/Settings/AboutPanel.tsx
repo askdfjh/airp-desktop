@@ -1,5 +1,7 @@
-import { ExternalLink, Gift, Scale, ShieldAlert } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, ChevronRight, ExternalLink, Gift, Scale, ShieldAlert } from "lucide-react";
 import { ComplianceNotice } from "./ComplianceNotice";
+import { RuntimeLogPanel } from "./RuntimeLogPanel";
 
 const legalRiskItems = [
   "违法或违规内容：不要生成、传播、协助制作违法信息，或用本软件规避平台、安全与内容治理规则。",
@@ -18,6 +20,7 @@ const references = [
 ];
 
 export function AboutPanel() {
+  const [showLogs, setShowLogs] = useState(false);
   return (
     <div style={{ maxWidth: 760, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ padding: 22, borderRadius: 22, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
@@ -108,6 +111,30 @@ export function AboutPanel() {
           ))}
         </div>
       </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+        <button
+          onClick={() => setShowLogs((v) => !v)}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 12px",
+            borderRadius: 12,
+            border: "1px solid var(--seed-border)",
+            background: "var(--seed-surface)",
+            color: "var(--seed-fg)",
+            fontSize: 13,
+            fontWeight: 550,
+            cursor: "pointer",
+          }}
+        >
+          {showLogs ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          运行日志
+        </button>
+      </div>
+
+      {showLogs && <RuntimeLogPanel />}
 
       <ComplianceNotice title="中国法律风险提示">
         下列内容仅作使用提醒，不构成法律意见；如果用途涉及经营、公开发布、收费服务或处理敏感数据，请先自行核验合规要求。

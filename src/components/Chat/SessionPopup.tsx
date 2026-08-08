@@ -4,12 +4,15 @@ import { useSessionStore } from "@/stores/sessionStore";
 import { useUIStore } from "@/stores/uiStore";
 import { TRASH_RETENTION_MS } from "@/lib/db";
 import { useKeyboardShift } from "@/hooks/useKeyboardShift";
+import type { AnimPhase } from "@/hooks/useAnimatedVisibility";
 
 interface Props {
   onClose: () => void;
+  /** 进出场动画阶段：由父级 useAnimatedVisibility 控制 */
+  phase?: AnimPhase;
 }
 
-export function SessionPopup({ onClose }: Props) {
+export function SessionPopup({ onClose, phase = "in" }: Props) {
   const kbdShift = useKeyboardShift();
   const sessions = useSessionStore((s) => s.sessions);
   const trash = useSessionStore((s) => s.trash);
@@ -298,6 +301,7 @@ export function SessionPopup({ onClose }: Props) {
       ref={overlayRef}
       data-popover-overlay
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
+      className={phase === "in" ? "anim-overlay-in" : phase === "out" ? "anim-overlay-out" : "anim-init"}
       style={{
         position: "fixed",
         inset: "0px",
@@ -310,10 +314,10 @@ export function SessionPopup({ onClose }: Props) {
         justifyContent: "center",
         paddingTop: 0,
         paddingBottom: kbdShift > 0 ? kbdShift + 16 : 0,
-        animation: "seed-fade-in-up 0.2s ease-out",
       }}
     >
       <div
+        className={phase === "in" ? "anim-modal-in" : phase === "out" ? "anim-modal-out" : "anim-init"}
         style={{
           width: "min(480px, 94vw)",
           minWidth: 0,
@@ -327,7 +331,6 @@ export function SessionPopup({ onClose }: Props) {
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          animation: "seed-fade-in-up 0.25s ease-out",
         }}
       >
         {/* Header */}
@@ -356,7 +359,7 @@ export function SessionPopup({ onClose }: Props) {
             </button>
             <button
               onClick={() => setTab("adventure")}
-              data-tooltip="冒险"
+              data-tooltip="新故事"
               className="seed-tip seed-tip--down"
               style={{ ...tabBtn(tab === "adventure"), width: 36, flex: "0 0 36px" }}
             >
@@ -456,7 +459,7 @@ export function SessionPopup({ onClose }: Props) {
           ) : tab === "adventure" ? (
             adventureGroups.length === 0 ? (
               <div style={{ textAlign: "center", padding: "40px 0", color: seed.muted, fontSize: "14px" }}>
-                {search ? "没有匹配的冒险会话" : "暂无冒险会话"}
+                {search ? "没有匹配的新故事" : "暂无新故事"}
               </div>
             ) : (
               adventureGroups.map((group) => {
@@ -697,7 +700,7 @@ export function SessionPopup({ onClose }: Props) {
                 <polyline points="2 17 12 22 22 17" />
                 <polyline points="2 12 12 17 22 12" />
               </svg>
-              新建冒险
+              新故事
             </button>
           </div>
         )}

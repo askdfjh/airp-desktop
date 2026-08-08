@@ -7,6 +7,7 @@ import { analyzeScene, parseSceneAnalysis, buildAnalyzePrompt } from "@/lib/scen
 import { parseSceneReply } from "@/lib/sceneTemplate";
 import { buildNarrativeGuard, buildProgressionGuard } from "@/lib/narrativeGuard";
 import { estimateTokens } from "@/lib/characterExtract";
+import { logError } from "@/lib/appLog";
 import { useProviderStore } from "@/stores/providerStore";
 import { useSessionStore } from "@/stores/sessionStore";
 import { loadMessages, insertMessage, updateMessageContent, updateMessageThinking, updateMessageSceneAnalysis, updateMessageTokenUsage, deleteMessage as deleteMessageDb, getAppSetting } from "@/lib/db";
@@ -197,7 +198,7 @@ export function useChat() {
       let hist = history;
       const basePrompt = activeSession?.systemPrompt || "";
       // 正文单独输出：不注入【场景信息】【对话推荐】模板（章节/场景/推荐由独立格式分析请求生成）
-      let sceneTemplate = activeSession?.kind !== "blank"
+      let sceneTemplate = (activeSession?.kind !== "blank" || activeSession?.formatEnabled)
         ? `\n\n【输出要求】直接输出故事正文本身。不要输出章节名、场景信息、对话推荐等任何区块标签，不要添加任何格式说明或前后缀。`
         : "";
       // 叙事约束（插件设置页开关，默认关闭）：叙事防护 + 剧情推进，可独立开启
@@ -343,7 +344,7 @@ export function useChat() {
       }
       // 当前场景 + 角色后台进展：取最近一条带 sceneAnalysis 的消息注入正文模型
       // （场景信息无条件注入保持连贯；后台进展玩家不可见，随 hiddenProgressOn 开关）
-      if (!isBlankSession) {
+      if (!isBlankSession || activeSession?.formatEnabled) {
         const ui = useUIStore.getState();
         let prevAnalysis: ReturnType<typeof parseSceneAnalysis> | null = null;
         for (let i = hist.length - 1; i >= 0; i--) {
@@ -425,7 +426,7 @@ export function useChat() {
     setAnalysingScene(true);
     try {
       const includeHidden = useUIStore.getState().hiddenProgressOn;
-      const result = await analyzeScene({
+      const { analysis: result, error: analyzeError } = await analyzeScene({
         baseUrl: provider.baseUrl,
         apiKey: provider.apiKey,
         model,
@@ -453,9 +454,18 @@ export function useChat() {
         );
       } else if (!result) {
         const now = Date.now();
+        logError("useChat.runSceneAnalysis", "场景分析未产出结果", {
+          model,
+          provider: provider.baseUrl,
+          reason: analyzeError ?? "模型未返回有效内容",
+        });
         if (now - lastSceneFailNotifyAt > 60_000) {
           lastSceneFailNotifyAt = now;
-          useUIStore.getState().notify("场景生成失败：模型服务未返回结果（超时或服务不可用），已跳过场景信息");
+          useUIStore.getState().notify(
+            analyzeError
+              ? `场景生成失败：${analyzeError}`
+              : "场景生成失败：模型服务未返回结果，已跳过场景信息",
+          );
         }
       }
     } finally {
@@ -584,8 +594,8 @@ export function useChat() {
                 m.id === placeholderMsg.id ? { ...m, tokenUsage: usage } : m,
               );
             }
-            // 格式分析（独立请求）：正文完成后生成章节名/场景信息/对话推荐（仅冒险会话、未中断）
-            if (activeSession?.kind !== "blank" && !abortController.signal.aborted && finalContent.trim()) {
+            // 格式分析（独立请求）：正文完成后生成章节名/场景信息/对话推荐（冒险会话或空白格式会话、未中断）
+            if ((activeSession?.kind !== "blank" || activeSession?.formatEnabled) && !abortController.signal.aborted && finalContent.trim()) {
               void runSceneAnalysis(placeholderMsg.id, finalContent);
             }
             resolve({ content: finalContent, thinking: finalThinking });
@@ -596,6 +606,11 @@ export function useChat() {
               return;
             }
             const errMsg = "请求失败: " + (err instanceof Error ? err.message : String(err));
+            logError("useChat.startStream", "正文流请求失败", {
+              model: activeModel,
+              provider: activeProvider.baseUrl,
+              reason: err instanceof Error ? err.message : String(err),
+            });
             setMessages((prev2) => {
               const last = prev2[prev2.length - 1];
               if (last?.id === placeholderMsg.id) {

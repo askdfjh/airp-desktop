@@ -21,8 +21,11 @@ importers:
         specifier: ^2
         version: 2.3.5
       '@tauri-apps/plugin-sql':
-        specifier: ^2
+        specifier: ^2.4.0
         version: 2.4.0
+      highlight.js:
+        specifier: ^11.11.1
+        version: 11.11.1
       lucide-react:
         specifier: ^0.500
         version: 0.500.0(react@19.2.8)
@@ -39,7 +42,7 @@ importers:
         specifier: ^7
         version: 7.0.2
       rehype-raw:
-        specifier: ^7
+        specifier: ^7.0.0
         version: 7.0.0
       remark-gfm:
         specifier: ^4

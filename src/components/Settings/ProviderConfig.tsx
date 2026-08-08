@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { NarraModel, NarraCharacter, NarraWorld, NarraAppearance, NarraTools, NarraMcp, NarraData } from "@/components/icons/NarraIcon";
 import type { ProviderType } from "@/types";
+import type { AnimPhase } from "@/hooks/useAnimatedVisibility";
 import { DataPanel } from "./DataPanel";
 import { CharacterPanel } from "./CharacterPanel";
 import { WorldPanel } from "./WorldPanel";
@@ -1271,7 +1272,7 @@ function SectionContent({ activeTab }: { activeTab: NavKey }) {
   return <ToolsPanel />;
 }
 
-export function ProviderConfigPanel() {
+export function ProviderConfigPanel({ phase = "in" }: { phase?: AnimPhase }) {
   // Android 无自绘标题栏（TitleBar 不渲染），设置面板需从顶部 0 开始
   const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
   const { setSettingsOpen } = useUIStore();
@@ -1287,7 +1288,9 @@ export function ProviderConfigPanel() {
   }, [activeProviderId, activeTab]);
 
     return (
-    <div className="fixed seed-settings-panel" style={{ top: isAndroid ? 0 : 40, left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", flexDirection: "column", background: "radial-gradient(ellipse 80% 60% at 50% 0%, var(--seed-accent-bg) 0%, transparent 60%), radial-gradient(ellipse 60% 50% at 20% 100%, color-mix(in srgb, var(--seed-accent) 3%, transparent) 0%, transparent 50%), var(--seed-bg)" }}>
+    <div
+      className={"fixed " + (phase === "in" ? "anim-sheet-in" : phase === "out" ? "anim-sheet-out" : "anim-init")}
+      style={{ top: isAndroid ? 0 : 40, left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", flexDirection: "column", background: "radial-gradient(ellipse 80% 60% at 50% 0%, var(--seed-accent-bg) 0%, transparent 60%), radial-gradient(ellipse 60% 50% at 20% 100%, color-mix(in srgb, var(--seed-accent) 3%, transparent) 0%, transparent 50%), var(--seed-bg)" }}>
       {/* 主内容区 */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div className="seed-page-header">
@@ -1299,7 +1302,7 @@ export function ProviderConfigPanel() {
           ref={rightContentRef}
           style={{ padding: "16px 24px 24px", flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}
         >
-          <div style={{ width: "100%", maxWidth: activeTab === "models" ? 1040 : 760, margin: "0 auto", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div key={activeTab} className="anim-content-in" style={{ width: "100%", maxWidth: activeTab === "models" ? 1040 : 760, margin: "0 auto", display: "flex", flexDirection: "column", gap: 12 }}>
             <SectionContent activeTab={activeTab} />
             <ComplianceNotice>
               请仅在符合中国法律法规、平台规则且你有权使用的内容与数据上启用外联功能（第三方模型、网页搜索、MCP、云同步和文件导入）。

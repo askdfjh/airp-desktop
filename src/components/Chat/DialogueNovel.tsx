@@ -66,6 +66,8 @@ export function DialogueNovel() {
 
   // 空白会话（kind=blank，无角色设定）使用普通对话排版，冒险会话使用小说排版
   const isBlank = (activeSession?.kind ?? "adventure") === "blank";
+  // 格式可用：冒险会话，或空白会话开启了「冒险格式」开关（formatEnabled：仅格式排版，不注入世界书/角色卡/文风）
+  const hasFormat = !isBlank || !!activeSession?.formatEnabled;
 
   // Auto-scroll when at bottom
   const [inputHidden, setInputHidden] = useState(false);
@@ -271,6 +273,34 @@ export function DialogueNovel() {
   const typingActive = streaming && lastMsg?.role === "assistant" && !lastMsg.content && !openingActive;
   const [typingSec, setTypingSec] = useState(0);
   const typingStartRef = useRef(0);
+  const thinkingMiniRef = useRef<HTMLDivElement>(null);
+  // 思考阶段主滚动即时跟随：规划中迷你窗口在消息流末尾持续增长，
+  // smooth 滚动会被高频更新反复打断追不上，改用逐帧即时滚底（与迷你窗口同步）
+  useEffect(() => {
+    if (!typingActive) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    let raf: number;
+    const tick = () => {
+      el.scrollTop = el.scrollHeight;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [typingActive]);
+  // 迷你思考窗口持续滚动到底部：打字机逐帧推进内容，滚动也必须逐帧跟随；
+  // 每次 thinking 更新重启循环，思考结束后循环继续空转（内容不再增长即稳定在底部）
+  useEffect(() => {
+    const el = thinkingMiniRef.current;
+    if (!el) return;
+    let raf: number;
+    const tick = () => {
+      el.scrollTop = el.scrollHeight;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [lastMsg?.thinking]);
   useEffect(() => {
     if (!typingActive) {
       setTypingSec(0);
@@ -323,7 +353,7 @@ export function DialogueNovel() {
   // 重新生成（regenerate）时锁定：新回复章节名只更新名称，不推进章节号（重写当前段不应开新章）；
   // 无分析结果（未绑定/失败/旧消息）→ 保持「第一章」兜底
   useEffect(() => {
-    if (isBlank) return;
+    if (!hasFormat) return;
     const title = sceneAnalysisData?.chapterTitle?.trim();
     if (!title) return;
     if (regenerateLockRef.current) {
@@ -437,6 +467,7 @@ export function DialogueNovel() {
       )}
 
       {/* 场景信息条（顶部，一行自适应：放得下直接显示，放不下折叠；仅格式分析可用时显示） */}
+      {/* 场景信息条（顶部，一行自适应：放得下直接显示，放不下折叠；仅冒险会话显示，空白格式会话不启用场景条） */}
       {!isBlank && visibleMessages.length > 0 && (hasSceneAnalysis || analysisPending) && (
         <div className="seed-scene-bar">
           <div className="seed-scene-measure" aria-hidden="true">
@@ -472,7 +503,7 @@ export function DialogueNovel() {
       <div className="seed-dialogue-scroll" ref={scrollRef} onScroll={handleScroll} style={{ paddingBottom: inputHidden ? 8 : 152 }}>
         <div className="seed-dialogue-content">
           {/* Chapter divider：第 N 章 · 章节名（格式分析动态更新，仅冒险会话；无分析数据固定第一章） */}
-          {visibleMessages.length > 0 && !isBlank && (
+          {visibleMessages.length > 0 && hasFormat && (
             <div key={chapterNo + ":" + (chapterName || "")} className="seed-chapter-divider seed-chapter-divider--transition">
               <span>{chapterName ? `第 ${chapterNo} 章 · ${chapterName}` : "第一章"}</span>
               <span className="seed-chapter-line" />
@@ -586,9 +617,9 @@ export function DialogueNovel() {
                 <div key={msg.id} data-msg-id={msg.id} className={"seed-msg-wrapper" + (highlightId === msg.id ? " seed-msg-highlight" : "")} style={{ animationDelay: `${Math.min(idx * 0.05, 0.5)}s` }}>
                   <div
                     className={
-                      (isBlank
-                        ? "seed-chat-assistant"
-                        : `seed-narration${isDropCap ? " seed-narration--drop-cap" : ""}`) +
+                      (hasFormat
+                        ? `seed-narration${isDropCap ? " seed-narration--drop-cap" : ""}`
+                        : "seed-chat-assistant") +
                       (settlingId === msg.id ? " seed-narration--settle" : "")
                     }
                     style={{ fontSize: msgFontSize }}
@@ -598,10 +629,10 @@ export function DialogueNovel() {
                   >
                     {isStreaming ? (
                       <StreamingText content={msg.content} active={isStreaming} />
-                    ) : isBlank ? (
-                      <MarkdownRender content={msg.content} highlight={hl || undefined} />
-                    ) : (
+                    ) : hasFormat ? (
                       hl ? <HighlightText text={msg.content} keyword={hl} /> : msg.content
+                    ) : (
+                      <MarkdownRender content={msg.content} highlight={hl || undefined} />
                     )}
                   </div>
                   {/* AI 生成合规标识 + token 消耗（低调展示；↑上传/输入 ↓下载/输出） */}
@@ -659,6 +690,12 @@ export function DialogueNovel() {
                   : `${typingSec}s`}
                 {activeSession?.thinkingEnabled ? " · 规划中" : ""}
               </span>
+              {/* 规划中迷你思考窗口：小字低对比，实时显示思考过程（防误以为卡住）；思考完成后随指示器隐藏 */}
+              {activeSession?.thinkingEnabled && lastMsg?.thinking ? (
+                <div ref={thinkingMiniRef} className="seed-thinking-mini">
+                  <StreamingText content={lastMsg.thinking} active={streaming} live />
+                </div>
+              ) : null}
             </div>
           )}
 
