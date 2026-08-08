@@ -1907,6 +1907,7 @@ details > :not(summary) { margin-top: 6px; }
   [data-onboarding-grid] > * {
     width: 100% !important;
     min-height: 0;
+    flex-shrink: 0;
     padding: 16px 18px !important;
     border-radius: 16px;
     /* 长按不出现选择蓝框/系统菜单/震动反馈 */

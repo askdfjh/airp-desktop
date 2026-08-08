@@ -343,17 +343,19 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
           <Search size={16} />
         </button>
 
-        {/* 章节排版开关：空白会话开启后仅启用章节分隔线；冒险会话可切回空白对话 */}
-        <button
-          className={"seed-func-btn" + (hasFormat ? " seed-func-btn--active" : "")}
-          disabled={compressing}
-          data-tooltip={hasFormat
-            ? "文字排版已开启（重新输入后生效），点击关闭"
-            : "文字排版，打开重新输入有效"}
-          onClick={toggleTextFormat}
-        >
-          <Sparkles size={16} />
-        </button>
+        {/* 章节排版开关：仅空白会话显示（开启后仅启用章节分隔线）；冒险会话固定格式排版，不显示 */}
+        {isBlank && (
+          <button
+            className={"seed-func-btn" + (hasFormat ? " seed-func-btn--active" : "")}
+            disabled={compressing}
+            data-tooltip={hasFormat
+              ? "文字排版已开启（重新输入后生效），点击关闭"
+              : "文字排版，打开重新输入有效"}
+            onClick={toggleTextFormat}
+          >
+            <Sparkles size={16} />
+          </button>
+        )}
 
         {/* World info：空白会话不显示世界规则入口 */}
         {!isBlank && (

@@ -104,7 +104,11 @@ export function TopicSelect() {
       // 避免单列布局下 grid 行被 maxHeight 压缩成细条
       const cardH = selectedCardRef.current.offsetHeight;
       const gridW = gridRef.current.clientWidth;
-      const cols = Math.max(1, Math.floor((gridW + 16) / 236));
+      // 移动端（≤820px）媒体查询把网格强制为单列 flex（flex-direction: column），卡片纵向堆叠；
+      // 此时不能按宽度估算列数（窄屏下宽度足够算 2 列但实际仍是 1 列堆叠），否则收缩高度只按 1 行计算，
+      // 剩余卡片被 flex-shrink 压缩成细条。以实际计算样式为准：column = 堆叠 2 行，否则按宽度估列。
+      const stacked = getComputedStyle(gridRef.current).flexDirection === "column";
+      const cols = stacked ? 1 : Math.max(1, Math.floor((gridW + 16) / 236));
       const rows = cols > 1 ? 1 : 2;
       const h = Math.max(Number.isFinite(cardH) ? cardH : 120, 120) * rows + (rows > 1 ? 16 : 0) + 34;
       // 显式 height 收缩：起点取点击时钉住的 height（卡片移除后 clientHeight 已是收缩值，不能用作动画起点），
