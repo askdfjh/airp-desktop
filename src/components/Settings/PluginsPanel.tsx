@@ -1,6 +1,6 @@
 import { useUIStore } from "@/stores/uiStore";
 import { useProviderStore } from "@/stores/providerStore";
-import { Shield, TrendingUp, Sparkles, Eye } from "lucide-react";
+import { Shield, TrendingUp, Sparkles, Eye, Shuffle } from "lucide-react";
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -27,6 +27,8 @@ export function PluginsPanel() {
   const setProgressionGuardOn = useUIStore((s) => s.setProgressionGuardOn);
   const hiddenProgressOn = useUIStore((s) => s.hiddenProgressOn);
   const setHiddenProgressOn = useUIStore((s) => s.setHiddenProgressOn);
+  const randomWorldEventOn = useUIStore((s) => s.randomWorldEventOn);
+  const setRandomWorldEventOn = useUIStore((s) => s.setRandomWorldEventOn);
   const providers = useProviderStore((s) => s.providers);
   const enabledProviders = useProviderStore((s) => s.enabledProviders);
 
@@ -88,6 +90,25 @@ export function PluginsPanel() {
         {hiddenProgressOn && (
           <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.6, padding: "10px 12px", borderRadius: 12, background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)" }}>
             AI 每次为其他主要角色生成一句话幕后进展（如：二皇子暗中拉拢朝臣、林夫人在查账房旧账），正文中不显示，但会注入下一轮生成上下文——角色下次出场带着新状态，不会"原地待机"等主角。依赖「场景与推荐执行模型」开启（关闭格式分析时本项失效）。
+          </div>
+        )}
+      </div>
+
+      {/* 随机世界事件 */}
+      <div style={card}>
+        <div style={headRow}>
+          <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--seed-accent-bg)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Shuffle size={18} style={{ color: "var(--seed-accent)" }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: "var(--fs-14)", fontWeight: 600, color: "var(--seed-fg)" }}>随机世界事件</div>
+            <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", marginTop: 2 }}>规则书中的设定（灵物、遗迹等）按节奏随机进入剧情，制造意外与惊喜（默认关闭）</div>
+          </div>
+          <Toggle on={randomWorldEventOn} onChange={setRandomWorldEventOn} />
+        </div>
+        {randomWorldEventOn && (
+          <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.6, padding: "10px 12px", borderRadius: 12, background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)" }}>
+            开启后：每经过 4 条用户消息尝试一次，从规则书中随机抽取一条设定注入剧情（自然引出作为新进展、转折或悬念，不强行出现）；抽中后冷却 4 轮，未抽中则 4 轮后重新尝试；同一会话内不重复抽取同一设定。已常驻与关键词命中的条目不受影响。
           </div>
         )}
       </div>

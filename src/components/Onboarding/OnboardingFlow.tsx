@@ -9,8 +9,10 @@ import { PRESET_WORLDS, WORLD_BOOK_MAP } from "./WorldSelect";
 import { getWorldOpeningScenario } from "@/lib/worldOpeningScenarios";
 import { buildHotTropeHint, buildTropeOpeningDirective, buildTropeSystemPrompt } from "@/lib/popularTropes";
 import { getTopicOpeningScenario, getTopicOpeningScenarios } from "@/lib/topicOpenings";
+import { getCustomBookOpeningScenario } from "@/lib/worldOpeningScenarios";
 import { getTopicScheme, getTopicSchemesByAudience } from "@/lib/topicSchemes";
 import { getWorldFoundation } from "@/lib/worldFoundations";
+import { inferWorldBase } from "@/lib/worldBaseMatch";
 import { TopicSelect } from "./TopicSelect";
 import { StyleModeSelect } from "./StyleModeSelect";
 import { ProtagonistSelect } from "./ProtagonistSelect";
@@ -61,10 +63,13 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
       null;
     const selectedBook = resolvedBookId ? worldState.books.find((b) => b.id === resolvedBookId) || null : null;
     const selectedPresetWorld = PRESET_WORLDS.find((w) => w.id === selectedWorldId);
-    // 世界观 id：优先从规则书 id 反查 WORLD_BOOK_MAP（题材书/底座书均命中真实世界观），再兜底底座
+    const isCustomBook = !!selectedBook && !selectedBook.isBuiltin;
+    // 世界观 id：优先从规则书 id 反查 WORLD_BOOK_MAP（题材书/底座书均命中真实世界观），再兜底底座；
+    // 自定义规则书走 AI 匹配的底座 → 底座映射世界观
     const worldviewId =
       (resolvedBookId ? Object.entries(WORLD_BOOK_MAP).find(([, v]) => v === resolvedBookId)?.[0] : undefined) ||
       selectedPresetWorld?.id ||
+      (isCustomBook ? worldviewIdForBase(inferWorldBase(selectedBook)) : undefined) ||
       selectedBook?.theme ||
       worldviewIdForBase(selectedWorldId) ||
       selectedWorldId ||
@@ -76,7 +81,8 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
     const selectedScenario = selectedScenarioId
       ? getTopicOpeningScenario(selectedTopicSchemeId, selectedScenarioId, selectedWorldId, ui.onboardingAudience) ||
         useOnboardingStore.getState().getScenarioById(selectedScenarioId) ||
-        getWorldOpeningScenario(selectedBook, selectedScenarioId)
+        getWorldOpeningScenario(selectedBook, selectedScenarioId) ||
+        getCustomBookOpeningScenario(selectedBook, selectedScenarioId)
       : undefined;
     const selectedMainEntry = selectedMainEntryId
       ? selectedBook?.entries.find((e) => e.id === selectedMainEntryId || e.title === selectedMainEntryName)

@@ -1,7 +1,8 @@
-import type { Message, Session } from "@/types";
+import type { Message, Session, SessionEntry } from "@/types";
 import { chatStream } from "@/providers/openai";
 import { loadMessages, updateSession, hardDeleteSession } from "./db";
 import { extractCharacters, saveExtractedCharacters, estimateTokens, type ExtractedCharacterInfo } from "./characterExtract";
+import { extractSessionEntries, mergeSessionEntries } from "./sessionEntryExtract";
 import { useProviderStore } from "@/stores/providerStore";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -183,22 +184,49 @@ export async function compressSession(ctx: CompressContext): Promise<CompressRes
     }
   }
 
-  // 第 2 步：生成剧情档案（注入父卷档案衔接）
+  // 第 2 步：生成剧情档案（注入父卷档案衔接）+ 提取会话临时世界条目（复用同一窗口文本）。
+  // 两者并行（同一 windowText，互不依赖），降低串行 3 次 LLM 调用的超时风险。
+  // 条目提取失败不阻塞压缩（与角色提取同模式）；仅在冒险会话提取（空白会话不关联世界设定）
   onStage?.("summarizing");
   const windowText = buildSummaryWindowText(window);
   const parent = session.parentId
     ? useSessionStore.getState().sessions.find((s) => s.id === session.parentId)
     : undefined;
-  const archive = await generateArchive(windowText, session.title, parent?.archive, provider, signal);
+  let archive: string;
+  let sessionEntries: SessionEntry[] | undefined;
+  try {
+    const [a, entries] = await Promise.all([
+      generateArchive(windowText, session.title, parent?.archive, provider, signal),
+      !isBlankSession
+        ? extractSessionEntries({
+            windowText,
+            existing: session.sessionEntries,
+            provider,
+            signal,
+          }).catch((e) => {
+            if (isAbort(e)) throw e;
+            console.warn("[compress] session entries extraction failed, continuing:", e);
+            return [] as SessionEntry[];
+          })
+        : Promise.resolve([] as SessionEntry[]),
+    ]);
+    archive = a;
+    sessionEntries = mergeSessionEntries(session.sessionEntries, entries);
+  } catch (e) {
+    // 任一步中止（用户停止/超时）向上传播；其余失败已各自兜底，不会走到这里
+    if (isAbort(e)) throw e;
+    console.warn("[compress] archive/entries stage failed:", e);
+    throw e;
+  }
 
   // 第 3 步：关键词索引
   const contextIndex = buildContextIndex(chars, window);
 
-  // 第 4 步：创建续集会话（复制基线卡）+ 在续集上保存提取 + 锁定原会话（原子：失败回滚）
+  // 第 4 步：创建续集会话（复制基线卡 + 继承临时条目）+ 在续集上保存提取 + 锁定原会话（原子：失败回滚）
   const ss = useSessionStore.getState();
   let continuationId = "";
   try {
-    continuationId = await ss.createContinuationSession(session, { archive, contextIndex });
+    continuationId = await ss.createContinuationSession(session, { archive, contextIndex, sessionEntries });
     const charactersSaved = chars.length > 0
       ? await saveExtractedCharacters(chars, continuationId, ctx.worldBookId)
       : 0;

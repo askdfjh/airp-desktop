@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Message } from "@/types";
+import type { Message, CustomOpeningSeed } from "@/types";
 import type { CreateType, GuideMode } from "@/lib/createGuide";
 
 /* ---------- 草稿（提取结果）类型 ---------- */
@@ -35,6 +35,10 @@ export interface WorldDraft {
   theme: string;
   description: string;
   tags: string[];
+  /** AI 匹配的世界底座 id（可在预览中修改） */
+  worldBaseId?: string;
+  /** AI 生成的自定义开局种子（可在预览中修改） */
+  openings?: CustomOpeningSeed[];
   entries: WorldEntryDraft[];
 }
 

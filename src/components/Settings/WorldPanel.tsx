@@ -17,6 +17,7 @@ export function WorldPanel() {
   } = useWorldStore();
 
   const [viewTab, setViewTab] = useState<"world" | "trash">("world");
+  const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
   // 窄屏（手机）：左右分栏改为上下堆叠
   const [isNarrow, setIsNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 820px)').matches);
   useEffect(() => {
@@ -137,7 +138,7 @@ export function WorldPanel() {
   return (
     <div style={{ display: "flex", gap: 20, flex: 1, minHeight: 0, flexDirection: isNarrow ? "column" : "row" }}>
       {/* Left column */}
-      <div style={{ width: isNarrow ? "100%" : 290, display: "flex", flexDirection: "column", gap: 12, flexShrink: 0, minHeight: 0, maxHeight: isNarrow ? 260 : "none", overflow: "hidden" }}>
+      <div style={{ width: isNarrow ? "100%" : 290, display: "flex", flexDirection: "column", gap: 12, flexShrink: 0, minHeight: 0, maxHeight: isNarrow ? 400 : "none", overflow: "hidden" }}>
         {/* View tabs */}
         <div style={{ display: "flex", gap: 4, padding: 4, background: "var(--seed-input-bg)", borderRadius: 12, border: "1px solid var(--seed-border)" }}>
           <button style={tabStyle(viewTab === "world")} onClick={() => setViewTab("world")}>
@@ -169,8 +170,8 @@ export function WorldPanel() {
               </button>
             </div>
 
-            {/* Grouped list */}
-            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+            {/* Grouped list：安卓下固定高度恰好 2 张卡片，超出滚动 */}
+            <div style={{ flex: isAndroid ? "0 0 auto" : 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, height: isAndroid ? 260 : undefined }}>
               {builtinBooks.length > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ fontSize: "var(--fs-11)", fontWeight: 600, color: "var(--seed-muted)", textTransform: "uppercase", letterSpacing: "0.06em", padding: "2px 2px 0" }}>
@@ -253,7 +254,14 @@ export function WorldPanel() {
                             <button onClick={(e) => { e.stopPropagation(); setEditingBook(book); }} title="编辑" style={iconBtn}>
                               <Edit3 size={11} />
                             </button>
-                            <button onClick={(e) => { e.stopPropagation(); removeBook(book.id); }} title="删除（进回收站）" style={iconBtn}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void removeBook(book.id).then(() => loadTrashFromDb());
+                              }}
+                              title="删除（进回收站）"
+                              style={iconBtn}
+                            >
                               <Trash2 size={11} />
                             </button>
                           </div>
@@ -277,6 +285,11 @@ export function WorldPanel() {
                 </div>
               )}
             </div>
+            {isAndroid && isNarrow && filtered.length > 2 && (
+              <div style={{ flexShrink: 0, textAlign: "center", padding: "4px 0 2px", fontSize: "var(--fs-11)", color: "var(--seed-muted)", opacity: 0.7, letterSpacing: "0.02em" }}>
+                上滑查看更多
+              </div>
+            )}
           </>
         ) : (
           /* Trash list */

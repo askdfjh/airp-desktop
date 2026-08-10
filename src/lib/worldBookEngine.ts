@@ -40,6 +40,19 @@ export function findMatchingEntries(entries: WorldBookEntry[], contextText: stri
   return matched;
 }
 
+/** 随机世界事件抽卡：从非常驻、未命中、未抽过的启用条目中均匀随机抽 1 条；池空返回 null */
+export function pickRandomEventEntry(
+  entries: WorldBookEntry[],
+  matchedIds: string[],
+  excludeIds: string[] = [],
+): WorldBookEntry | null {
+  const pool = entries.filter(
+    (e) => !e.disable && !e.constant && !matchedIds.includes(e.id) && !excludeIds.includes(e.id),
+  );
+  if (pool.length === 0) return null;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 export function buildWorldContext(
   book: WorldBook | null,
   recentText: string,
@@ -57,18 +70,15 @@ export function buildWorldContext(
     (a, b) => b.insertionDepth - a.insertionDepth || a.order - b.order,
   );
 
+  const header = `【世界规则·${book.name}】（世界基础规则：仅定义舞台与底层设定；若与题材规则冲突，以题材规则为准）`;
   const sections: string[] = [];
-  let total = 0;
+  let consumed = header.length;
   const matchedEntryIds: string[] = [];
 
   const pushEntry = (e: WorldBookEntry, label: string) => {
     const line = `【${e.category}·${e.title}】${e.content}`;
-    total += line.length;
     sections.push(line);
   };
-
-  const header = `【世界规则·${book.name}】（世界基础规则：仅定义舞台与底层设定；若与题材规则冲突，以题材规则为准）`;
-  total += header.length;
 
   for (const e of constants.slice(0, opts.maxConstantEntries)) {
     pushEntry(e, "constant");
@@ -80,7 +90,6 @@ export function buildWorldContext(
   }
 
   let text = header;
-  let consumed = header.length;
   let included: string[] = [];
   for (const line of sections) {
     if (consumed + line.length + 1 > opts.maxChars) break;

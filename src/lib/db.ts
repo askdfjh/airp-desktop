@@ -58,6 +58,8 @@ export async function initDb(): Promise<void> {
   await db.execute(`ALTER TABLE sessions ADD COLUMN archive TEXT;`).catch(() => {});
   await db.execute(`ALTER TABLE sessions ADD COLUMN contextIndex TEXT;`).catch(() => {});
   await db.execute(`ALTER TABLE sessions ADD COLUMN formatEnabled INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
+  // 会话临时世界条目（压缩提取，仅会话及续集生效，JSON 数组）
+  await db.execute(`ALTER TABLE sessions ADD COLUMN sessionEntries TEXT DEFAULT '[]';`).catch(() => {});
   // 回收站：软删除标记 + 删除时间
   await db.execute(`ALTER TABLE sessions ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
   await db.execute(`ALTER TABLE sessions ADD COLUMN deletedAt INTEGER;`).catch(() => {});
@@ -204,10 +206,14 @@ export async function initDb(): Promise<void> {
       isActive INTEGER NOT NULL DEFAULT 0,
       isBuiltin INTEGER NOT NULL DEFAULT 0,
       violationWords TEXT NOT NULL DEFAULT '[]',
+      worldBaseId TEXT NOT NULL DEFAULT '',
+      customOpenings TEXT NOT NULL DEFAULT '[]',
       createdAt INTEGER NOT NULL,
       updatedAt INTEGER NOT NULL
     );
   `);
+  await db.execute(`ALTER TABLE world_books ADD COLUMN worldBaseId TEXT NOT NULL DEFAULT '';`).catch(() => {});
+  await db.execute(`ALTER TABLE world_books ADD COLUMN customOpenings TEXT NOT NULL DEFAULT '[]';`).catch(() => {});
   await db.execute(`
     CREATE TABLE IF NOT EXISTS world_book_entries (
       id TEXT PRIMARY KEY,
@@ -292,6 +298,7 @@ interface SessionRow {
   archive?: string | null;
   contextIndex?: string | null;
   formatEnabled?: number | null;
+  sessionEntries?: string | null;
 }
 
 interface MessageRow {
@@ -331,7 +338,20 @@ function rowToSession(r: SessionRow): Session {
     archive: r.archive ?? undefined,
     contextIndex: r.contextIndex ?? undefined,
     formatEnabled: r.formatEnabled === 1,
+    sessionEntries: parseSessionEntries(r.sessionEntries),
   };
+}
+
+function parseSessionEntries(raw: string | null | undefined) {
+  if (!raw) return undefined;
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr)
+      ? arr.filter((e) => e && typeof e === "object" && typeof e.id === "string" && typeof e.title === "string" && e.title)
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function rowToMessage(r: MessageRow): Message {
@@ -365,8 +385,8 @@ export async function loadSessions(): Promise<Session[]> {
 export async function insertSession(s: Session): Promise<void> {
   console.log("[db] insertSession", s.id, s.title);
   await getDb().execute(
-    "INSERT INTO sessions (id, title, systemPrompt, providerId, model, thinkingEnabled, createdAt, updatedAt, kind, contextSummary, summaryUpdatedAt, summaryCount, lastSummarizedMessageId, chainId, chainIndex, parentId, locked, archive, contextIndex, formatEnabled) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20);",
-    [s.id, s.title, s.systemPrompt, s.providerId, s.model, s.thinkingEnabled ? 1 : 0, s.createdAt, s.updatedAt, s.kind === "blank" ? "blank" : "adventure", s.contextSummary ?? "", s.summaryUpdatedAt ?? null, s.summaryCount ?? 0, s.lastSummarizedMessageId ?? null, s.chainId ?? null, s.chainIndex ?? null, s.parentId ?? null, s.locked ? 1 : 0, s.archive ?? null, s.contextIndex ?? null, s.formatEnabled ? 1 : 0]
+    "INSERT INTO sessions (id, title, systemPrompt, providerId, model, thinkingEnabled, createdAt, updatedAt, kind, contextSummary, summaryUpdatedAt, summaryCount, lastSummarizedMessageId, chainId, chainIndex, parentId, locked, archive, contextIndex, formatEnabled, sessionEntries) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21);",
+    [s.id, s.title, s.systemPrompt, s.providerId, s.model, s.thinkingEnabled ? 1 : 0, s.createdAt, s.updatedAt, s.kind === "blank" ? "blank" : "adventure", s.contextSummary ?? "", s.summaryUpdatedAt ?? null, s.summaryCount ?? 0, s.lastSummarizedMessageId ?? null, s.chainId ?? null, s.chainIndex ?? null, s.parentId ?? null, s.locked ? 1 : 0, s.archive ?? null, s.contextIndex ?? null, s.formatEnabled ? 1 : 0, s.sessionEntries ? JSON.stringify(s.sessionEntries) : "[]"]
   );
 }
 
@@ -431,7 +451,7 @@ export async function hardDeleteSession(id: string): Promise<void> {
   await getDb().execute("DELETE FROM sessions WHERE id = $1;", [id]);
 }
 
-const SESSION_FIELDS = ["title", "systemPrompt", "providerId", "model", "thinkingEnabled", "updatedAt", "contextSummary", "summaryUpdatedAt", "summaryCount", "lastSummarizedMessageId", "chainId", "chainIndex", "parentId", "locked", "archive", "contextIndex", "formatEnabled"] as const;
+const SESSION_FIELDS = ["title", "systemPrompt", "providerId", "model", "thinkingEnabled", "updatedAt", "contextSummary", "summaryUpdatedAt", "summaryCount", "lastSummarizedMessageId", "chainId", "chainIndex", "parentId", "locked", "archive", "contextIndex", "formatEnabled", "sessionEntries"] as const;
 type SessionUpdateField = (typeof SESSION_FIELDS)[number];
 
 const SESSION_BOOL_FIELDS = new Set(["locked", "thinkingEnabled", "formatEnabled"]);
@@ -1308,6 +1328,8 @@ interface WorldBookRow {
   isActive: number;
   isBuiltin: number;
   violationWords: string;
+  worldBaseId: string;
+  customOpenings: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -1349,10 +1371,22 @@ function mapWorldBook(r: WorldBookRow, entries?: WorldBookEntry[]): WorldBook {
     isActive: r.isActive === 1,
     isBuiltin: r.isBuiltin === 1,
     violationWords: JSON.parse(r.violationWords || "[]"),
+    worldBaseId: r.worldBaseId || undefined,
+    customOpenings: parseCustomOpenings(r.customOpenings),
     entries: entries || [],
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   };
+}
+
+function parseCustomOpenings(raw: string | null | undefined) {
+  if (!raw) return undefined;
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter((o) => o && typeof o === "object" && typeof o.name === "string" && o.name) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function mapWorldBookEntry(r: WorldBookEntryRow): WorldBookEntry {
@@ -1395,15 +1429,15 @@ export async function loadWorldBooks(includeEntries = true): Promise<WorldBook[]
 export async function insertWorldBook(book: WorldBook): Promise<void> {
   const now = Date.now();
   await getDb().execute(
-    "INSERT INTO world_books (id, name, theme, description, tags, isActive, isBuiltin, violationWords, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);",
-    [book.id, book.name, book.theme || "", book.description || "", JSON.stringify(book.tags), book.isActive ? 1 : 0, book.isBuiltin ? 1 : 0, JSON.stringify(book.violationWords || []), book.createdAt || now, book.updatedAt || now]
+    "INSERT INTO world_books (id, name, theme, description, tags, isActive, isBuiltin, violationWords, worldBaseId, customOpenings, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);",
+    [book.id, book.name, book.theme || "", book.description || "", JSON.stringify(book.tags), book.isActive ? 1 : 0, book.isBuiltin ? 1 : 0, JSON.stringify(book.violationWords || []), book.worldBaseId || "", JSON.stringify(book.customOpenings || []), book.createdAt || now, book.updatedAt || now]
   );
   if (book.entries && book.entries.length > 0) {
     await batchInsertWorldBookEntries(book.id, book.entries);
   }
 }
 
-export async function updateWorldBook(id: string, fields: Partial<Pick<WorldBook, "name" | "theme" | "description" | "tags" | "isActive" | "isBuiltin" | "violationWords" | "updatedAt">>): Promise<void> {
+export async function updateWorldBook(id: string, fields: Partial<Pick<WorldBook, "name" | "theme" | "description" | "tags" | "isActive" | "isBuiltin" | "violationWords" | "worldBaseId" | "customOpenings" | "updatedAt">>): Promise<void> {
   const sets: string[] = [];
   const values: (string | number)[] = [];
   if (fields.name !== undefined) { sets.push("name = $" + (sets.length + 1)); values.push(fields.name); }
@@ -1413,6 +1447,8 @@ export async function updateWorldBook(id: string, fields: Partial<Pick<WorldBook
   if (fields.isActive !== undefined) { sets.push("isActive = $" + (sets.length + 1)); values.push(fields.isActive ? 1 : 0); }
   if (fields.isBuiltin !== undefined) { sets.push("isBuiltin = $" + (sets.length + 1)); values.push(fields.isBuiltin ? 1 : 0); }
   if (fields.violationWords !== undefined) { sets.push("violationWords = $" + (sets.length + 1)); values.push(JSON.stringify(fields.violationWords)); }
+  if (fields.worldBaseId !== undefined) { sets.push("worldBaseId = $" + (sets.length + 1)); values.push(fields.worldBaseId || ""); }
+  if (fields.customOpenings !== undefined) { sets.push("customOpenings = $" + (sets.length + 1)); values.push(JSON.stringify(fields.customOpenings || [])); }
   const ts = fields.updatedAt ?? Date.now();
   sets.push("updatedAt = $" + (sets.length + 1));
   values.push(ts);
@@ -1709,7 +1745,7 @@ const SETTINGS_TABLE_COLUMNS: Record<string, { columns: string[]; defaults: Reco
   character_cards: { columns: ["id", "name", "description", "systemPrompt", "emoji", "tags", "isBuiltin", "createdAt", "updatedAt", "personality", "scenario", "firstMes", "mesExample", "worldBookId", "characterBookEntries", "isExtracted", "triggerWords", "deleted", "deletedAt"], defaults: { name: "", description: "", systemPrompt: "", emoji: "🎭", tags: "[]", isBuiltin: 0, createdAt: 0, updatedAt: 0, personality: "", scenario: "", firstMes: "", mesExample: "", worldBookId: null, characterBookEntries: "[]", isExtracted: 0, triggerWords: "[]", deleted: 0, deletedAt: null } },
   characters: { columns: ["id", "name", "appearance", "personality", "background", "tags", "avatar", "isBuiltin", "createdAt", "updatedAt"], defaults: { name: "", appearance: "", personality: "", background: "", tags: "[]", avatar: "", isBuiltin: 0, createdAt: 0, updatedAt: 0 } },
   world_rules: { columns: ["id", "name", "description", "rules", "isActive", "isBuiltin", "createdAt", "updatedAt"], defaults: { name: "", description: "", rules: "", isActive: 0, isBuiltin: 0, createdAt: 0, updatedAt: 0 } },
-  world_books: { columns: ["id", "name", "theme", "description", "tags", "isActive", "isBuiltin", "violationWords", "createdAt", "updatedAt"], defaults: { name: "", theme: "", description: "", tags: "[]", isActive: 0, isBuiltin: 0, violationWords: "[]", createdAt: 0, updatedAt: 0 } },
+  world_books: { columns: ["id", "name", "theme", "description", "tags", "isActive", "isBuiltin", "violationWords", "worldBaseId", "customOpenings", "createdAt", "updatedAt"], defaults: { name: "", theme: "", description: "", tags: "[]", isActive: 0, isBuiltin: 0, violationWords: "[]", worldBaseId: "", customOpenings: "[]", createdAt: 0, updatedAt: 0 } },
   world_book_entries: { columns: ["id", "bookId", "uid", "category", "title", "key", "keysecondary", "content", "constant", "selective", "order", "position", "insertion_depth", "disable", "linkedCharacterIds", "createdAt", "updatedAt"], defaults: { bookId: "", uid: 0, category: "", title: "", key: "[]", keysecondary: "[]", content: "", constant: 0, selective: 0, order: 100, position: "system", insertion_depth: 50, disable: 0, linkedCharacterIds: "[]", createdAt: 0, updatedAt: 0 } },
 };
 
@@ -1787,8 +1823,8 @@ export async function restoreConversations(snap: ConversationsSnapshot): Promise
   const db = getDb();
 
   const sessionsCfg = {
-    columns: ["id", "title", "systemPrompt", "providerId", "model", "thinkingEnabled", "createdAt", "updatedAt", "deleted", "deletedAt", "kind", "contextSummary", "summaryUpdatedAt", "summaryCount", "lastSummarizedMessageId", "chainId", "chainIndex", "parentId", "locked", "archive", "contextIndex"],
-    defaults: { title: "会话", systemPrompt: "", providerId: "", model: "", thinkingEnabled: 1, createdAt: 0, updatedAt: 0, deleted: 0, deletedAt: null, kind: "adventure", contextSummary: null, summaryUpdatedAt: null, summaryCount: 0, lastSummarizedMessageId: null, chainId: null, chainIndex: null, parentId: null, locked: 0, archive: null, contextIndex: null },
+    columns: ["id", "title", "systemPrompt", "providerId", "model", "thinkingEnabled", "createdAt", "updatedAt", "deleted", "deletedAt", "kind", "contextSummary", "summaryUpdatedAt", "summaryCount", "lastSummarizedMessageId", "chainId", "chainIndex", "parentId", "locked", "archive", "contextIndex", "formatEnabled", "sessionEntries"],
+    defaults: { title: "会话", systemPrompt: "", providerId: "", model: "", thinkingEnabled: 1, createdAt: 0, updatedAt: 0, deleted: 0, deletedAt: null, kind: "adventure", contextSummary: null, summaryUpdatedAt: null, summaryCount: 0, lastSummarizedMessageId: null, chainId: null, chainIndex: null, parentId: null, locked: 0, archive: null, contextIndex: null, formatEnabled: 0, sessionEntries: "[]" },
   };
   for (const row of snap.sessions ?? []) {
     await insertRowIgnore(db, "sessions", sessionsCfg.columns, row, sessionsCfg.defaults);
@@ -1835,8 +1871,8 @@ export async function mergeWorldBooks(snap: {
   let entries = 0;
   for (const row of snap.worldBooks ?? []) {
     const r = await db.execute(
-      "INSERT OR IGNORE INTO world_books (id, name, theme, description, tags, isActive, isBuiltin, violationWords, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);",
-      ["id", "name", "theme", "description", "tags", "isActive", "isBuiltin", "violationWords", "createdAt", "updatedAt"].map((c) => normalizeSettingValue(c, row[c]))
+      "INSERT OR IGNORE INTO world_books (id, name, theme, description, tags, isActive, isBuiltin, violationWords, worldBaseId, customOpenings, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);",
+      ["id", "name", "theme", "description", "tags", "isActive", "isBuiltin", "violationWords", "worldBaseId", "customOpenings", "createdAt", "updatedAt"].map((c) => normalizeSettingValue(c, row[c]))
     );
     books += r.rowsAffected;
   }

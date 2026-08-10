@@ -3,7 +3,9 @@ import { createPortal } from "react-dom";
 import { useCharacterStore } from "@/stores/characterStore";
 import { useGenerationStore } from "@/stores/generationStore";
 import { useUIStore } from "@/stores/uiStore";
+import { useWorldStore } from "@/stores/worldStore";
 import { getTopicOpeningScenarios } from "@/lib/topicOpenings";
+import { getCustomBookOpeningScenarios } from "@/lib/worldOpeningScenarios";
 
 interface Props {
   onComplete: () => void;
@@ -28,6 +30,7 @@ export function ProtagonistSelect({ onComplete }: Props) {
   const characters = useCharacterStore((s) => s.characters).filter((c) => !c.isBuiltin);
   const addCharacter = useCharacterStore((s) => s.addCharacter);
   const { activePresetId, setActivePreset } = useGenerationStore();
+  const worldBooks = useWorldStore((s) => s.books);
 
   const [selectedChar, setSelectedChar] = useState<string | null>(null);
   const [selectedScenario, setSelectedScenarioLocal] = useState<string | null>(null);
@@ -37,7 +40,11 @@ export function ProtagonistSelect({ onComplete }: Props) {
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState("");
 
-  const scenarios = getTopicOpeningScenarios(selectedTopicSchemeId, selectedWorldId, onboardingAudience);
+  // 自定义规则书：开局只用自己的定制开局池（AI 生成 + 条目兜底），不进男女频预设池
+  const customBook = selectedWorldId ? worldBooks.find((b) => b.id === selectedWorldId && !b.isBuiltin) || null : null;
+  const scenarios = customBook
+    ? getCustomBookOpeningScenarios(customBook)
+    : getTopicOpeningScenarios(selectedTopicSchemeId, selectedWorldId, onboardingAudience);
   const randomResult = scenarios.find((s) => s.id === selectedScenario) || null;
 
   useEffect(() => {
@@ -88,6 +95,21 @@ export function ProtagonistSelect({ onComplete }: Props) {
   };
 
   const randomScenario = () => {
+    // 自定义规则书：只从自己的定制开局池随机（已展示的全部参与，池子小不排除），不进预设题材池
+    if (customBook) {
+      const pool = getCustomBookOpeningScenarios(customBook);
+      if (pool.length > 0) {
+        const scenario = pool[Math.floor(Math.random() * pool.length)];
+        setRandomPicked(true);
+        setSelectedScenarioLocal(scenario.id);
+        setSelectedScenario(scenario.id, scenario.name);
+        return;
+      }
+      setRandomPicked(true);
+      setSelectedScenarioLocal("ai-random");
+      setSelectedScenario("ai-random", "AI 随机开局");
+      return;
+    }
     // 固定展示的开局（当前频道/底座过滤后的预设）不参与随机：
     // 从同题材、同底座的「全部频道」池随机一个未被展示的开局；若预设开局已全部展示完，则用 AI 随机开局（即兴生成，不展示预设场景）
     const shownIds = new Set(scenarios.map((s) => s.id));

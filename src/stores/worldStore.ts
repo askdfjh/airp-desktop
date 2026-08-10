@@ -30,7 +30,7 @@ interface WorldState {
   selectBook: (id: string | null) => void;
   
   addBook: (book: Omit<WorldBook, "id" | "entries" | "createdAt" | "updatedAt">) => Promise<string>;
-  updateBook: (id: string, fields: Partial<Pick<WorldBook, "name" | "theme" | "description" | "tags" | "isActive" | "isBuiltin" | "violationWords">>) => Promise<void>;
+  updateBook: (id: string, fields: Partial<Pick<WorldBook, "name" | "theme" | "description" | "tags" | "isActive" | "isBuiltin" | "violationWords" | "worldBaseId" | "customOpenings">>) => Promise<void>;
   removeBook: (id: string) => Promise<void>;
   duplicateBook: (id: string) => Promise<string | null>;
   setActiveBook: (id: string) => Promise<void>;

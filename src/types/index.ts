@@ -39,6 +39,14 @@ export interface PromptInjection {
   createdAt: number;
 }
 
+export interface SessionEntry {
+  id: string;
+  title: string;
+  key: string[];
+  content: string;
+  createdAt: number;
+}
+
 export interface Session {
   id: string;
   title: string;
@@ -66,6 +74,8 @@ export interface Session {
   // 剧情档案（结构化：局势/角色现状/关键事件/伏笔）+ 关键词索引（JSON：关键词→消息 id）
   archive?: string;
   contextIndex?: string;
+  /** 会话临时世界条目（压缩时从对话提取；仅本会话及续集生效，不写入规则书） */
+  sessionEntries?: SessionEntry[];
 }
 
 export interface Message {
@@ -167,9 +177,19 @@ export interface WorldBook {
   isActive: boolean;
   isBuiltin: boolean;
   violationWords: string[];
+  /** AI 创建时匹配的世界底座 id（modern/ancient/cultivation/future/otherworld/infinite/custom；兼容旧数据缺省） */
+  worldBaseId?: string;
+  /** AI 创建时生成的自定义开局种子（保存/读取兼容旧数据缺省） */
+  customOpenings?: CustomOpeningSeed[];
   entries: WorldBookEntry[];
   createdAt: number;
   updatedAt: number;
+}
+
+export interface CustomOpeningSeed {
+  name: string;
+  focus: string;
+  tags?: string[];
 }
 
 

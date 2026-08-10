@@ -16,7 +16,7 @@ import { useMcpStore } from "@/stores/mcpStore";
 import { callTool as callMcpTool } from "@/lib/mcpClient";
 import { useUIStore } from "@/stores/uiStore";
 import { useWorldStore } from "@/stores/worldStore";
-import { buildWorldContext } from "@/lib/worldBookEngine";
+import { buildWorldContext, findMatchingEntries, pickRandomEventEntry } from "@/lib/worldBookEngine";
 import { useGenerationStore } from "@/stores/generationStore";
 import { usePromptInjectionStore } from "@/stores/promptInjectionStore";
 import { loadSessionCharacterCards } from "@/lib/db";
@@ -111,6 +111,10 @@ export function useChat() {
   const activeSessionIdRef = useRef<string | null>(null);
   const messagesRef = useRef<Message[]>([]);
   const everLoadedRef = useRef(false);
+  // 随机世界事件：每会话节奏状态（上次触发时的轮次 + 已抽过的条目 id）
+  const randomEventStateRef = useRef<Map<string, { lastTurn: number; pickedIds: string[] }>>(new Map());
+  // 本次请求待注入的随机事件行（sendMessage 抽卡一次，buildApiMessages 消费；重试复用同一条）
+  const pendingRandomEventRef = useRef<{ sessionId: string; line: string } | null>(null);
 
   const { providers, activeProviderId, activeModel } = useProviderStore();
   const activeSession = useSessionStore((s) =>
@@ -330,6 +334,48 @@ export function useChat() {
         if (world.text) {
           result.push({ role: "system", content: world.text });
         }
+      }
+      // 会话临时世界条目（压缩提取，仅本会话及续集生效）：≤3 条全量注入；超过按触发词匹配最近文本
+      if (!isBlankSession && activeSession?.sessionEntries && activeSession.sessionEntries.length > 0) {
+        const entries = activeSession.sessionEntries;
+        const recentText = [
+          ...hist.slice(-2).map((m) => m.content),
+          lastUserContent,
+        ].join("\n");
+        const hit = entries.length <= 3
+          ? entries
+          : entries.filter((e) => (e.key || []).some((k) => {
+              const kw = (k || "").toLowerCase().replace(/\s+/g, "");
+              return kw.length >= 2 && recentText.toLowerCase().replace(/\s+/g, "").includes(kw);
+            }));
+        if (hit.length > 0) {
+          const lines: string[] = [];
+          let used = 0;
+          for (const e of hit) {
+            const line = `【会话临时设定·${e.title}】${e.content}`;
+            if (used + line.length + 1 > 1200) break;
+            lines.push(line);
+            used += line.length + 1;
+          }
+          if (lines.length > 0) {
+            result.push({
+              role: "system",
+              content:
+                "【会话临时设定】以下设定仅在本次故事会话及续集中生效（不写入规则书），用于保持本卷新增设定的连贯；可继续发展，但不得与规则书基础设定冲突：\n" +
+                lines.join("\n"),
+            });
+          }
+        }
+      }
+      // 随机世界事件：本轮 sendMessage 已抽卡（pendingRandomEventRef），注入独立 block（与规则书/临时条目互不干扰）
+      if (!isBlankSession && pendingRandomEventRef.current && pendingRandomEventRef.current.sessionId === activeSession?.id) {
+        const line = pendingRandomEventRef.current.line;
+        pendingRandomEventRef.current = null;
+        result.push({
+          role: "system",
+          content:
+            `【随机世界事件】以下设定来自当前世界规则书，可作为本段剧情的新进展、转折或悬念自然引出（不必强行出现，未引出也不算失败）：\n${line}`,
+        });
       }
       // 提取角色卡注入（规则书同机制）：角色出场触发词命中 → 注入；压缩后首条 forceAll 全量
       if (!isBlankSession && sessionCards.length > 0) {
@@ -628,7 +674,7 @@ export function useChat() {
         })();
       });
     },
-    [activeModel, activeProvider, activeSession, activeGenPreset, isBlankSession, runSceneAnalysis],
+    [activeModel, activeProvider, activeSession, activeWorldBook, activeGenPreset, isBlankSession, runSceneAnalysis],
   );
 
   const sendMessage = useCallback(
@@ -646,6 +692,29 @@ export function useChat() {
       // 自动压缩触发检查：历史超阈值时弹确认框并拦截本次发送（确认后压缩，用户可再发送）
       if (!isBlankSession && maybePromptCompress(sessionId, messagesRef.current)) return;
       if (useUIStore.getState().compressing) return;
+
+      // 随机世界事件（插件开关，默认关闭）：每经过 4 条 user 消息尝试一次。
+      // 尝试后无论是否抽中，间隔都重置（抽中→冷却 4 轮；未抽中→4 轮后重新尝试新事件）。
+      // 每轮只抽一次（存 ref），buildApiMessages 消费注入；重试复用同一条
+      pendingRandomEventRef.current = null;
+      const uiState = useUIStore.getState();
+      if (uiState.randomWorldEventOn && !isBlankSession && activeWorldBook && activeWorldBook.entries.length > 0) {
+        // user 消息计数（含本次正要发送的一条）：4 条 user 消息为一个节奏周期
+        const userCount = messagesRef.current.filter((m) => m.role === "user").length + 1;
+        const state = randomEventStateRef.current.get(sessionId) || { lastTurn: 0, pickedIds: [] };
+        if (userCount - state.lastTurn >= 4) {
+          const recentText = [...messagesRef.current.slice(-2).map((m) => m.content), content].join("\n");
+          const matchedIds = findMatchingEntries(activeWorldBook.entries, recentText).map((e) => e.id);
+          const entry = pickRandomEventEntry(activeWorldBook.entries, matchedIds, state.pickedIds);
+          const next = { lastTurn: userCount, pickedIds: state.pickedIds };
+          if (entry) {
+            const line = `【世界事件·${entry.title}】${entry.content}（可将此设定自然引入本段剧情，作为新进展、转折或悬念；不必强行出现）`;
+            pendingRandomEventRef.current = { sessionId, line };
+            next.pickedIds = [...state.pickedIds, entry.id].slice(-32);
+          }
+          randomEventStateRef.current.set(sessionId, next);
+        }
+      }
 
       let finalContent = content;
       if (files && files.length > 0) {

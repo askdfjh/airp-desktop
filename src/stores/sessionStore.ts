@@ -1,5 +1,5 @@
 ﻿import { create } from "zustand";
-import type { Session } from "@/types";
+import type { Session, SessionEntry } from "@/types";
 import { useUIStore } from "./uiStore";
 import { useProviderStore } from "./providerStore";
 import {
@@ -53,8 +53,8 @@ interface SessionState {
   toggleThinking: (id: string) => void;
   setThinkingEnabled: (id: string, enabled: boolean) => void;
   branchFromMessage: (sourceId: string, messageId: string) => Promise<boolean>;
-  /** 创建续集会话（继承设定 + 复制前卷基线卡 + 写入档案/索引），返回新会话 id */
-  createContinuationSession: (source: Session, opts: { archive: string; contextIndex: string }) => Promise<string>;
+  /** 创建续集会话（继承设定 + 复制前卷基线卡 + 写入档案/索引 + 继承临时条目），返回新会话 id */
+  createContinuationSession: (source: Session, opts: { archive: string; contextIndex: string; sessionEntries?: SessionEntry[] }) => Promise<string>;
   /** 锁定会话（压缩后只读，可分支） */
   lockSession: (id: string) => void;
   /** 创建角色扮演会话（AI 扮演该角色，空白会话类型 + 自动开场自我介绍），返回新会话 id */
@@ -250,6 +250,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       summaryUpdatedAt: source.summaryUpdatedAt,
       summaryCount: source.summaryCount,
       lastSummarizedMessageId: source.lastSummarizedMessageId,
+      sessionEntries: source.sessionEntries,
       createdAt: now,
       updatedAt: now,
     };
@@ -326,6 +327,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       parentId: source.id,
       archive: opts.archive,
       contextIndex: opts.contextIndex,
+      // 临时条目：压缩提取结果写入续集（无新提取时继承父卷条目，保证设定不断层）
+      sessionEntries: opts.sessionEntries && opts.sessionEntries.length > 0
+        ? opts.sessionEntries
+        : source.sessionEntries,
     };
     // 复制前卷绑定卡作为续集基线（C2 包含 C1，各自独立；仅冒险会话有绑定卡）
     if (session.kind !== "blank") {

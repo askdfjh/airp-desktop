@@ -4,8 +4,8 @@ import { getTopicSchemesByAudience, type TopicScheme } from "@/lib/topicSchemes"
 import { getWorldFoundation, worldFoundationLabel } from "@/lib/worldFoundations";
 import { useUIStore } from "@/stores/uiStore";
 import { useWorldStore } from "@/stores/worldStore";
+import { inferWorldBase } from "@/lib/worldBaseMatch";
 import { pickMainEntries } from "./onboardingHelpers";
-import type { WorldAudienceFilter } from "@/lib/worldAudience";
 
 export function TopicSelect() {
   const {
@@ -36,8 +36,11 @@ export function TopicSelect() {
   const contractTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flipPosRef = useRef<{ x: number; y: number } | null>(null);
-  const [audienceFilter, setAudienceFilter] = useState<WorldAudienceFilter>("all");
-  const topics = getTopicSchemesByAudience(audienceFilter);
+  const [audienceFilter, setAudienceFilter] = useState<"all" | "male" | "female" | "custom">("all");
+  const topics = audienceFilter === "custom" ? [] : getTopicSchemesByAudience(audienceFilter);
+  const customBooks = useWorldStore((s) => s.books).filter((b) => !b.isBuiltin);
+  const hasCustom = customBooks.length > 0;
+  const [customSelectedId, setCustomSelectedId] = useState<string | null>(null);
 
   // 仅在点标签（锁定）后排序：排序列表跟随 sortedTopicId（点卡片主体只改高亮，不改排序，避免跳回原位）
   // 随机题材卡始终固定渲染在网格第一位
@@ -145,7 +148,7 @@ export function TopicSelect() {
     const worldBaseId = baseId && (topic.expandableWorldBaseIds as string[]).includes(baseId) ? baseId : topic.worldBaseId;
     setSelected(topic.id);
     setSelectedBase(worldBaseId);
-    setOnboardingAudience(audienceFilter);
+    setOnboardingAudience(audienceFilter === "custom" ? "all" : audienceFilter);
     // 规则书解析：默认底座用题材书（优先）→ 底座书兜底；切到扩展底座时用该底座书
     const foundation = getWorldFoundation(worldBaseId);
     const baseBookId = foundation.builtinBookId;
@@ -166,6 +169,42 @@ export function TopicSelect() {
     setPlayerName("");
     // 注意：规则书激活推迟到 OnboardingFlow.handleComplete（最后一步点"开始冒险"才执行），
     // 中途退出开局流程不改变任何世界状态
+  };
+
+  // 自定义规则书：直接选中该规则书（无题材方案），底座用 AI 匹配结果
+  const chooseCustomBook = (bookId: string) => {
+    const book = customBooks.find((b) => b.id === bookId);
+    if (!book) return;
+    setCustomSelectedId(bookId);
+    const baseId = inferWorldBase(book);
+    setSelectedBase(baseId);
+    setOnboardingAudience("all");
+    const mainEntry = pickMainEntries(book)[0] || null;
+    setSelectedTopicScheme(null, null);
+    setSelectedTrope(null, null);
+    setSelectedWorld(bookId, book.name);
+    setSelectedMainEntry(mainEntry?.id ?? null, mainEntry?.title ?? null);
+    setSelectedScenario(null, null);
+    setSelectedStylePreset(null, null);
+    setSelectedMode(null);
+    setSelectedCharacter(null, null);
+    setPlayerName("");
+  };
+
+  const switchTab = (tab: "all" | "male" | "female" | "custom") => {
+    // 切换频道 tab：重置锁定/排序/选中/隐藏状态（不同频道的题材列表不同，避免排序引用失效与卡片被过滤）
+    if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
+    setContracted(false);
+    setHideOthers(false);
+    setSorted(false);
+    setSortedTopicId(null);
+    setLabelLock(false);
+    setSelected(null);
+    setSelectedBase(null);
+    setCustomSelectedId(null);
+    clearCardTransforms();
+    setGridHeight("auto");
+    setAudienceFilter(tab);
   };
 
   const pickBase = (topic: TopicScheme, baseId: string) => {
@@ -251,7 +290,7 @@ export function TopicSelect() {
   };
 
   const confirmTopic = () => {
-    if (selected) setOnboardingStep(2);
+    if (selected || customSelectedId) setOnboardingStep(2);
   };
 
   const selectedTopic = selected ? topics.find((t) => t.id === selected) || null : null;
@@ -291,25 +330,13 @@ export function TopicSelect() {
           { key: "all", label: "全部" },
           { key: "male", label: "男频" },
           { key: "female", label: "女频" },
-        ] as const).map((tab) => {
+          ...(hasCustom ? [{ key: "custom" as const, label: "自定义" }] : []),
+        ]).map((tab) => {
           const active = audienceFilter === tab.key;
           return (
             <button
               key={tab.key}
-              onClick={() => {
-                // 切换频道 tab：重置锁定/排序/选中/隐藏状态（不同频道的题材列表不同，避免排序引用失效与卡片被过滤）
-                if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
-                setContracted(false);
-                setHideOthers(false);
-                setSorted(false);
-                setSortedTopicId(null);
-                setLabelLock(false);
-                setSelected(null);
-                setSelectedBase(null);
-                clearCardTransforms();
-                setGridHeight("auto");
-                setAudienceFilter(tab.key);
-              }}
+              onClick={() => switchTab(tab.key as "all" | "male" | "female" | "custom")}
               style={{
                 padding: "9px 24px",
                 borderRadius: 999,
@@ -323,12 +350,51 @@ export function TopicSelect() {
               }}
             >
               {tab.label}
+              {tab.key === "custom" && <span style={{ opacity: 0.7, fontSize: 11, marginLeft: 4 }}>{customBooks.length}</span>}
             </button>
           );
         })}
       </div>
 
       <div ref={gridRef} data-onboarding-grid style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, height: gridHeight, overflow: gridOverflow, transition: "height 0.5s ease", alignItems: "start" }}>
+        {audienceFilter === "custom" ? (
+          /* 自定义 tab：只展示用户创建的自定义规则书 */
+          customBooks.map((book) => {
+            const isSelectedCard = customSelectedId === book.id;
+            const baseId = inferWorldBase(book);
+            return (
+              <div
+                key={book.id}
+                className={`seed-card ${isSelectedCard ? "seed-card--selected" : ""}`}
+                onClick={() => chooseCustomBook(book.id)}
+                style={{ padding: "22px 20px", cursor: "pointer" }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+                  <div className="seed-card-title" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{book.name}</div>
+                  <span style={{ fontSize: 11, color: "var(--seed-muted)", flexShrink: 0 }}>{worldFoundationLabel(baseId)}</span>
+                </div>
+                <div className="seed-card-desc" style={{ marginBottom: 12, minHeight: 40 }}>{book.description || book.theme || "暂无描述"}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  <span style={{
+                    fontSize: 11, padding: "3px 9px", borderRadius: 999,
+                    background: "var(--seed-hover-bg)", border: "1px solid var(--seed-border)", color: "var(--seed-muted)",
+                  }}>
+                    {book.entries.filter((e) => !e.disable).length} 条条目
+                  </span>
+                  {(book.customOpenings || []).length > 0 && (
+                    <span style={{
+                      fontSize: 11, padding: "3px 9px", borderRadius: 999,
+                      background: "var(--seed-accent-bg)", border: "1px solid color-mix(in srgb, var(--seed-accent) 35%, transparent)", color: "var(--seed-accent)",
+                    }}>
+                      {book.customOpenings!.length} 个定制开局
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        ) : (
+        <>
         {/* 随机题材卡固定第一位，锁定收缩时保持可见（与选中卡同行） */}
         <div
           className="seed-card seed-card--custom"
@@ -415,10 +481,29 @@ export function TopicSelect() {
             </div>
           );
         })}
+        </>
+        )}
       </div>
 
       <div style={{ textAlign: "center", marginTop: 28, minHeight: 48, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        {selectedTopic ? (
+        {audienceFilter === "custom" ? (
+          customSelectedId ? (
+            <button
+              className="seed-cta"
+              onClick={confirmTopic}
+              style={{ display: "inline-flex", alignItems: "center", gap: 8, animation: "seed-fade-in-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) both" }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: 15, height: 15 }}>
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+              </svg>
+              开始 · {customBooks.find((b) => b.id === customSelectedId)?.name}（{worldFoundationLabel(selectedBase)}）
+            </button>
+          ) : (
+            <div style={{ fontSize: 13, color: "var(--seed-muted)", letterSpacing: "0.08em", fontWeight: 500 }}>
+              1 <span style={{ opacity: 0.4 }}>/ 3</span>
+            </div>
+          )
+        ) : selectedTopic ? (
           <button
             className="seed-cta"
             onClick={confirmTopic}

@@ -5,6 +5,8 @@ import { useCreateStore, type CharacterDraft, type WorldDraft, type WorldEntryDr
 import { useCharacterStore } from "@/stores/characterStore";
 import { useWorldStore } from "@/stores/worldStore";
 import { GUIDE_LABEL } from "@/lib/createGuide";
+import { WORLD_FOUNDATIONS } from "@/lib/worldFoundations";
+import type { CustomOpeningSeed } from "@/types";
 import { AutoTextarea, AutoInput } from "@/lib/autoGrow";
 
 function buildCardPrompt(d: CharacterDraft): string {
@@ -43,7 +45,7 @@ export function DraftPreview() {
     if (!preview) {
       return type === "character"
         ? { name: "", emoji: "🎭", tags: [], description: "", appearance: "", personality: "", speechStyle: "", background: "", relationships: "", goals: "", triggerWords: [] }
-        : { name: "", theme: "", description: "", tags: [], entries: [] };
+        : { name: "", theme: "", description: "", tags: [], worldBaseId: "modern", openings: [], entries: [] };
     }
     return { ...preview, entries: "entries" in preview ? [...preview.entries] : undefined } as CharacterDraft | WorldDraft;
   });
@@ -103,6 +105,8 @@ export function DraftPreview() {
           isActive: false,
           isBuiltin: false,
           violationWords: [],
+          worldBaseId: wd.worldBaseId || "custom",
+          customOpenings: (wd.openings || []).filter((o) => o.name.trim() && o.focus.trim()),
         });
         const entries = wd.entries.filter((e) => e.title.trim() && e.content.trim());
         for (const e of entries) {
@@ -127,6 +131,8 @@ export function DraftPreview() {
         // 随后选角色 + 开局场景（自定义世界无预设场景时可选 AI 随机开局）即可开始冒险
         const uiStore = useUIStore.getState();
         uiStore.setCreateMode(null);
+        uiStore.setSelectedTopicScheme(null, null);
+        uiStore.setSelectedTrope(null, null);
         uiStore.setSelectedWorld(bookId, name);
         uiStore.setSelectedMode(null);
         uiStore.setSelectedCharacter(null, null);
@@ -149,6 +155,17 @@ export function DraftPreview() {
   const parseTags = (s: string) => s.split(",").map((t) => t.trim()).filter(Boolean);
   const keysText = (keys: string[]) => keys.join(", ");
   const parseKeys = (s: string) => s.split(",").map((t) => t.trim()).filter(Boolean);
+  const setOpening = (i: number, patch: Partial<CustomOpeningSeed>) => {
+    const openings = [...(wd.openings || [])];
+    openings[i] = { ...openings[i], ...patch };
+    setWD({ openings });
+  };
+  const addOpening = () => {
+    setWD({ openings: [...(wd.openings || []), { name: "", focus: "", tags: [] }] });
+  };
+  const removeOpening = (i: number) => {
+    setWD({ openings: (wd.openings || []).filter((_, j) => j !== i) });
+  };
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 210, display: "flex", background: "color-mix(in srgb, var(--seed-bg) 55%, transparent)", backdropFilter: "blur(6px)" }}>
@@ -206,8 +223,53 @@ export function DraftPreview() {
                 <input value={wd.name} onChange={(e) => setWD({ name: e.target.value })} placeholder="规则书名称 *" style={fieldStyle({ flex: 1, fontWeight: 600 })} />
                 <AutoInput value={wd.theme} onChange={(e) => setWD({ theme: e.target.value })} placeholder="题材基调" min={90} max={200} style={fieldStyle()} />
               </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: "var(--fs-11)", fontWeight: 600, color: "var(--seed-fg)", flexShrink: 0 }}>世界底座</span>
+                <select
+                  value={wd.worldBaseId || "custom"}
+                  onChange={(e) => setWD({ worldBaseId: e.target.value })}
+                  style={{ ...fieldStyle({ width: 180 }), cursor: "pointer" }}
+                >
+                  {WORLD_FOUNDATIONS.filter((f) => f.id !== "custom").map((f) => (
+                    <option key={f.id} value={f.id}>{f.label}</option>
+                  ))}
+                  <option value="custom">自定义</option>
+                </select>
+                <span style={{ fontSize: "var(--fs-10)", color: "var(--seed-muted)" }}>AI 已按题材匹配，可手动调整</span>
+              </div>
               <AutoInput value={tagText(wd.tags)} onChange={(e) => setWD({ tags: parseTags(e.target.value) })} placeholder="标签（逗号分隔）" min={200} max={520} style={fieldStyle()} />
               <AutoTextarea value={wd.description} onChange={(e) => setWD({ description: e.target.value })} placeholder="一句话简介" style={fieldStyle({ minHeight: 44 })} maxHeight={200} />
+
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)" }}>开局场景（{(wd.openings || []).length}）</span>
+                <span style={{ fontSize: "var(--fs-10)", color: "var(--seed-muted)" }}>AI 生成，保存后开局流程可直接选用</span>
+                <div style={{ flex: 1 }} />
+                <button
+                  onClick={addOpening}
+                  style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 999, border: "1px solid color-mix(in srgb, var(--seed-accent) 40%, transparent)", background: "var(--seed-accent-bg)", color: "var(--seed-accent)", fontSize: "var(--fs-10)", fontFamily: "inherit", cursor: "pointer" }}
+                >
+                  <Plus size={11} /> 添加开局
+                </button>
+              </div>
+
+              {(wd.openings || []).map((o, i) => (
+                <div key={i} style={{ padding: 12, borderRadius: 12, display: "flex", flexDirection: "column", gap: 8, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input value={o.name} onChange={(ev) => setOpening(i, { name: ev.target.value })} placeholder="开局名称 *" style={fieldStyle({ flex: 1, minWidth: 140, fontWeight: 600 })} />
+                    <button onClick={() => removeOpening(i)} title="删除开局"
+                      style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "transparent", color: "var(--danger)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                  <AutoInput value={(o.tags || []).join(", ")} onChange={(ev) => setOpening(i, { tags: parseTags(ev.target.value) })} placeholder="开局标签（逗号分隔）" min={200} max={520} style={fieldStyle({ fontSize: "var(--fs-11)" })} />
+                  <AutoTextarea value={o.focus} onChange={(ev) => setOpening(i, { focus: ev.target.value })} placeholder="开局核心事件（一句话，30-60 字）" style={fieldStyle({ minHeight: 48, fontSize: "var(--fs-11)" })} maxHeight={140} />
+                </div>
+              ))}
+              {(wd.openings || []).length === 0 && (
+                <div style={{ padding: "16px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-11)", background: "var(--seed-surface)", borderRadius: 12, border: "1px dashed var(--seed-border)" }}>
+                  没有开局场景。可返回对话补充开局想法后重新生成，或手动添加。
+                </div>
+              )}
 
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
                 <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)" }}>规则书条目（{wd.entries.length}）</span>

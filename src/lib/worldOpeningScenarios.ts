@@ -1,7 +1,5 @@
 import type { WorldBook, WorldBookEntry } from "@/types";
-import type { OpeningScenario } from "@/stores/onboardingStore";
-
-function compact(s: string | undefined | null, fallback = "") {
+import type { OpeningScenario } from "@/stores/onboardingStore";function compact(s: string | undefined | null, fallback = "") {
   return (s || "").replace(/\s+/g, " ").trim() || fallback;
 }
 
@@ -142,4 +140,41 @@ export function buildWorldOpeningScenarios(book: WorldBook): OpeningScenario[] {
 export function getWorldOpeningScenario(book: WorldBook | null | undefined, id: string | null | undefined) {
   if (!book || !id) return undefined;
   return buildWorldOpeningScenarios(book).find((s) => s.id === id);
+}
+
+/**
+ * 自定义规则书的开局池：优先 AI 生成的开局种子（customOpenings），
+ * 没有时兜底用规则书条目自动提取的 3 个开局（buildWorldOpeningScenarios）。
+ */
+export function getCustomBookOpeningScenarios(book: WorldBook | null | undefined): OpeningScenario[] {
+  if (!book) return [];
+  const custom = (book.customOpenings || []).filter((o) => o.name && o.focus);
+  if (custom.length > 0) {
+    const worldName = compact(book.name, "自定义世界");
+    const worldDesc = clip(book.description || book.theme || "这个世界的规则与势力由规则书条目定义。", 160);
+    return custom.map((o, i) => ({
+      id: `customopen:${book.id}:${i}`,
+      name: o.name,
+      description: o.focus,
+      keywords: keywords(book, (o.tags || []).concat([o.name])),
+      theme: book.id,
+      systemPromptTemplate: template({
+        worldName,
+        worldDesc,
+        sceneName: o.name,
+        sceneFocus: o.focus,
+      }),
+      openingMessage: opening({
+        worldName,
+        sceneName: o.name,
+        sceneFocus: o.focus,
+      }),
+    }));
+  }
+  return buildWorldOpeningScenarios(book);
+}
+
+export function getCustomBookOpeningScenario(book: WorldBook | null | undefined, id: string | null | undefined) {
+  if (!book || !id) return undefined;
+  return getCustomBookOpeningScenarios(book).find((s) => s.id === id);
 }

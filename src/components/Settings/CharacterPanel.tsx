@@ -33,6 +33,7 @@ function buildCharacterPrompt(c: Character, arcs: CharacterArc[]): string {
 export function CharacterPanel() {
   const { characters, loadCharactersFromDb, updateCharacter, removeCharacter, loadArcs, arcs, clearWorldArcs, restoreDefaultCharacters, cards, loadFromDb, updateCard, removeCard, trashCards, loadTrashFromDb, restoreCardFromTrash, purgeCardFromTrash, clearExpiredTrash } = useCharacterStore();
   const [viewTab, setViewTab] = useState<"char" | "extracted" | "trash">("char");
+  const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
   // 窄屏（手机）：左右分栏改为上下堆叠
   const [isNarrow, setIsNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 820px)').matches);
   useEffect(() => {
@@ -110,6 +111,7 @@ export function CharacterPanel() {
     if (!c) return;
     if (!confirm(`确定删除角色「${c.name}」？`)) return;
     await removeCharacter(id);
+    await loadTrashFromDb();
     if (detailId === id) setDetailId(null);
     setSelectedChars(prev => {
       const n = new Set(prev);
@@ -176,6 +178,7 @@ export function CharacterPanel() {
   const removeExtractedCard = async (id: string) => {
     if (!confirm("删除该提取角色卡？将移入回收站（保留30天），其绑定的会话将不再自动注入此角色，可随时恢复。")) return;
     await removeCard(id);
+    await loadTrashFromDb();
   };
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
@@ -190,7 +193,7 @@ export function CharacterPanel() {
   return (
     <div style={{ display: "flex", gap: 20, flex: 1, minHeight: 0, flexDirection: isNarrow ? "column" : "row" }}>
       {/* Left column */}
-      <div style={{ width: isNarrow ? "100%" : 290, display: "flex", flexDirection: "column", gap: 12, flexShrink: 0, minHeight: 0, maxHeight: isNarrow ? 260 : "none", overflow: "hidden" }}>
+      <div style={{ width: isNarrow ? "100%" : 290, display: "flex", flexDirection: "column", gap: 12, flexShrink: 0, minHeight: 0, maxHeight: isNarrow ? 400 : "none", overflow: "hidden" }}>
         {/* View tabs */}
         <div style={{ display: "flex", gap: 4, padding: 4, background: "var(--seed-input-bg)", borderRadius: 12, border: "1px solid var(--seed-border)" }}>
           <button style={tabStyle(viewTab === "char")} onClick={() => setViewTab("char")}>
@@ -226,8 +229,8 @@ export function CharacterPanel() {
               </button>
             </div>
 
-            {/* Grouped list */}
-            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+            {/* Grouped list：安卓下固定高度恰好 2 张卡片，超出滚动 */}
+            <div style={{ flex: isAndroid ? "0 0 auto" : 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, height: isAndroid ? 260 : undefined }}>
               {builtinChars.length > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ fontSize: 11, fontWeight: 600, color: "var(--seed-muted)", textTransform: "uppercase", letterSpacing: "0.06em", padding: "2px 2px 0" }}>
@@ -310,6 +313,11 @@ export function CharacterPanel() {
                 </div>
               )}
             </div>
+            {isAndroid && isNarrow && viewTab === "char" && filtered.length > 2 && (
+              <div style={{ flexShrink: 0, textAlign: "center", padding: "4px 0 2px", fontSize: "var(--fs-11)", color: "var(--seed-muted)", opacity: 0.7, letterSpacing: "0.02em" }}>
+                上滑查看更多
+              </div>
+            )}
           </>
         )}
 

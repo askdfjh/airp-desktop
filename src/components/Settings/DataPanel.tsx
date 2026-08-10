@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Download, Upload, ShieldAlert, CheckCircle2, Loader2, Check, Globe, CloudUpload, CloudDownload, RefreshCw, Clock, Bug } from "lucide-react";
 import { buildDebugExport } from "@/lib/debugExport";
 import { testConnection, listCloudBackups, uploadCloudBackup, downloadCloudBackup, cleanupCloudBackups, findLatestCloudBackup, summarizeBackup, type CloudBackupMeta } from "@/lib/webdavClient";
@@ -34,6 +35,8 @@ function formatTime(ts: number): string {
 
 export function DataPanel() {
   const notify = useUIStore((s) => s.notify);
+  const effectiveTheme = useUIStore((s) => s.effectiveTheme);
+  const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
   const [busy, setBusy] = useState<"export" | "import" | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [importSummary, setImportSummary] = useState<string[] | null>(null);
@@ -284,6 +287,125 @@ export function DataPanel() {
   );
 
   const importDialogGroups = importTarget ? getBackupGroups(importTarget.data) : [];
+
+  // 导入确认弹窗内容（桌面端内联渲染；安卓端挂到 body，避免被动画 transform 包含块截断遮罩）
+  const importDialog = importTarget && (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 2000,
+        background: "rgba(0,0,0,0.45)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+        animation: "seed-fade-in-up 0.18s ease-out",
+      }}
+      onClick={() => { if (busy !== "import") setImportTarget(null); }}
+    >
+      <div
+        style={{
+          width: 460, maxWidth: "calc(100vw - 32px)", maxHeight: "82vh",
+          display: "flex", flexDirection: "column",
+          padding: "26px 26px 22px", background: "var(--seed-surface)",
+          border: "1px solid var(--seed-border)", borderRadius: 18,
+          boxShadow: "0 16px 64px rgba(0,0,0,0.5)", animation: "seed-fade-in-up 0.22s ease-out",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 11, background: "var(--seed-accent-bg)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Upload size={16} style={{ color: "var(--seed-accent)" }} />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--seed-fg)" }}>导入备份</div>
+            <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {importTarget.source}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "12px 0 8px" }}>
+          <span style={{ fontSize: "var(--fs-11)", fontWeight: 500, color: "var(--seed-muted)" }}>
+            选择要导入的内容（{importGroups.size}/{importDialogGroups.length}）
+          </span>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              onClick={() => setImportGroups(new Set(importDialogGroups))}
+              style={{ padding: "3px 10px", borderRadius: 999, border: "1px solid var(--seed-border)", background: "transparent", color: "var(--seed-muted)", fontSize: "var(--fs-10)", cursor: "pointer" }}
+            >
+              全选
+            </button>
+            <button
+              onClick={() => setImportGroups(new Set())}
+              style={{ padding: "3px 10px", borderRadius: 999, border: "1px solid var(--seed-border)", background: "transparent", color: "var(--seed-muted)", fontSize: "var(--fs-10)", cursor: "pointer" }}
+            >
+              清空
+            </button>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
+          {importDialogGroups.map((key) => {
+            const checked = importGroups.has(key);
+            const count = summarizeGroups(importTarget.data, [key])[0] ?? BACKUP_GROUP_LABELS[key];
+            return (
+              <button
+                key={key}
+                onClick={() => setImportGroups((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(key)) next.delete(key);
+                  else next.add(key);
+                  return next;
+                })}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "9px 12px", borderRadius: 12, cursor: "pointer",
+                  textAlign: "left", fontSize: "var(--fs-11)", lineHeight: 1.35,
+                  color: "var(--seed-fg)",
+                  background: checked ? "var(--seed-accent-bg)" : "var(--seed-hover-bg)",
+                  border: checked ? "1px solid var(--seed-accent-border)" : "1px solid var(--seed-border)",
+                  transition: "all 0.12s",
+                }}
+              >
+                <span style={{
+                  width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: checked ? "var(--seed-accent)" : "transparent",
+                  border: "1px solid " + (checked ? "var(--seed-accent)" : "var(--seed-border)"),
+                  transition: "all 0.12s",
+                }}>
+                  {checked && <Check size={11} style={{ color: "#fff" }} />}
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ display: "flex", gap: 8, padding: "10px 12px", borderRadius: 12, background: "color-mix(in srgb, #f59e0b 7%, transparent)", border: "1px solid color-mix(in srgb, #f59e0b 28%, transparent)", marginBottom: 16 }}>
+          <ShieldAlert size={13} style={{ color: "#f59e0b", flexShrink: 0, marginTop: 1 }} />
+          <span style={{ fontSize: "var(--fs-10)", color: "var(--seed-muted)", lineHeight: 1.55 }}>
+             设置类内容（模型服务 / 界面偏好 / 提示词等）将覆盖现有配置；规则书 / 角色卡 / 会话以合并方式导入，已存在的保留不覆盖
+          </span>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button
+            onClick={() => setImportTarget(null)}
+            disabled={busy === "import"}
+            style={{ padding: "9px 18px", borderRadius: 10, fontSize: "var(--fs-12)", border: "1px solid var(--seed-border)", background: "transparent", color: "var(--seed-muted)", cursor: "pointer", opacity: busy === "import" ? 0.5 : 1 }}
+          >
+            取消
+          </button>
+          <button
+            onClick={() => void handleConfirmImport()}
+            disabled={busy === "import" || importGroups.size === 0}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 20px", borderRadius: 10, fontSize: "var(--fs-12)", fontWeight: 600, border: "none", background: "var(--seed-accent)", color: "#fff", cursor: importGroups.size === 0 ? "not-allowed" : "pointer", opacity: busy === "import" || importGroups.size === 0 ? 0.6 : 1 }}
+          >
+            {busy === "import" ? <Loader2 size={13} className="seed-spin" /> : <Upload size={13} />}
+            导入所选（{importGroups.size} 项）
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ maxWidth: 640, width: "100%", display: "flex", flexDirection: "column", gap: 16, flex: 1, minHeight: 0, overflowY: "auto", margin: "0 auto" }}>
@@ -623,124 +745,11 @@ export function DataPanel() {
         )}
       </div>
 
-      {/* 导入确认弹窗：显示备份内容，让用户勾选后导入（本地文件 / 云端备份共用） */}
-      {importTarget && (
-        <div
-          style={{
-            position: "fixed", inset: 0, zIndex: 2000,
-            background: "rgba(0,0,0,0.45)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-            display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
-            animation: "seed-fade-in-up 0.18s ease-out",
-          }}
-          onClick={() => { if (busy !== "import") setImportTarget(null); }}
-        >
-          <div
-            style={{
-              width: 460, maxWidth: "calc(100vw - 32px)", maxHeight: "82vh",
-              display: "flex", flexDirection: "column",
-              padding: "26px 26px 22px", background: "var(--seed-surface)",
-              border: "1px solid var(--seed-border)", borderRadius: 18,
-              boxShadow: "0 16px 64px rgba(0,0,0,0.5)", animation: "seed-fade-in-up 0.22s ease-out",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-              <div style={{ width: 38, height: 38, borderRadius: 11, background: "var(--seed-accent-bg)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <Upload size={16} style={{ color: "var(--seed-accent)" }} />
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--seed-fg)" }}>导入备份</div>
-                <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {importTarget.source}
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "12px 0 8px" }}>
-              <span style={{ fontSize: "var(--fs-11)", fontWeight: 500, color: "var(--seed-muted)" }}>
-                选择要导入的内容（{importGroups.size}/{importDialogGroups.length}）
-              </span>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button
-                  onClick={() => setImportGroups(new Set(importDialogGroups))}
-                  style={{ padding: "3px 10px", borderRadius: 999, border: "1px solid var(--seed-border)", background: "transparent", color: "var(--seed-muted)", fontSize: "var(--fs-10)", cursor: "pointer" }}
-                >
-                  全选
-                </button>
-                <button
-                  onClick={() => setImportGroups(new Set())}
-                  style={{ padding: "3px 10px", borderRadius: 999, border: "1px solid var(--seed-border)", background: "transparent", color: "var(--seed-muted)", fontSize: "var(--fs-10)", cursor: "pointer" }}
-                >
-                  清空
-                </button>
-              </div>
-            </div>
-
-            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
-              {importDialogGroups.map((key) => {
-                const checked = importGroups.has(key);
-                const count = summarizeGroups(importTarget.data, [key])[0] ?? BACKUP_GROUP_LABELS[key];
-                return (
-                  <button
-                    key={key}
-                    onClick={() => setImportGroups((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(key)) next.delete(key);
-                      else next.add(key);
-                      return next;
-                    })}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 10,
-                      padding: "9px 12px", borderRadius: 12, cursor: "pointer",
-                      textAlign: "left", fontSize: "var(--fs-11)", lineHeight: 1.35,
-                      color: "var(--seed-fg)",
-                      background: checked ? "var(--seed-accent-bg)" : "var(--seed-hover-bg)",
-                      border: checked ? "1px solid var(--seed-accent-border)" : "1px solid var(--seed-border)",
-                      transition: "all 0.12s",
-                    }}
-                  >
-                    <span style={{
-                      width: 16, height: 16, borderRadius: 4, flexShrink: 0,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      background: checked ? "var(--seed-accent)" : "transparent",
-                      border: "1px solid " + (checked ? "var(--seed-accent)" : "var(--seed-border)"),
-                      transition: "all 0.12s",
-                    }}>
-                      {checked && <Check size={11} style={{ color: "#fff" }} />}
-                    </span>
-                    <span style={{ flex: 1, minWidth: 0 }}>{count}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div style={{ display: "flex", gap: 8, padding: "10px 12px", borderRadius: 12, background: "color-mix(in srgb, #f59e0b 7%, transparent)", border: "1px solid color-mix(in srgb, #f59e0b 28%, transparent)", marginBottom: 16 }}>
-              <ShieldAlert size={13} style={{ color: "#f59e0b", flexShrink: 0, marginTop: 1 }} />
-              <span style={{ fontSize: "var(--fs-10)", color: "var(--seed-muted)", lineHeight: 1.55 }}>
-                 设置类内容（模型服务 / 界面偏好 / 提示词等）将覆盖现有配置；规则书 / 角色卡 / 会话以合并方式导入，已存在的保留不覆盖
-              </span>
-            </div>
-
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setImportTarget(null)}
-                disabled={busy === "import"}
-                style={{ padding: "9px 18px", borderRadius: 10, fontSize: "var(--fs-12)", border: "1px solid var(--seed-border)", background: "transparent", color: "var(--seed-muted)", cursor: "pointer", opacity: busy === "import" ? 0.5 : 1 }}
-              >
-                取消
-              </button>
-              <button
-                onClick={() => void handleConfirmImport()}
-                disabled={busy === "import" || importGroups.size === 0}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 20px", borderRadius: 10, fontSize: "var(--fs-12)", fontWeight: 600, border: "none", background: "var(--seed-accent)", color: "#fff", cursor: importGroups.size === 0 ? "not-allowed" : "pointer", opacity: busy === "import" || importGroups.size === 0 ? 0.6 : 1 }}
-              >
-                {busy === "import" ? <Loader2 size={13} className="seed-spin" /> : <Upload size={13} />}
-                导入所选（{importGroups.size} 项）
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 导入确认弹窗：安卓端挂到 body 以覆盖全屏遮罩；桌面端内联渲染 */}
+      {isAndroid && importDialog ? createPortal(
+        <div className={`theme-${effectiveTheme()}`}>{importDialog}</div>,
+        document.body
+      ) : importDialog}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 {
   "productName": "灵叙 Narra",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "identifier": "com.airp.app",
   "build": {
     "beforeBuildCommand": "npm run build",
@@ -38,6 +38,9 @@
       "nsis": {
         "installerIcon": "icons/installer.ico",
         "uninstallerIcon": "icons/installer.ico"
+      },
+      "wix": {
+        "language": "zh-CN"
       }
     }
   },

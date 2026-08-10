@@ -37,6 +37,9 @@ interface UIState {
   // 角色后台进展（隐藏幕后进展注入正文生成，默认开启）
   hiddenProgressOn: boolean;
   setHiddenProgressOn: (v: boolean) => void;
+  // 随机世界事件（插件设置页开关，默认关闭）：世界书条目按节奏随机注入剧情
+  randomWorldEventOn: boolean;
+  setRandomWorldEventOn: (v: boolean) => void;
   toast: string | null;
   toastAction: "settings" | null;
   notify: (msg: string, action?: "settings" | null) => void;
@@ -128,6 +131,8 @@ export const useUIStore = create<UIState>()(
       setEnsembleGuardOn: (v) => set({ ensembleGuardOn: v }),
       hiddenProgressOn: true,
       setHiddenProgressOn: (v) => set({ hiddenProgressOn: v }),
+      randomWorldEventOn: false,
+      setRandomWorldEventOn: (v) => set({ randomWorldEventOn: v }),
       toast: null,
       toastAction: null,
       notify: (msg, action) => {
@@ -237,6 +242,7 @@ export const useUIStore = create<UIState>()(
         progressionGuardOn: s.progressionGuardOn,
         ensembleGuardOn: s.ensembleGuardOn,
         hiddenProgressOn: s.hiddenProgressOn,
+        randomWorldEventOn: s.randomWorldEventOn,
       }),
     },
   ),

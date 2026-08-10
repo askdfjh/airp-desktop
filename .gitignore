@@ -20,6 +20,7 @@ coverage
 *.bak
 __patch_*.js
 *开发日志*.md
+*测试日志*.md
 *dev-log*.md
 *development-log*.md
 
