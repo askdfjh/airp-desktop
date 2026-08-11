@@ -40,6 +40,10 @@
 
 6. **合规免责**：使用者需遵守所在国家/地区的法律法规、所接入服务商的服务条款。不得将本软件用于违法、侵权或有害用途。作者不对任何滥用行为负责。
 
+7. **渠道免责**：作者仅对官方渠道（GitHub Releases 与文末网盘镜像）发布的文件负责。其他任何渠道（第三方转发、修改打包、二次封装）获取的安装包无法保证完整性，可能被篡改或捆绑恶意程序，下载使用风险由用户自行承担。建议下载后核对文末 SHA-256 校验值。
+
+8. **AI 生成声明**：本软件由 AI 辅助开发（代码由 AI 生成后经人工整合、审查与测试），可能存在未知缺陷或与预期不符的行为，界面与功能以实际表现为准。软件持续迭代中，使用前请务必定期备份数据（见第 4 条）。
+
 ## 构建与运行
 
 ### 桌面端（Windows）
@@ -69,8 +73,22 @@ Tauri 2 · React 19 · TypeScript · Vite · Zustand · SQLite（tauri-plugin-sq
 
 ## 发布渠道
 
-- 代码仓库：https://github.com/askdfjh/airp-desktop
-- 请仅从上述仓库的 Releases 获取安装包，警惕山寨版本。
+**官方发布渠道仅以下三处**，其他渠道获取的安装包与本项目无关：
+
+- **GitHub Releases（主渠道）**：https://github.com/askdfjh/airp-desktop/releases
+- **夸克网盘（镜像）**：https://pan.quark.cn/s/e61c6ce610ad 提取码：`5rjv`
+- **蓝奏云（镜像）**：https://wwbmc.lanzoup.com/b01eup1uib 密码：`b8ia`
+
+> [!WARNING]
+> 请仅从上述渠道获取安装包，警惕第三方转发、修改打包的山寨版本。下载后建议核对以下 SHA-256 校验值（与文件实际哈希一致即为官方原包）：
+
+| 文件 | SHA-256 |
+|---|---|
+| Narra_0.2.1_x64-setup.exe | `B13CC5C79984DBD741B6978A4EE34CD1810ED713BC05670480BD9C3B77B510FA` |
+| Narra_0.2.1_x64_zh-CN.msi | `163D603C3740F82CC2AEA5B7905AF9DB34EB6B6FA4F4B2861E37D8BF84BBFFC6` |
+| Narra_0.2.1_android-arm64-release.apk | `C6CC103A789AFBCA7F7B5C59BA947C3F09391A26CFB946EA93B65B61181756AE` |
+
+Windows 校验命令：`certutil -hashfile "文件路径" SHA256`
 
 ---
 
