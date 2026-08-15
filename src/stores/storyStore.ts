@@ -163,7 +163,9 @@ export const useStoryStore = create<StoryState>((set, get) => ({
           useSessionStore.getState().rename(sess.id, title);
         }
       }
-      if (!opts?.silent) useUIStore.getState().notify(`书名：${title}`);
+      if (!opts?.silent) {
+        useUIStore.getState().notify(error ? `${error}：${title}` : `书名：${title}`);
+      }
       return title;
     } catch (e) {
       console.error("[story] autoTitle failed:", e);
