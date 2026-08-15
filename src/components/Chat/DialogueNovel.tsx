@@ -168,19 +168,20 @@ export function DialogueNovel() {
     return () => clearTimeout(t);
   }, [highlightId]);
 
-  const handleSend = () => {
-    const text = inputValue.trim();
-    if (!text || streaming) return;
+  const emitUserTurn = (text: string) => {
+    const next = text.trim();
+    if (!next || streaming) return;
     const blocker = getSendBlocker();
     if (blocker) {
       notify(blocker, "settings");
       return;
     }
-    // 新轮次：清除重新生成锁定（若上次 regenerate 中断残留，避免误吞章节推进）
     regenerateLockRef.current = false;
     setInputValue("");
-    sendMessage(text);
+    sendMessage(next);
   };
+
+  const handleSend = () => emitUserTurn(inputValue);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -430,19 +431,8 @@ export function DialogueNovel() {
   }, [streaming, lastAssistantMsg?.id, lastAssistantMsg?.content]);
 
   const handleSuggest = (text: string) => {
-    if (!text.trim() || streaming) return;
-    const blocker = getSendBlocker();
-    if (blocker) {
-      notify(blocker, "settings");
-      return;
-    }
-    setInputValue(text.trim());
-    // 选择推荐后自动收回推荐条
     setSuggestBarOpen(false);
-    if (inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.scrollIntoView({ block: "nearest" });
-    }
+    emitUserTurn(text);
   };
 
   // Floating particles
@@ -878,7 +868,7 @@ export function DialogueNovel() {
               </svg>
             </div>
             {suggestBarOpen && (
-              <SuggestBar suggestions={suggestions} streaming={analysisPending} onPick={handleSuggest} />
+              <SuggestBar suggestions={suggestions} streaming={streaming || analysisPending} onPick={handleSuggest} />
             )}
           </div>
         )}
