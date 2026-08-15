@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useStoryStore } from "@/stores/storyStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useSessionStore } from "@/stores/sessionStore";
@@ -8,6 +8,7 @@ import {
   NarraPlus, NarraDraft, NarraSeek, NarraGrid, NarraRows,
   NarraSettings, NarraBookmark,
 } from "@/components/icons/NarraIcon";
+import { isPlaceholderTitle } from "@/lib/storyTitle";
 import type { Story } from "@/types";
 
 function relTime(ts?: number | null): string {
@@ -48,6 +49,20 @@ export function Bookshelf() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
+
+  const placeholderIds = stories.filter((s) => isPlaceholderTitle(s.title)).map((s) => s.id).join(",");
+  useEffect(() => {
+    if (!placeholderIds) return;
+    let cancelled = false;
+    const ids = placeholderIds.split(",");
+    (async () => {
+      for (const id of ids) {
+        if (cancelled) break;
+        await useStoryStore.getState().autoTitle(id, { silent: true });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [placeholderIds]);
 
   const last = useMemo(() => {
     return [...stories].filter((s) => s.lastOpenedAt).sort((a, b) => (b.lastOpenedAt ?? 0) - (a.lastOpenedAt ?? 0))[0] ?? null;
@@ -210,6 +225,7 @@ function BookMenu({ story, onClose, onRename, onDetail }: { story: Story; onClos
       <button onClick={() => { void st.openStory(story.id); onClose(); }}>继续</button>
       <button onClick={onDetail}>详情</button>
       <button onClick={onRename}>重命名</button>
+      <button onClick={() => { void st.autoTitle(story.id, { force: true }); onClose(); }}>取书名</button>
       <button onClick={() => { st.setPinned(story.id, !story.pinned); onClose(); }}>{story.pinned ? "取消置顶" : "置顶"}</button>
       <button onClick={() => { st.setStatus(story.id, story.status === "finished" ? "writing" : "finished"); onClose(); }}>
         {story.status === "finished" ? "继续写" : "标为完结"}

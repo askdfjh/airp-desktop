@@ -4,10 +4,13 @@ import {
   loadStories, loadTrashedStories, insertStory, updateStory,
   softDeleteStory, restoreStory, purgeStory,
 } from "@/lib/db";
+import { generateStoryTitle, isPlaceholderTitle } from "@/lib/storyTitle";
 import { useSessionStore } from "./sessionStore";
 import { useUIStore } from "./uiStore";
 import { useWorldStore } from "./worldStore";
 import { useGenerationStore } from "./generationStore";
+
+const titling = new Set<string>();
 
 interface StoryState {
   stories: Story[];
@@ -21,6 +24,7 @@ interface StoryState {
   createDraftStory: () => Promise<string>;
   addStory: (s: Story) => void;
   rename: (id: string, title: string) => void;
+  autoTitle: (id: string, opts?: { force?: boolean; silent?: boolean }) => Promise<string | null>;
   setPinned: (id: string, pinned: boolean) => void;
   setStatus: (id: string, status: Story["status"]) => void;
   patch: (id: string, fields: Partial<Story>) => void;
@@ -78,6 +82,7 @@ export const useStoryStore = create<StoryState>((set, get) => ({
       useGenerationStore.getState().setActivePreset(story.generationPresetId);
     }
     useUIStore.getState().setAppPhase("reading");
+    void get().autoTitle(id, { silent: true });
   },
 
   startNewAdventure: () => {
@@ -111,6 +116,36 @@ export const useStoryStore = create<StoryState>((set, get) => ({
   addStory: (s) => set((st) => ({ stories: [s, ...st.stories], activeStoryId: s.id })),
 
   rename: (id, title) => get().patch(id, { title, updatedAt: Date.now() }),
+
+  autoTitle: async (id, opts) => {
+    const story = get().stories.find((s) => s.id === id);
+    if (!story) return null;
+    if (!opts?.force && !isPlaceholderTitle(story.title)) return null;
+    if (titling.has(id)) return null;
+    titling.add(id);
+    try {
+      const title = await generateStoryTitle(story, { allowMetaOnly: !!opts?.force });
+      if (!title || title === story.title) {
+        if (!opts?.silent) useUIStore.getState().notify("取书名失败，请稍后再试");
+        return null;
+      }
+      get().rename(id, title);
+      const sessions = useSessionStore.getState().sessions.filter((s) => s.storyId === id);
+      for (const sess of sessions) {
+        if (isPlaceholderTitle(sess.title) || sess.title === story.title) {
+          useSessionStore.getState().rename(sess.id, title);
+        }
+      }
+      if (!opts?.silent) useUIStore.getState().notify(`书名：${title}`);
+      return title;
+    } catch (e) {
+      console.error("[story] autoTitle failed:", e);
+      if (!opts?.silent) useUIStore.getState().notify("取书名失败，请稍后再试");
+      return null;
+    } finally {
+      titling.delete(id);
+    }
+  },
 
   setPinned: (id, pinned) => get().patch(id, { pinned, updatedAt: Date.now() }),
 

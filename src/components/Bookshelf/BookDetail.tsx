@@ -12,6 +12,7 @@ export function BookDetail({ storyId, onClose }: { storyId: string; onClose: () 
   const sessions = useSessionStore((s) => s.sessions);
   const books = useWorldStore((s) => s.books);
   const [busy, setBusy] = useState(false);
+  const [titling, setTitling] = useState(false);
   const vols = useMemo(
     () => sessions.filter((s) => s.storyId === storyId).sort((a, b) => (a.chainIndex ?? 1) - (b.chainIndex ?? 1)),
     [sessions, storyId],
@@ -58,7 +59,23 @@ export function BookDetail({ storyId, onClose }: { storyId: string; onClose: () 
           </p>
           {story.synopsis && <p className="narra-detail-syn">{story.synopsis}</p>}
           <p className="narra-detail-wc">{story.wordCount > 0 ? `约 ${story.wordCount} 字` : "字数将在续写后累计"}</p>
-          <button className="narra-btn-primary" onClick={() => { void useStoryStore.getState().openStory(story.id); onClose(); }}>继续书写</button>
+          <div className="narra-detail-actions">
+            <button className="narra-btn-primary" onClick={() => { void useStoryStore.getState().openStory(story.id); onClose(); }}>继续书写</button>
+            <button
+              className="narra-btn-ghost"
+              disabled={titling}
+              onClick={async () => {
+                setTitling(true);
+                try {
+                  await useStoryStore.getState().autoTitle(story.id, { force: true });
+                } finally {
+                  setTitling(false);
+                }
+              }}
+            >
+              {titling ? "取名中…" : "取书名"}
+            </button>
+          </div>
         </div>
       </div>
       <h2 className="narra-detail-h">卷次</h2>

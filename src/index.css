@@ -2755,6 +2755,9 @@ details > :not(summary) { margin-top: 6px; }
 }
 .narra-detail-hero { display: grid; grid-template-columns: 120px 1fr; gap: 18px; padding: 8px 20px 20px; }
 .narra-detail-hero h1 { margin: 0 0 6px; font-size: 22px; }
+.narra-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.narra-detail-actions .narra-btn-primary,
+.narra-detail-actions .narra-btn-ghost { flex: 1; min-width: 108px; }
 .narra-detail-sub, .narra-detail-wc, .narra-muted { color: var(--seed-muted); font-size: 12px; }
 .narra-detail-syn { font-size: 13px; line-height: 1.65; }
 .narra-detail-h { margin: 8px 20px 8px; font-size: 13px; letter-spacing: 0.16em; color: var(--seed-muted); font-weight: 600; }
