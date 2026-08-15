@@ -16,6 +16,7 @@ import { useMcpStore } from "@/stores/mcpStore";
 import { callTool as callMcpTool } from "@/lib/mcpClient";
 import { useUIStore } from "@/stores/uiStore";
 import { useWorldStore } from "@/stores/worldStore";
+import { useStoryStore } from "@/stores/storyStore";
 import { buildWorldContext, findMatchingEntries, pickRandomEventEntry } from "@/lib/worldBookEngine";
 import { useGenerationStore } from "@/stores/generationStore";
 import { usePromptInjectionStore } from "@/stores/promptInjectionStore";
@@ -122,6 +123,13 @@ export function useChat() {
   );
   const activeProvider = providers.find((p) => p.id === activeProviderId);
   const activeWorldBook = useWorldStore((s) => s.activeBook);
+  const storyBoundBook = useStoryStore((s) => {
+    const sid = s.activeStoryId;
+    const story = sid ? s.stories.find((x) => x.id === sid) : null;
+    if (!story?.worldBookId) return null;
+    return useWorldStore.getState().books.find((b) => b.id === story.worldBookId) || null;
+  });
+  const worldBookForChat = storyBoundBook ?? activeWorldBook;
   const [sessionCards, setSessionCards] = useState<LoadedExtractedCard[]>([]);
   // 父卷消息缓存（续集触发式注入用：切换会话时预加载）
   const parentMessagesRef = useRef<Message[]>([]);
@@ -325,12 +333,12 @@ export function useChat() {
         }
         result.push({ role: "system", content: joined });
       }
-      if (!isBlankSession && activeWorldBook) {
+      if (!isBlankSession && worldBookForChat) {
         const recentContext = [
           ...hist.slice(-2).map((m) => m.content),
           lastUserContent,
         ].join("\n");
-        const world = buildWorldContext(activeWorldBook, recentContext);
+        const world = buildWorldContext(worldBookForChat, recentContext);
         if (world.text) {
           result.push({ role: "system", content: world.text });
         }
@@ -437,7 +445,7 @@ export function useChat() {
       }
       return result;
     },
-    [activeSession, activeWorldBook, activeGenPreset, activeInjections, sessionCards, isBlankSession],
+    [activeSession, worldBookForChat, activeGenPreset, activeInjections, sessionCards, isBlankSession],
   );
 
   // 格式分析（独立请求）：按设置解析执行模型 → analyzeScene → 更新消息内存 + 入库。
@@ -674,7 +682,7 @@ export function useChat() {
         })();
       });
     },
-    [activeModel, activeProvider, activeSession, activeWorldBook, activeGenPreset, isBlankSession, runSceneAnalysis],
+    [activeModel, activeProvider, activeSession, worldBookForChat, activeGenPreset, isBlankSession, runSceneAnalysis],
   );
 
   const sendMessage = useCallback(
@@ -698,14 +706,14 @@ export function useChat() {
       // 每轮只抽一次（存 ref），buildApiMessages 消费注入；重试复用同一条
       pendingRandomEventRef.current = null;
       const uiState = useUIStore.getState();
-      if (uiState.randomWorldEventOn && !isBlankSession && activeWorldBook && activeWorldBook.entries.length > 0) {
+      if (uiState.randomWorldEventOn && !isBlankSession && worldBookForChat && worldBookForChat.entries.length > 0) {
         // user 消息计数（含本次正要发送的一条）：4 条 user 消息为一个节奏周期
         const userCount = messagesRef.current.filter((m) => m.role === "user").length + 1;
         const state = randomEventStateRef.current.get(sessionId) || { lastTurn: 0, pickedIds: [] };
         if (userCount - state.lastTurn >= 4) {
           const recentText = [...messagesRef.current.slice(-2).map((m) => m.content), content].join("\n");
-          const matchedIds = findMatchingEntries(activeWorldBook.entries, recentText).map((e) => e.id);
-          const entry = pickRandomEventEntry(activeWorldBook.entries, matchedIds, state.pickedIds);
+          const matchedIds = findMatchingEntries(worldBookForChat.entries, recentText).map((e) => e.id);
+          const entry = pickRandomEventEntry(worldBookForChat.entries, matchedIds, state.pickedIds);
           const next = { lastTurn: userCount, pickedIds: state.pickedIds };
           if (entry) {
             const line = `【世界事件·${entry.title}】${entry.content}（可将此设定自然引入本段剧情，作为新进展、转折或悬念；不必强行出现）`;

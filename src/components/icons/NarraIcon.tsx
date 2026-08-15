@@ -87,3 +87,76 @@ export const NarraWebSearch = (p: IconProps) => (
 export const NarraWorldInfo = (p: IconProps) => (
   <Svg {...p}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="8" r="0.9" fill="currentColor" stroke="none" /><path d="M12 11 L12 17" /></Svg>
 );
+
+/** 书架 — 三册并立 */
+export const NarraShelf = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3" y="6" width="5" height="14" rx="0.8" />
+    <rect x="9.5" y="4" width="5" height="16" rx="0.8" />
+    <rect x="16" y="7" width="5" height="13" rx="0.8" />
+    <path d="M2 21 L22 21" />
+  </Svg>
+);
+
+/** 返回 — 折线箭头 */
+export const NarraBack = (p: IconProps) => (
+  <Svg {...p}><path d="M15 5 L7 12 L15 19" /><path d="M7 12 L21 12" /></Svg>
+);
+
+/** 新建 — 细圈十字 */
+export const NarraPlus = (p: IconProps) => (
+  <Svg {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7 L12 17 M7 12 L17 12" /></Svg>
+);
+
+/** 置顶 — 针钉 */
+export const NarraPin = (p: IconProps) => (
+  <Svg {...p}><path d="M12 3 L15 8 L19 9 L14 13 L15 20 L12 17 L9 20 L10 13 L5 9 L9 8 Z" /></Svg>
+);
+
+/** 书签带 */
+export const NarraBookmark = (p: IconProps) => (
+  <Svg {...p}><path d="M7 3 L17 3 L17 21 L12 16 L7 21 Z" /></Svg>
+);
+
+/** 网格 */
+export const NarraGrid = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="4" y="4" width="6.5" height="6.5" rx="1" />
+    <rect x="13.5" y="4" width="6.5" height="6.5" rx="1" />
+    <rect x="4" y="13.5" width="6.5" height="6.5" rx="1" />
+    <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1" />
+  </Svg>
+);
+
+/** 列表 */
+export const NarraRows = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5 7 L19 7 M5 12 L19 12 M5 17 L19 17" />
+  </Svg>
+);
+
+/** 稿纸 */
+export const NarraDraft = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M7 3 L15 3 L19 7 L19 21 L7 21 Z" />
+    <path d="M15 3 L15 8 L19 8" />
+    <path d="M10 12 L16 12 M10 16 L14 16" />
+  </Svg>
+);
+
+/** 导出 — 向下折页 */
+export const NarraExport = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 4 L12 15" />
+    <path d="M8 12 L12 16 L16 12" />
+    <path d="M5 19 L19 19" />
+  </Svg>
+);
+
+/** 检索 */
+export const NarraSeek = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="10.5" cy="10.5" r="6" />
+    <path d="M15 15 L20 20" />
+  </Svg>
+);

@@ -44,7 +44,7 @@ interface UIState {
   toastAction: "settings" | null;
   notify: (msg: string, action?: "settings" | null) => void;
   // Onboarding state
-  appPhase: "onboarding" | "dialogue";
+  appPhase: "onboarding" | "dialogue" | "bookshelf" | "reading";
   onboardingStep: OnboardingStep;
   selectedWorldId: string | null;
   selectedWorldName: string | null;
@@ -76,7 +76,13 @@ interface UIState {
   setMcpActive: (v: boolean) => void;
   effectiveTheme: () => "dark" | "light";
   // Onboarding methods
-  setAppPhase: (phase: "onboarding" | "dialogue") => void;
+  setAppPhase: (phase: "onboarding" | "dialogue" | "bookshelf" | "reading") => void;
+  shelfView: "grid" | "list";
+  shelfSort: "opened" | "updated" | "title" | "created";
+  shelfGroup: "all" | "writing" | "finished" | "draft";
+  setShelfView: (v: "grid" | "list") => void;
+  setShelfSort: (v: "opened" | "updated" | "title" | "created") => void;
+  setShelfGroup: (v: "all" | "writing" | "finished" | "draft") => void;
   setOnboardingStep: (step: OnboardingStep) => void;
   setSelectedWorld: (id: string | null, name: string | null) => void;
   setSelectedTopicScheme: (id: string | null, name: string | null) => void;
@@ -178,6 +184,12 @@ export const useUIStore = create<UIState>()(
       },
       // Onboarding methods
       setAppPhase: (phase) => set({ appPhase: phase }),
+      shelfView: "grid",
+      shelfSort: "opened",
+      shelfGroup: "all",
+      setShelfView: (v) => set({ shelfView: v }),
+      setShelfSort: (v) => set({ shelfSort: v }),
+      setShelfGroup: (v) => set({ shelfGroup: v }),
       setOnboardingStep: (step) => set({ onboardingStep: step }),
       setSelectedWorld: (id, name) => set({ selectedWorldId: id, selectedWorldName: name }),
       setSelectedTopicScheme: (id, name) => set({ selectedTopicSchemeId: id, selectedTopicSchemeName: name }),
@@ -243,6 +255,9 @@ export const useUIStore = create<UIState>()(
         ensembleGuardOn: s.ensembleGuardOn,
         hiddenProgressOn: s.hiddenProgressOn,
         randomWorldEventOn: s.randomWorldEventOn,
+        shelfView: s.shelfView,
+        shelfSort: s.shelfSort,
+        shelfGroup: s.shelfGroup,
       }),
     },
   ),

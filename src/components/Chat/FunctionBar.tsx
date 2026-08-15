@@ -10,7 +10,7 @@ import { setToolsEnabled } from "@/hooks/useChat";
 import { setAppSetting } from "@/lib/db";
 import { runCompression, stopCompress, CONTEXT_WINDOW_TOKENS, COMPRESS_ALLOW_PCT } from "@/lib/contextCompress";
 import { isThinkingModel } from "@/providers/openai";
-import { SessionPopup } from "./SessionPopup";
+import { VolumeSheet } from "@/components/Bookshelf/VolumeSheet";
 import { SearchPanel } from "./SearchPanel";
 import { WorldInfoPanel } from "./WorldInfoPanel";
 import { registerBackHandler } from "@/lib/androidBack";
@@ -333,8 +333,7 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
           <NarraFont size={16} />
         </button>
 
-        {/* Session management */}
-        <button className="seed-func-btn" disabled={compressing} data-tooltip="会话管理" onClick={() => setShowSessionPopup(true)}>
+        <button className="seed-func-btn" disabled={compressing} data-tooltip="本书卷次" onClick={() => setShowSessionPopup(true)}>
           <NarraSession size={16} />
         </button>
 
@@ -482,7 +481,7 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
       {/* Session popup */}
       {sessionAnim.mounted && createPortal(
         <div className={`theme-${eff}`}>
-          <SessionPopup phase={sessionAnim.phase} onClose={() => setShowSessionPopup(false)} />
+          <VolumeSheet phase={sessionAnim.phase} onClose={() => setShowSessionPopup(false)} />
         </div>,
         document.body
       )}
