@@ -322,6 +322,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       kind: source.kind ?? "adventure",
       createdAt: now,
       updatedAt: now,
+      storyId: source.storyId,
       chainId: source.chainId || source.id,
       chainIndex: (source.chainIndex ?? 1) + 1,
       parentId: source.id,
