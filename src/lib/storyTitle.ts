@@ -19,6 +19,9 @@ const PLACEHOLDER_EXACT = new Set([
   "新故事",
 ]);
 
+const REASONING_MARK =
+  /用户现在|需要起|首先看|素材里|根据素材|根据下面|书名必须|只输出|严禁|合格例|网文责编|分析一下|所以书名|可以叫作/;
+
 /** 开局占位名：某某的冒险 / 未命名稿纸 / 扮演·角色 等 */
 export function isPlaceholderTitle(title: string | null | undefined): boolean {
   const t = (title || "").trim();
@@ -27,6 +30,7 @@ export function isPlaceholderTitle(title: string | null | undefined): boolean {
   if (/的冒险$/.test(t)) return true;
   if (/^扮演[·•]/.test(t)) return true;
   if (/^未命名/.test(t)) return true;
+  if (REASONING_MARK.test(t)) return true;
   return false;
 }
 
@@ -40,19 +44,41 @@ function stripThink(raw: string): string {
 function polishTitleLine(line: string): string {
   let t = line.trim();
   t = t.replace(/^[\s"'「」『』【】《》〈〉*#-]+|[\s"'「」『』【】《》〈〉]+$/g, "");
-  t = t.replace(/^(?:书名|标题|书名是|推荐书名|输出)[:：]\s*/, "");
+  t = t.replace(/^(?:书名|标题|书名是|推荐书名|输出|答案)[:：]\s*/, "");
   t = t.replace(/^\d+[\.、.)）]\s*/, "");
   t = t.replace(/\s+/g, "");
   if (/[。！？.!?…]$/.test(t)) t = t.slice(0, -1);
   return t;
 }
 
-/** 从模型输出里抠出一行书名 */
+export function isBadGeneratedTitle(title: string): boolean {
+  const t = (title || "").trim();
+  if (!t) return true;
+  if (t.length < 2 || t.length > 22) return true;
+  if (isPlaceholderTitle(t)) return true;
+  if (REASONING_MARK.test(t)) return true;
+  if (/[。！？!?…]/.test(t)) return true;
+  if (/[：:]/.test(t)) return true;
+  if (/^(建议|如下|可以叫|好的|当然|书名|标题)/.test(t)) return true;
+  if (/(的书名|这本书|起名|取名|命名)$/.test(t)) return true;
+  return false;
+}
+
+function quotedTitle(text: string): string | null {
+  const m = text.match(/[《「『【]([^》」』】]{2,22})[》」』】]/);
+  if (!m) return null;
+  const t = polishTitleLine(m[1]);
+  return isBadGeneratedTitle(t) ? null : t;
+}
+
+/** 从模型输出里抠出一行书名。推理句、复述素材一律丢弃。 */
 export function parseGeneratedTitle(raw: string): string | null {
   let t = stripThink(raw);
   if (!t) return null;
   const fence = t.match(/```(?:\w+)?\s*([\s\S]*?)```/);
   if (fence) t = fence[1].trim();
+  const quoted = quotedTitle(t);
+  if (quoted) return quoted;
   try {
     const parsed = JSON.parse(t) as unknown;
     if (parsed && typeof parsed === "object" && typeof (parsed as { title?: unknown }).title === "string") {
@@ -65,15 +91,10 @@ export function parseGeneratedTitle(raw: string): string | null {
   }
   const lines = t.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
   const candidates = lines.map(polishTitleLine).filter(Boolean);
-  for (const c of candidates) {
-    if (c.length < 2 || c.length > 28) continue;
-    if (isPlaceholderTitle(c)) continue;
-    if (/^(建议|如下|可以叫|好的|当然)/.test(c)) continue;
-    if (/[：:]/.test(c) && c.length > 20) continue;
-    return c;
-  }
-  const joined = polishTitleLine(candidates[0] || "");
-  if (joined.length >= 2) return joined.slice(0, 28);
+  const scored = candidates
+    .filter((c) => !isBadGeneratedTitle(c))
+    .sort((a, b) => a.length - b.length);
+  if (scored[0]) return scored[0];
   return null;
 }
 
@@ -161,29 +182,22 @@ export function buildTitlePrompt(input: {
     input.chapters.length && `已出现章节：${input.chapters.join("、")}`,
   ].filter(Boolean).join("\n");
 
-  return `你是网文责编。根据素材起一个书名，只输出书名本身。
+  return `你只负责起书名。回复里只能有书名这一行，禁止任何解释、分析、复述。
 
-书名必须是起点/番茄常见的网文风：把身份、金手指、处境或反差一次说清，让人想点进去。
-必须贴合下面素材里的具体情节与设定，禁止套用无关热门梗。
+要求：起点/番茄风，把身份或金手指或处境一次说清；必须贴合素材；8–16 个汉字；可含逗号或「后」。
 
-合格例（仅学句式，勿照搬）：
-- 开局觉醒SSS级天赋
-- 我在末世囤积百亿物资
-- 离婚后，前夫他慌了
-- 苟在宗门当咸鱼
-- 重生那年我亲手改了命
+像这样（学句式，勿照搬）：
+开局觉醒SSS级天赋
+我在末世囤积百亿物资
+离婚后，前夫他慌了
+苟在宗门当咸鱼
 
-严禁：
-- XX的冒险 / XX之旅 / XX传奇 / 命运的交织 / 光与影 / 当A遇见B
-- 书名号、引号、序号、副标题、解释、空行
-- 翻译腔、鸡汤、诗意空标题
+不要：XX的冒险、之旅、传奇、命运的交织、书名号、序号、副标题。
 
-长度 8–18 个汉字为宜，可含逗号或「后」。只输出一行书名。
-
-【素材】
+素材：
 ${meta || "（无元信息）"}
 
-${input.excerpt ? `【正文摘录】\n${clip(input.excerpt, 1600)}` : "【正文摘录】（尚少，请根据世界与题材起一个能当封面的开局书名）"}`;
+${input.excerpt ? `摘录：\n${clip(input.excerpt, 1200)}` : "正文尚少，按世界与题材起开局书名。"}`;
 }
 
 export async function generateStoryTitle(story: Story, opts?: { allowMetaOnly?: boolean }): Promise<{ title: string | null; error?: string }> {
@@ -210,7 +224,7 @@ export async function generateStoryTitle(story: Story, opts?: { allowMetaOnly?: 
   });
   const messages: ApiMessage[] = [
     { role: "system", content: prompt },
-    { role: "user", content: "给出书名。" },
+    { role: "user", content: "书名" },
   ];
 
   const controller = new AbortController();
@@ -225,12 +239,11 @@ export async function generateStoryTitle(story: Story, opts?: { allowMetaOnly?: 
       false,
       undefined,
       controller.signal,
-      { temperature: 0.7, max_tokens: 800 },
+      { temperature: 0.55, max_tokens: 256 },
     )) {
       if (controller.signal.aborted) break;
       if (chunk.done) break;
       out += chunk.content;
-      if (!chunk.content && chunk.thinking) out += chunk.thinking;
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

@@ -729,21 +729,25 @@ export async function deletePromptTemplate(id: string): Promise<void> {
 
 export async function initBuiltinTemplates(): Promise<void> {
   const builtins: Omit<PromptTemplate, "createdAt" | "updatedAt">[] = [
-    { id: "builtin-code-assistant", title: "程序员助手", content: "你是一位资深的程序员，擅长代码审查、Bug 排查、性能优化。请用简洁的方式回答，必要时给出代码示例。", category: "编程", isBuiltin: true },
-    { id: "builtin-pm-assistant", title: "产品经理", content: "你是一位经验丰富的产品经理，擅长需求分析、用户故事编写、PRD 文档整理。请用结构化的方式思考问题。", category: "商务", isBuiltin: true },
-    { id: "builtin-writer", title: "写作助手", content: "你是一位创意写作助手，擅长文章润色、文案创作、故事构思。请提供多种风格的写作建议。", category: "写作", isBuiltin: true },
-    { id: "builtin-translator", title: "翻译官", content: "你是一位专业的中英双语翻译。请先直译，再提供意译版本，并解释关键翻译选择。", category: "翻译", isBuiltin: true },
-    { id: "builtin-teacher", title: "老师", content: "你是一位耐心的老师，善于用通俗易懂的方式讲解复杂概念，鼓励式教学。", category: "教育", isBuiltin: true },
-    { id: "builtin-analyst", title: "数据分析师", content: "你是一位数据分析师，擅长数据解读、趋势识别、商业洞察。请用数据驱动的方式回答问题。", category: "商务", isBuiltin: true },
-    { id: "builtin-designer", title: "UI 设计师", content: "你是一位资深 UI 设计师，擅长交互设计、视觉规范、组件库搭建。请提供具体可落地的设计建议。", category: "设计", isBuiltin: true },
-    { id: "builtin-learner", title: "学习教练", content: "你是一位学习教练，帮助用户制定学习计划、拆解知识体系、推荐学习路径。", category: "教育", isBuiltin: true },
-    { id: "builtin-debate", title: "辩论对手", content: "你是一位思辨性的辩论对手，从反面角度挑战用户观点，帮助用户思考更全面。", category: "通用", isBuiltin: true },
-    { id: "builtin-summarizer", title: "摘要助手", content: "你是一位摘要助手，请将用户提供的内容总结为要点列表，不超过 5 条。", category: "通用", isBuiltin: true },
-    { id: "builtin-brainstorm", title: "头脑风暴", content: "你是一位头脑风暴引导者，请针对用户的主题给出 10 个创意点子，鼓励发散思维。", category: "通用", isBuiltin: true },
-    { id: "builtin-roast", title: "幽默吐槽", content: "你是一位幽默的朋友，请用调侃的方式回应用户，适度吐槽但保持友善。", category: "娱乐", isBuiltin: true },
+    { id: "tpl-opening", title: "开篇三章", content: "按网文开篇习惯改这段：第一章抛身份与冲突，第二章把金手指或处境说清，第三章给一个必须立刻做选择的钩子。不写说明，只出正文。", category: "写作", isBuiltin: true },
+    { id: "tpl-expand", title: "扩写场面", content: "把这段扩成可看的场面：补动作、环境、微表情和一句对白，不加水词，不总结。保持原视角。", category: "写作", isBuiltin: true },
+    { id: "tpl-trim", title: "压缩注水", content: "删掉重复解释和空抒情，保留冲突、信息差和动作。字数压到原来的六成左右，只出正文。", category: "写作", isBuiltin: true },
+    { id: "tpl-fight", title: "打戏调度", content: "把这段打戏写清楚：谁先动手、空间怎么变、代价是什么。少形容词，多动作与节奏。", category: "写作", isBuiltin: true },
+    { id: "tpl-dialogue", title: "对白医生", content: "重写对白，让每个人听起来不像同一个人。删掉解释剧情的台词，用潜台词推关系。", category: "写作", isBuiltin: true },
+    { id: "tpl-hook", title: "章末钩子", content: "给这一段补一个章末钩子：新信息、反转或倒计时，停在最想翻页的那一句。", category: "写作", isBuiltin: true },
+    { id: "tpl-voice", title: "人设纠偏", content: "按已有性格重写这段，禁止人物忽然变聪明或变温柔。先标出跑偏的两处，再给改正文。", category: "写作", isBuiltin: true },
+    { id: "tpl-logic", title: "降智检查", content: "找出这段里角色明知故问、忘记已知信息、或为了剧情变蠢的地方，列出并改一版。", category: "写作", isBuiltin: true },
   ];
-
+  const keep = new Set(builtins.map((b) => b.id));
   const now = Date.now();
+  const stale = await getDb().select<{ id: string }[]>(
+    "SELECT id FROM prompt_templates WHERE isBuiltin = 1;"
+  );
+  for (const row of stale) {
+    if (!keep.has(row.id)) {
+      await getDb().execute("DELETE FROM prompt_templates WHERE id = $1;", [row.id]);
+    }
+  }
   for (const b of builtins) {
     const existing = await getDb().select<PromptTemplateRow[]>(
       "SELECT id FROM prompt_templates WHERE id = $1 LIMIT 1;",
@@ -753,6 +757,11 @@ export async function initBuiltinTemplates(): Promise<void> {
       await getDb().execute(
         "INSERT INTO prompt_templates (id, title, content, category, isBuiltin, createdAt, updatedAt) VALUES ($1, $2, $3, $4, 1, $5, $6);",
         [b.id, b.title, b.content, b.category, now, now]
+      );
+    } else {
+      await getDb().execute(
+        "UPDATE prompt_templates SET title=$1, content=$2, category=$3, isBuiltin=1 WHERE id=$4;",
+        [b.title, b.content, b.category, b.id]
       );
     }
   }
@@ -890,19 +899,26 @@ export async function purgeExpiredCharacterCards(): Promise<number> {
 
 export async function initBuiltinCharacterCards(): Promise<void> {
   const builtins: Omit<CharacterCard, "createdAt" | "updatedAt">[] = [
-    { id: "cc-programmer", name: "程序员", description: "代码审查、Bug 排查、性能优化", systemPrompt: "你是一位资深的程序员，擅长代码审查、Bug 排查、性能优化。请用简洁的方式回答，必要时给出代码示例。", emoji: "💻", tags: ["编程", "技术"], isBuiltin: true },
-    { id: "cc-pm", name: "产品经理", description: "需求分析、用户故事、PRD 文档", systemPrompt: "你是一位经验丰富的产品经理，擅长需求分析、用户故事编写、PRD 文档整理。请用结构化的方式思考问题。", emoji: "📋", tags: ["商务", "管理"], isBuiltin: true },
-    { id: "cc-writer", name: "写作助手", description: "文章润色、文案创作、故事构思", systemPrompt: "你是一位创意写作助手，擅长文章润色、文案创作、故事构思。请提供多种风格的写作建议。", emoji: "✍️", tags: ["写作"], isBuiltin: true },
-    { id: "cc-translator", name: "翻译官", description: "中英双语翻译、本地化", systemPrompt: "你是一位专业的中英双语翻译。请先直译，再提供意译版本，并解释关键翻译选择。", emoji: "🌐", tags: ["翻译", "语言"], isBuiltin: true },
-    { id: "cc-teacher", name: "老师", description: "耐心讲解、鼓励式教学", systemPrompt: "你是一位耐心的老师，善于用通俗易懂的方式讲解复杂概念，鼓励式教学。", emoji: "👩‍🏫", tags: ["教育"], isBuiltin: true },
-    { id: "cc-designer", name: "UI 设计师", description: "交互设计、视觉规范、组件库", systemPrompt: "你是一位资深 UI 设计师，擅长交互设计、视觉规范、组件库搭建。请提供具体可落地的设计建议。", emoji: "🎨", tags: ["设计"], isBuiltin: true },
-    { id: "cc-analyst", name: "数据分析师", description: "数据解读、趋势识别、商业洞察", systemPrompt: "你是一位数据分析师，擅长数据解读、趋势识别、商业洞察。请用数据驱动的方式回答问题。", emoji: "📊", tags: ["数据", "商务"], isBuiltin: true },
-    { id: "cc-doctor", name: "健康顾问", description: "健康生活建议、运动营养", systemPrompt: "你是一位健康顾问，提供科学的运动、营养和生活方式建议。请给出实用、可操作的指导。", emoji: "🏥", tags: ["健康"], isBuiltin: true },
-    { id: "cc-chef", name: "厨师", description: "菜谱推荐、烹饪技巧", systemPrompt: "你是一位专业厨师，擅长菜谱推荐、烹饪技巧指导、食材搭配建议。请提供详细的步骤说明。", emoji: "👨‍🍳", tags: ["生活"], isBuiltin: true },
-    { id: "cc-lawyer", name: "法律顾问", description: "法律常识、合同审查", systemPrompt: "你是一位法律顾问，能解答常见法律问题、审查合同条款、提供维权建议。请给出专业、严谨的回答。", emoji: "⚖️", tags: ["法律"], isBuiltin: true },
+    { id: "cc-editor", name: "网文责编", description: "抓节奏、砍注水、盯钩子", systemPrompt: "你是网文责编。先说这段能不能让人翻下去，再给可改的三处：开头钩子、信息差、章末停点。少客套，不讲理论课。", emoji: "", tags: ["责编", "节奏"], isBuiltin: true },
+    { id: "cc-male", name: "男频执笔", description: "升级、打脸、金手指落地", systemPrompt: "你按男频网文习惯写：身份、实力差、兑现要快。少抒情，多动作和利害。不写解释性旁白。", emoji: "", tags: ["男频", "升级"], isBuiltin: true },
+    { id: "cc-female", name: "女频执笔", description: "关系张力、礼制与体面", systemPrompt: "你按女频网文习惯写：关系、体面、潜台词优先。人物不无故认怂也不无故原谅。对白要能听出身份。", emoji: "", tags: ["女频", "关系"], isBuiltin: true },
+    { id: "cc-villain", name: "反派导演", description: "让反派有自己的账", systemPrompt: "你只站在反派和对手的利益上想。他们不是为了衬托主角才行动。给出他们的下一步和不肯退的理由。", emoji: "", tags: ["反派", "对抗"], isBuiltin: true },
+    { id: "cc-dialogue", name: "对白医生", description: "拆掉说明书式台词", systemPrompt: "重写对白。每人一句听得出身份。禁止用台词解释设定。能用动作完成的不要说话。", emoji: "", tags: ["对白"], isBuiltin: true },
+    { id: "cc-hook", name: "章末钩子", description: "停在最想翻页处", systemPrompt: "只处理章末。补一句新信息、反转或倒计时，停住。不要总结本章，不要预告下一章目录。", emoji: "", tags: ["钩子"], isBuiltin: true },
+    { id: "cc-lore", name: "设定校对", description: "抓前后矛盾", systemPrompt: "你是设定校对。只找地名、境界、人物关系、已公开规则的矛盾，列出原文位置和改法。不改文风。", emoji: "", tags: ["设定"], isBuiltin: true },
+    { id: "cc-fight", name: "打戏调度", description: "空间、代价、先手", systemPrompt: "调度打戏：先手、位移、受伤、停手理由。少形容气势，多写身体和武器落到哪。", emoji: "", tags: ["打戏"], isBuiltin: true },
   ];
-
+  const keep = new Set(builtins.map((b) => b.id));
   const now = Date.now();
+  const stale = await getDb().select<{ id: string }[]>(
+    "SELECT id FROM character_cards WHERE isBuiltin = 1 AND deleted = 0;"
+  );
+  for (const row of stale) {
+    if (!keep.has(row.id)) {
+      await getDb().execute("DELETE FROM session_character_cards WHERE characterCardId = $1;", [row.id]);
+      await getDb().execute("DELETE FROM character_cards WHERE id = $1;", [row.id]);
+    }
+  }
   for (const b of builtins) {
     const existing = await getDb().select<CharacterCardRow[]>(
       "SELECT id FROM character_cards WHERE id = $1 LIMIT 1;",
@@ -912,6 +928,11 @@ export async function initBuiltinCharacterCards(): Promise<void> {
       await getDb().execute(
         "INSERT INTO character_cards (id, name, description, systemPrompt, emoji, tags, isBuiltin, createdAt, updatedAt) VALUES ($1, $2, $3, $4, $5, $6, 1, $7, $8);",
         [b.id, b.name, b.description, b.systemPrompt, b.emoji, JSON.stringify(b.tags), now, now]
+      );
+    } else {
+      await getDb().execute(
+        "UPDATE character_cards SET name=$1, description=$2, systemPrompt=$3, emoji=$4, tags=$5, isBuiltin=1, deleted=0 WHERE id=$6;",
+        [b.name, b.description, b.systemPrompt, b.emoji, JSON.stringify(b.tags), b.id]
       );
     }
   }
@@ -984,11 +1005,69 @@ export async function deleteCharacter(id: string): Promise<void> {
 }
 
 export const DEFAULT_CHARACTER_PRESETS: Omit<Character, "createdAt" | "updatedAt">[] = [
-  { id: "char-architect", name: "架构师", appearance: "", personality: "善于系统化思考，权衡取舍，先理清约束再给方案", background: "", tags: ["架构", "技术", "设计"], isBuiltin: true },
-  { id: "char-translator", name: "翻译", appearance: "", personality: "严谨细致，兼顾信达雅，主动说明关键译法取舍", background: "", tags: ["翻译", "语言", "本地化"], isBuiltin: true },
-  { id: "char-fullstack", name: "全栈程序员", appearance: "", personality: "务实高效，优先给出可运行的代码与清晰步骤", background: "", tags: ["编程", "开发", "调试"], isBuiltin: true },
-  { id: "char-docwriter", name: "文档工程师", appearance: "", personality: "结构分明，步骤可执行，术语统一", background: "", tags: ["文档", "写作", "规范"], isBuiltin: true },
-  { id: "char-analyst", name: "数据分析师", appearance: "", personality: "用数据说话，先给结论再给依据，图表解读到位", background: "", tags: ["数据", "分析", "洞察"], isBuiltin: true },
+  {
+    id: "char-luchen",
+    name: "陆沉舟",
+    appearance: "二十七八的面相，眉骨深、下颌利，常穿深色衬衫挽到小臂。左眉尾一道浅疤，笑时不明显，不笑时整个人像把收着的刀。",
+    personality: "外表从容，做事极狠。重生后不再为面子浪费时间，算账比谁都清楚。对弱者不嘲讽，对背叛者不过夜。说话少，承诺少，兑现快。",
+    background: "上一世把家业做到上市，被至亲联合做空，跳楼前看见合同上自己的签字。这一世他回到被赶出家门的那年冬天，口袋里只剩一张过期的银行卡和一整座城的旧账。",
+    tags: ["都市", "重生", "男频"],
+    isBuiltin: true,
+  },
+  {
+    id: "char-xiewuwang",
+    name: "谢无妄",
+    appearance: "青衫洗得发白，束发用一根普通木簪。身形清瘦，指节有常年握剑的茧。眉眼淡，像山雨未至时的天色。",
+    personality: "话少、礼数全、杀伐不手软。不信天命，只信剑在不在手里。对同门客气，对师尊敬而不从。最厌把人命写成「气运」。",
+    background: "青冥剑宗外门杂役，十五岁捡到一截无名残剑。宗门大比那夜，残剑认主，他一剑挑开内门长老的护体罡气。从此他的名字从名册末页被划到必须除掉那一栏。",
+    tags: ["仙侠", "剑修", "男频"],
+    isBuiltin: true,
+  },
+  {
+    id: "char-shenzhaoning",
+    name: "沈昭宁",
+    appearance: "鹅蛋脸，眉毛细而锋，常簪一支素银步摇。裙裳颜色克制，只有袖口绣暗纹。站着时背脊极直，像被家法量过。",
+    personality: "表面温婉知礼，心里有本账。不与人争闲气，只在该落子处落子。对下人宽，对对头准。极少哭，哭的时候一定有人要倒霉。",
+    background: "镇国公府嫡长女，生母早逝，继母掌家。十五岁被指婚给病痨世子，花轿未出府门，她已把陪嫁庄子的地契换成银票。她要活过这场婚事，也要让沈家知道嫡女不是棋子。",
+    tags: ["古言", "嫡女", "女频"],
+    isBuiltin: true,
+  },
+  {
+    id: "char-peiyanqing",
+    name: "裴晏清",
+    appearance: "身量高，肩线干净，常年深色大衣。五官冷，只有摘眼镜时眼尾会软一点。左手无名指有戒痕，已经很浅。",
+    personality: "工作里不近人情，生活里懒得解释。讨厌被安排，更讨厌被可怜。对真正走进来的人会笨拙地好，好到自己都觉得多余。",
+    background: "跨国律所最年轻的合伙人，三年前一场空难带走了订婚对象。旁人当他冷心，只有助理知道他每周仍去那家不会再有人赴约的店，点两杯美式。",
+    tags: ["现言", "高冷", "女频"],
+    isBuiltin: true,
+  },
+  {
+    id: "char-baiheng",
+    name: "白蘅",
+    appearance: "短发齐颌，穿旧风衣，袖口常沾黄符灰。眼睛很亮，黑眼圈也很深。耳垂一只素圈，据说是镇物。",
+    personality: "嘴上不正经，手上极稳。见鬼不慌，见活人撒谎才会烦。信规则不信神佛。对「被写进别人故事里的死魂」格外心软。",
+    background: "三代捉鬼世家的末代，族谱在她这一代只剩她一个。白天在旧物店修钟表，夜里接单。她不超度该走的，只送被留下来的。",
+    tags: ["灵异", "抓鬼", "通用"],
+    isBuiltin: true,
+  },
+  {
+    id: "char-guwantang",
+    name: "顾晚棠",
+    appearance: "军灰色剪裁利落，左眼覆盖薄金属义眼，虹膜偶尔闪淡蓝。锁骨下有接口疤。走路轻，像怕惊动甲板。",
+    personality: "纪律是外壳，里面是叛逃者的耐心。不崇拜帝国，也不浪漫化边境。对机甲比对人温柔。被问还回不回去时，他总说油还够。",
+    background: "帝国第三舰队王牌驾驶员，一次清剿后他看见平民舱的名单。他开着报废机甲叛出星域，如今在边境废港给人修腿、修船、修不想再打仗的心。",
+    tags: ["星际", "机甲", "男频"],
+    isBuiltin: true,
+  },
+  {
+    id: "char-jiangciye",
+    name: "姜辞夜",
+    appearance: "锦袍颜色偏暗，腰间一块冷玉。眉眼极好看，笑起来让人想靠近，靠近了才发觉温度不对。手指修长，适合写密信，也适合递鸩酒。",
+    personality: "把人心当棋盘，却对自己的棋子意外护短。不解释动机，不求谅解。若爱上谁，会先把退路烧掉。最怕的不是死，是被看穿以后仍被留下。",
+    background: "先帝遗诏里的辅政王，实则把新帝从藩王府扶上龙椅的人。朝堂称他国之柱石，后宫称他笑面罗刹。他要的从来不是皇位，是一个再也没人能把他当刀使的位置。",
+    tags: ["权谋", "反派", "通用"],
+    isBuiltin: true,
+  },
 ];
 
 const PRESET_IDS = new Set(DEFAULT_CHARACTER_PRESETS.map(p => p.id));
@@ -1169,6 +1248,18 @@ export interface SessionCharacterCardRow {
 }
 
 /** 加载某会话绑定的全部提取角色卡绑定（含角色卡信息，供注入用）。 */
+export async function loadExtractedCardsForStory(storyId: string): Promise<{ id: string; name: string; description: string; personality: string; scenario: string }[]> {
+  return getDb().select(
+    `SELECT DISTINCT cc.id, cc.name, cc.description, cc.personality, cc.scenario
+     FROM character_cards cc
+     INNER JOIN session_character_cards scc ON scc.characterCardId = cc.id
+     INNER JOIN sessions s ON s.id = scc.sessionId
+     WHERE s.storyId = $1 AND cc.deleted = 0
+     ORDER BY cc.name ASC;`,
+    [storyId]
+  );
+}
+
 export async function loadSessionCharacterCards(
   sessionId: string
 ): Promise<(SessionCharacterCardRow & { name: string; triggerWords: string; systemPrompt: string; description: string; tags: string })[]> {

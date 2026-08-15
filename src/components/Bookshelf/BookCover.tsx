@@ -1,4 +1,5 @@
 import { coverThemeFor, verticalTitle } from "@/lib/storyCover";
+import { artForStory } from "@/lib/worldArt";
 import type { Story } from "@/types";
 
 function Motif({ id }: { id: string }) {
@@ -29,9 +30,10 @@ function Motif({ id }: { id: string }) {
 export function BookCover({ story, compact }: { story: Story; compact?: boolean }) {
   const theme = coverThemeFor(story.worldBaseId, story.kind);
   const title = verticalTitle(story.title, compact ? 5 : 8);
+  const art = artForStory(story);
   return (
     <div
-      className={"narra-cover narra-cover--" + theme.id + (compact ? " narra-cover--compact" : "")}
+      className={"narra-cover narra-cover--" + theme.id + (compact ? " narra-cover--compact" : "") + (art ? " has-art" : "")}
       style={{
         "--cover-ink": theme.ink,
         "--cover-wash": theme.wash,
@@ -40,6 +42,7 @@ export function BookCover({ story, compact }: { story: Story; compact?: boolean 
       } as React.CSSProperties}
       aria-hidden
     >
+      {art && <img className="narra-cover-art" src={art} alt="" />}
       <div className="narra-cover-wash" />
       <div className="narra-cover-grain" />
       <div className="narra-cover-headband" />

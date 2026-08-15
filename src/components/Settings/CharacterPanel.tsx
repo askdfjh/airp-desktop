@@ -237,7 +237,7 @@ export function CharacterPanel() {
                     预设角色 · {builtinChars.length}
                   </div>
                   <div style={{ fontSize: "var(--fs-9)", color: "var(--seed-muted)", opacity: 0.7, padding: "0 2px", lineHeight: 1.5 }}>
-                    内置预设内容仅供演示与功能参考
+                    网文向模板，可直接应用为扮演会话
                   </div>
                   {builtinChars.map((c) => {
                     const isSelected = selectedChars.has(c.id);
@@ -254,7 +254,14 @@ export function CharacterPanel() {
                           </div>
                         </div>
                         {c.personality && (
-                          <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical" }}>{c.personality}</div>
+                          <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{c.personality}</div>
+                        )}
+                        {c.tags.length > 0 && (
+                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                            {c.tags.slice(0, 3).map((tag) => (
+                              <span key={tag} className="seed-tag-pill" style={{ fontSize: "var(--fs-9)", padding: "1px 7px", background: "var(--seed-accent-bg)", color: "var(--seed-accent)", fontWeight: 500 }}>{tag}</span>
+                            ))}
+                          </div>
                         )}
                       </div>
                     );

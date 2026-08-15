@@ -188,6 +188,10 @@ export function AppShell() {
         setShowRemoveAllConfirm(false);
         return true;
       }
+      if (s.readerSettingsOpen) {
+        s.setReaderSettingsOpen(false);
+        return true;
+      }
       if (s.settingsOpen) {
         s.setSettingsOpen(false);
         return true;
