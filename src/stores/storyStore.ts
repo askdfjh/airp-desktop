@@ -126,7 +126,7 @@ export const useStoryStore = create<StoryState>((set, get) => ({
     try {
       const title = await generateStoryTitle(story, { allowMetaOnly: !!opts?.force });
       if (!title || title === story.title) {
-        if (!opts?.silent) useUIStore.getState().notify("取书名失败，请稍后再试");
+        if (opts?.force) useUIStore.getState().notify("取书名失败，请稍后再试");
         return null;
       }
       get().rename(id, title);
@@ -140,7 +140,7 @@ export const useStoryStore = create<StoryState>((set, get) => ({
       return title;
     } catch (e) {
       console.error("[story] autoTitle failed:", e);
-      if (!opts?.silent) useUIStore.getState().notify("取书名失败，请稍后再试");
+      if (opts?.force) useUIStore.getState().notify("取书名失败，请稍后再试");
       return null;
     } finally {
       titling.delete(id);
