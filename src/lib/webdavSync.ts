@@ -83,7 +83,8 @@ export function computeGroupUpdatedAt(group: SyncGroup, data: unknown): number {
     ...(d.favorites ?? []).map((r) => Number(r.createdAt) || 0),
     ...(d.sessionCharacters ?? []).map((r) => Number(r.createdAt) || 0),
     ...(d.sessionCharacterCards ?? []).map((r) => Number(r.createdAt) || 0),
-    ...(d.characterArcs ?? []).map((r) => Number(r.createdAt) || 0)
+    ...(d.characterArcs ?? []).map((r) => Number(r.createdAt) || 0),
+    ...(d.stories ?? []).map((r) => Number(r.updatedAt) || 0)
   );
 }
 

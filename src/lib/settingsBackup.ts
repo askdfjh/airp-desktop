@@ -223,9 +223,11 @@ export function summarizeGroups(data: SettingsBackup, groups: BackupGroupKey[]):
       const messages = data.conversations?.messages?.length ?? 0;
       const trash = data.conversations?.sessions?.filter((s) => Number(s.deleted) === 1).length ?? 0;
       const cards = data.conversations?.sessionCharacterCards?.length ?? 0;
+      const stories = data.conversations?.stories?.length ?? 0;
       const trashText = trash > 0 ? `，含回收站 ${trash} 个` : "";
       const cardsText = cards > 0 ? `，提取角色卡 ${cards} 张` : "";
-      return `会话与消息（${sessions} 个会话 / ${messages} 条消息${trashText}${cardsText}）`;
+      const storiesText = stories > 0 ? `，故事 ${stories} 本` : "";
+      return `会话与消息（${sessions} 个会话 / ${messages} 条消息${trashText}${cardsText}${storiesText}）`;
     }
     return `${BACKUP_GROUP_LABELS[key]}（${countGroupItems(data, key)} 项）`;
   });

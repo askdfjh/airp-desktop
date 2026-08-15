@@ -1,5 +1,5 @@
 import Database from "@tauri-apps/plugin-sql";
-import type { Session, Message, PromptTemplate, CharacterCard, Character, CharacterArc, SessionCharacter, McpServer, WorldRule, WorldBook, WorldBookEntry } from "@/types";
+import type { Session, Message, PromptTemplate, CharacterCard, Character, CharacterArc, SessionCharacter, McpServer, WorldRule, WorldBook, WorldBookEntry, Story, StoryStatus } from "@/types";
 import { PRESET_WORLD_BOOKS } from "./preset_worldbooks";
 
 let db: Database | null = null;
@@ -266,6 +266,54 @@ export async function initDb(): Promise<void> {
       FOREIGN KEY (characterCardId) REFERENCES character_cards(id) ON DELETE CASCADE
     );
   `);
+  await db.execute(`ALTER TABLE sessions ADD COLUMN storyId TEXT;`).catch(() => {});
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS stories (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'adventure',
+      status TEXT NOT NULL DEFAULT 'writing',
+      cover TEXT,
+      groupId TEXT NOT NULL DEFAULT 'all',
+      pinned INTEGER NOT NULL DEFAULT 0,
+      worldBookId TEXT,
+      generationPresetId TEXT,
+      protagonistName TEXT,
+      topicSchemeId TEXT,
+      worldBaseId TEXT,
+      synopsis TEXT NOT NULL DEFAULT '',
+      tags TEXT NOT NULL DEFAULT '[]',
+      lastOpenedAt INTEGER,
+      lastVolumeId TEXT,
+      wordCount INTEGER NOT NULL DEFAULT 0,
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL,
+      deleted INTEGER NOT NULL DEFAULT 0,
+      deletedAt INTEGER
+    );
+  `);
+  await db.execute(`ALTER TABLE stories ADD COLUMN title TEXT NOT NULL DEFAULT '';`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN kind TEXT NOT NULL DEFAULT 'adventure';`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN status TEXT NOT NULL DEFAULT 'writing';`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN cover TEXT;`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN groupId TEXT NOT NULL DEFAULT 'all';`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN worldBookId TEXT;`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN generationPresetId TEXT;`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN protagonistName TEXT;`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN topicSchemeId TEXT;`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN worldBaseId TEXT;`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN synopsis TEXT NOT NULL DEFAULT '';`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN tags TEXT NOT NULL DEFAULT '[]';`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN lastOpenedAt INTEGER;`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN lastVolumeId TEXT;`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN wordCount INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN createdAt INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN deletedAt INTEGER;`).catch(() => {});
+  const { migrateStoriesOnInit } = await import("./storyMigrate");
+  await migrateStoriesOnInit();
 }
 
 function getDb(): Database {
@@ -299,6 +347,7 @@ interface SessionRow {
   contextIndex?: string | null;
   formatEnabled?: number | null;
   sessionEntries?: string | null;
+  storyId?: string | null;
 }
 
 interface MessageRow {
@@ -339,6 +388,7 @@ function rowToSession(r: SessionRow): Session {
     contextIndex: r.contextIndex ?? undefined,
     formatEnabled: r.formatEnabled === 1,
     sessionEntries: parseSessionEntries(r.sessionEntries),
+    storyId: r.storyId ?? undefined,
   };
 }
 
@@ -385,8 +435,8 @@ export async function loadSessions(): Promise<Session[]> {
 export async function insertSession(s: Session): Promise<void> {
   console.log("[db] insertSession", s.id, s.title);
   await getDb().execute(
-    "INSERT INTO sessions (id, title, systemPrompt, providerId, model, thinkingEnabled, createdAt, updatedAt, kind, contextSummary, summaryUpdatedAt, summaryCount, lastSummarizedMessageId, chainId, chainIndex, parentId, locked, archive, contextIndex, formatEnabled, sessionEntries) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21);",
-    [s.id, s.title, s.systemPrompt, s.providerId, s.model, s.thinkingEnabled ? 1 : 0, s.createdAt, s.updatedAt, s.kind === "blank" ? "blank" : "adventure", s.contextSummary ?? "", s.summaryUpdatedAt ?? null, s.summaryCount ?? 0, s.lastSummarizedMessageId ?? null, s.chainId ?? null, s.chainIndex ?? null, s.parentId ?? null, s.locked ? 1 : 0, s.archive ?? null, s.contextIndex ?? null, s.formatEnabled ? 1 : 0, s.sessionEntries ? JSON.stringify(s.sessionEntries) : "[]"]
+    "INSERT INTO sessions (id, title, systemPrompt, providerId, model, thinkingEnabled, createdAt, updatedAt, kind, contextSummary, summaryUpdatedAt, summaryCount, lastSummarizedMessageId, chainId, chainIndex, parentId, locked, archive, contextIndex, formatEnabled, sessionEntries, storyId) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22);",
+    [s.id, s.title, s.systemPrompt, s.providerId, s.model, s.thinkingEnabled ? 1 : 0, s.createdAt, s.updatedAt, s.kind === "blank" ? "blank" : "adventure", s.contextSummary ?? "", s.summaryUpdatedAt ?? null, s.summaryCount ?? 0, s.lastSummarizedMessageId ?? null, s.chainId ?? null, s.chainIndex ?? null, s.parentId ?? null, s.locked ? 1 : 0, s.archive ?? null, s.contextIndex ?? null, s.formatEnabled ? 1 : 0, s.sessionEntries ? JSON.stringify(s.sessionEntries) : "[]", s.storyId ?? null]
   );
 }
 
@@ -451,7 +501,7 @@ export async function hardDeleteSession(id: string): Promise<void> {
   await getDb().execute("DELETE FROM sessions WHERE id = $1;", [id]);
 }
 
-const SESSION_FIELDS = ["title", "systemPrompt", "providerId", "model", "thinkingEnabled", "updatedAt", "contextSummary", "summaryUpdatedAt", "summaryCount", "lastSummarizedMessageId", "chainId", "chainIndex", "parentId", "locked", "archive", "contextIndex", "formatEnabled", "sessionEntries"] as const;
+const SESSION_FIELDS = ["title", "systemPrompt", "providerId", "model", "thinkingEnabled", "updatedAt", "contextSummary", "summaryUpdatedAt", "summaryCount", "lastSummarizedMessageId", "chainId", "chainIndex", "parentId", "locked", "archive", "contextIndex", "formatEnabled", "sessionEntries", "storyId"] as const;
 type SessionUpdateField = (typeof SESSION_FIELDS)[number];
 
 const SESSION_BOOL_FIELDS = new Set(["locked", "thinkingEnabled", "formatEnabled"]);
@@ -1317,6 +1367,151 @@ export async function setAppSetting(key: string, value: string): Promise<void> {
   );
 }
 
+/* ---------- Stories（书架） ---------- */
+
+interface StoryRow {
+  id: string;
+  title: string;
+  kind: string;
+  status: string;
+  cover: string | null;
+  groupId: string;
+  pinned: number;
+  worldBookId: string | null;
+  generationPresetId: string | null;
+  protagonistName: string | null;
+  topicSchemeId: string | null;
+  worldBaseId: string | null;
+  synopsis: string;
+  tags: string;
+  lastOpenedAt: number | null;
+  lastVolumeId: string | null;
+  wordCount: number;
+  createdAt: number;
+  updatedAt: number;
+  deleted?: number;
+  deletedAt?: number | null;
+}
+
+function parseTags(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter((t) => typeof t === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function rowToStory(r: StoryRow): Story {
+  return {
+    id: r.id,
+    title: r.title,
+    kind: r.kind === "blank" ? "blank" : "adventure",
+    status: (r.status === "paused" || r.status === "finished" ? r.status : "writing") as StoryStatus,
+    cover: r.cover,
+    groupId: r.groupId || "all",
+    pinned: r.pinned === 1,
+    worldBookId: r.worldBookId,
+    generationPresetId: r.generationPresetId,
+    protagonistName: r.protagonistName,
+    topicSchemeId: r.topicSchemeId,
+    worldBaseId: r.worldBaseId,
+    synopsis: r.synopsis || "",
+    tags: parseTags(r.tags),
+    lastOpenedAt: r.lastOpenedAt,
+    lastVolumeId: r.lastVolumeId,
+    wordCount: r.wordCount || 0,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    deletedAt: r.deletedAt ?? undefined,
+  };
+}
+
+export async function loadStories(): Promise<Story[]> {
+  const rows = await getDb().select<StoryRow[]>(
+    "SELECT * FROM stories WHERE deleted = 0 ORDER BY pinned DESC, COALESCE(lastOpenedAt, updatedAt) DESC;"
+  );
+  return rows.map(rowToStory);
+}
+
+export async function loadTrashedStories(): Promise<Story[]> {
+  const rows = await getDb().select<StoryRow[]>(
+    "SELECT * FROM stories WHERE deleted = 1 ORDER BY deletedAt DESC;"
+  );
+  return rows.map(rowToStory);
+}
+
+function storyInsertValues(s: Story): (string | number | null)[] {
+  return [
+    s.id, s.title, s.kind, s.status, s.cover ?? null, s.groupId, s.pinned ? 1 : 0,
+    s.worldBookId ?? null, s.generationPresetId ?? null, s.protagonistName ?? null,
+    s.topicSchemeId ?? null, s.worldBaseId ?? null, s.synopsis ?? "",
+    JSON.stringify(s.tags ?? []), s.lastOpenedAt ?? null, s.lastVolumeId ?? null,
+    s.wordCount ?? 0, s.createdAt, s.updatedAt,
+  ];
+}
+
+const STORY_INSERT_COLS = `INSERT INTO stories (id, title, kind, status, cover, groupId, pinned, worldBookId, generationPresetId, protagonistName, topicSchemeId, worldBaseId, synopsis, tags, lastOpenedAt, lastVolumeId, wordCount, createdAt, updatedAt, deleted, deletedAt)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,0,NULL);`;
+
+export async function insertStory(s: Story): Promise<void> {
+  await getDb().execute(STORY_INSERT_COLS, storyInsertValues(s));
+}
+
+export async function insertStoryIfAbsent(s: Story): Promise<void> {
+  await getDb().execute(`INSERT OR IGNORE INTO stories (id, title, kind, status, cover, groupId, pinned, worldBookId, generationPresetId, protagonistName, topicSchemeId, worldBaseId, synopsis, tags, lastOpenedAt, lastVolumeId, wordCount, createdAt, updatedAt, deleted, deletedAt)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,0,NULL);`, storyInsertValues(s));
+}
+
+const STORY_FIELDS = [
+  "title", "kind", "status", "cover", "groupId", "pinned", "worldBookId",
+  "generationPresetId", "protagonistName", "topicSchemeId", "worldBaseId",
+  "synopsis", "tags", "lastOpenedAt", "lastVolumeId", "wordCount", "updatedAt",
+] as const;
+
+export async function updateStory(id: string, fields: Partial<Story>): Promise<void> {
+  const valid = STORY_FIELDS.filter((k) => k in fields);
+  if (valid.length === 0) return;
+  const sets = valid.map((k, i) => `${k} = $${i + 1}`).join(", ");
+  const values = valid.map((k) => {
+    const v = fields[k];
+    if (k === "pinned") return v ? 1 : 0;
+    if (k === "tags") return JSON.stringify(Array.isArray(v) ? v : []);
+    return v as string | number | null;
+  });
+  await getDb().execute(`UPDATE stories SET ${sets} WHERE id = $${valid.length + 1};`, [...values, id]);
+}
+
+export async function softDeleteStory(id: string): Promise<void> {
+  const now = Date.now();
+  await getDb().execute("UPDATE stories SET deleted = 1, deletedAt = $2, updatedAt = $2 WHERE id = $1;", [id, now]);
+  await getDb().execute("UPDATE sessions SET deleted = 1, deletedAt = $2 WHERE storyId = $1 AND deleted = 0;", [id, now]);
+}
+
+export async function restoreStory(id: string): Promise<void> {
+  await getDb().execute("UPDATE stories SET deleted = 0, deletedAt = NULL WHERE id = $1;", [id]);
+  await getDb().execute("UPDATE sessions SET deleted = 0, deletedAt = NULL WHERE storyId = $1 AND deleted = 1;", [id]);
+}
+
+export async function purgeExpiredStories(): Promise<number> {
+  const cutoff = Date.now() - TRASH_RETENTION_MS;
+  const rows = await getDb().select<{ id: string }[]>(
+    "SELECT id FROM stories WHERE deleted = 1 AND deletedAt IS NOT NULL AND deletedAt < $1;",
+    [cutoff]
+  );
+  for (const r of rows) {
+    await getDb().execute("DELETE FROM stories WHERE id = $1;", [r.id]);
+  }
+  return rows.length;
+}
+
+export async function purgeStory(id: string): Promise<void> {
+  const rows = await getDb().select<{ id: string }[]>("SELECT id FROM sessions WHERE storyId = $1;", [id]);
+  for (const r of rows) await purgeSession(r.id);
+  await getDb().execute("DELETE FROM stories WHERE id = $1;", [id]);
+}
+
 /* ---------- World Books ---------- */
 
 interface WorldBookRow {
@@ -1685,8 +1880,9 @@ const SETTINGS_TABLE_SELECTS: Record<keyof SettingsDbSnapshot, string> = {
 const NUMERIC_SETTING_COLUMNS = new Set([
   "uid", "order", "insertion_depth", "createdAt", "updatedAt",
   "isBuiltin", "isActive", "constant", "selective", "disable",
-  "deleted", "thinkingEnabled", "opening", "turnCount", "arcClearedAt",
+  "deleted", "deletedAt", "thinkingEnabled", "opening", "turnCount", "arcClearedAt",
   "isExtracted", "summaryUpdatedAt", "summaryCount",
+  "pinned", "wordCount", "lastOpenedAt",
 ]);
 
 function normalizeSettingValue(col: string, v: unknown): string | number | null {
@@ -1803,6 +1999,7 @@ export interface ConversationsSnapshot {
   sessionCharacters: Record<string, unknown>[];
   sessionCharacterCards: Record<string, unknown>[];
   characterArcs: Record<string, unknown>[];
+  stories?: Record<string, unknown>[];
 }
 
 /** 导出会话与消息等对话数据（原始行，含回收站状态与角色弧光）。 */
@@ -1815,6 +2012,7 @@ export async function snapshotConversations(): Promise<ConversationsSnapshot> {
     sessionCharacters: await q("SELECT * FROM session_characters;"),
     sessionCharacterCards: await q("SELECT * FROM session_character_cards;"),
     characterArcs: await q("SELECT * FROM character_arcs;"),
+    stories: await q("SELECT * FROM stories;"),
   };
 }
 
@@ -1822,9 +2020,17 @@ export async function snapshotConversations(): Promise<ConversationsSnapshot> {
 export async function restoreConversations(snap: ConversationsSnapshot): Promise<void> {
   const db = getDb();
 
+  const storiesCfg = {
+    columns: ["id", "title", "kind", "status", "cover", "groupId", "pinned", "worldBookId", "generationPresetId", "protagonistName", "topicSchemeId", "worldBaseId", "synopsis", "tags", "lastOpenedAt", "lastVolumeId", "wordCount", "createdAt", "updatedAt", "deleted", "deletedAt"],
+    defaults: { title: "未命名稿纸", kind: "adventure", status: "writing", cover: null, groupId: "all", pinned: 0, worldBookId: null, generationPresetId: null, protagonistName: null, topicSchemeId: null, worldBaseId: null, synopsis: "", tags: "[]", lastOpenedAt: null, lastVolumeId: null, wordCount: 0, createdAt: 0, updatedAt: 0, deleted: 0, deletedAt: null },
+  };
+  for (const row of snap.stories ?? []) {
+    await insertRowIgnore(db, "stories", storiesCfg.columns, row, storiesCfg.defaults);
+  }
+
   const sessionsCfg = {
-    columns: ["id", "title", "systemPrompt", "providerId", "model", "thinkingEnabled", "createdAt", "updatedAt", "deleted", "deletedAt", "kind", "contextSummary", "summaryUpdatedAt", "summaryCount", "lastSummarizedMessageId", "chainId", "chainIndex", "parentId", "locked", "archive", "contextIndex", "formatEnabled", "sessionEntries"],
-    defaults: { title: "会话", systemPrompt: "", providerId: "", model: "", thinkingEnabled: 1, createdAt: 0, updatedAt: 0, deleted: 0, deletedAt: null, kind: "adventure", contextSummary: null, summaryUpdatedAt: null, summaryCount: 0, lastSummarizedMessageId: null, chainId: null, chainIndex: null, parentId: null, locked: 0, archive: null, contextIndex: null, formatEnabled: 0, sessionEntries: "[]" },
+    columns: ["id", "title", "systemPrompt", "providerId", "model", "thinkingEnabled", "createdAt", "updatedAt", "deleted", "deletedAt", "kind", "contextSummary", "summaryUpdatedAt", "summaryCount", "lastSummarizedMessageId", "chainId", "chainIndex", "parentId", "locked", "archive", "contextIndex", "formatEnabled", "sessionEntries", "storyId"],
+    defaults: { title: "会话", systemPrompt: "", providerId: "", model: "", thinkingEnabled: 1, createdAt: 0, updatedAt: 0, deleted: 0, deletedAt: null, kind: "adventure", contextSummary: null, summaryUpdatedAt: null, summaryCount: 0, lastSummarizedMessageId: null, chainId: null, chainIndex: null, parentId: null, locked: 0, archive: null, contextIndex: null, formatEnabled: 0, sessionEntries: "[]", storyId: null },
   };
   for (const row of snap.sessions ?? []) {
     await insertRowIgnore(db, "sessions", sessionsCfg.columns, row, sessionsCfg.defaults);
@@ -1857,6 +2063,9 @@ export async function restoreConversations(snap: ConversationsSnapshot): Promise
   for (const row of snap.characterArcs ?? []) {
     await insertRowIgnore(db, "character_arcs", arcsCfg.columns, row, arcsCfg.defaults);
   }
+
+  const { repairMissingStoryIds } = await import("./storyMigrate");
+  await repairMissingStoryIds();
 }
 
 /* ---------- 同步合并导入（WebDAV 云端下载用，INSERT OR IGNORE 不覆盖现有） ---------- */
