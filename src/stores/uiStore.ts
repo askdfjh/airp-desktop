@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { HotTropeId } from "@/lib/popularTropes";
+import {
+  clampReaderPrefs,
+  DEFAULT_READER_PREFS,
+  readerFontSizeFromMessage,
+  type ReaderPrefs,
+} from "@/lib/readerPrefs";
 
 export type ThemeMode = "dark" | "light" | "system";
 export type MessageFontSize = "xs" | "sm" | "md" | "lg" | "xl";
@@ -22,6 +28,17 @@ interface UIState {
   settingsOpen: boolean;
   theme: ThemeMode;
   messageFontSize: MessageFontSize;
+  reader: ReaderPrefs;
+  readerSettingsOpen: boolean;
+  setReader: (p: Partial<ReaderPrefs>) => void;
+  setReaderSettingsOpen: (v: boolean) => void;
+  resetReader: () => void;
+  readerByStory: Record<string, ReaderPrefs>;
+  readerStoryId: string | null;
+  hydrateReaderForStory: (storyId: string | null) => void;
+  openingError: string | null;
+  lastOpeningMessage: string | null;
+  setOpeningError: (msg: string | null) => void;
   webSearchOn: boolean;
   mcpActive: boolean;
   // 格式分析执行模型（章节/场景/对话推荐独立请求所用模型）
@@ -126,6 +143,36 @@ export const useUIStore = create<UIState>()(
       settingsOpen: false,
       theme: "system",
       messageFontSize: "sm",
+      reader: DEFAULT_READER_PREFS,
+      readerSettingsOpen: false,
+      readerByStory: {},
+      readerStoryId: null,
+      setReader: (p) =>
+        set((s) => {
+          const reader = clampReaderPrefs({ ...s.reader, ...p });
+          const sid = s.readerStoryId;
+          return {
+            reader,
+            readerByStory: sid ? { ...s.readerByStory, [sid]: reader } : s.readerByStory,
+          };
+        }),
+      setReaderSettingsOpen: (v) => set({ readerSettingsOpen: v }),
+      resetReader: () =>
+        set((s) => {
+          const next = { ...s.readerByStory };
+          if (s.readerStoryId) delete next[s.readerStoryId];
+          return { reader: DEFAULT_READER_PREFS, readerByStory: next };
+        }),
+      hydrateReaderForStory: (storyId) =>
+        set((s) => ({
+          readerStoryId: storyId,
+          reader: storyId && s.readerByStory[storyId]
+            ? clampReaderPrefs(s.readerByStory[storyId])
+            : s.reader,
+        })),
+      openingError: null,
+      lastOpeningMessage: null,
+      setOpeningError: (msg) => set({ openingError: msg }),
       webSearchOn: false,
       mcpActive: false,
       formatModel: { mode: "follow" },
@@ -206,7 +253,12 @@ export const useUIStore = create<UIState>()(
       setSelectedTrope: (id, name) => set({ selectedTropeId: id, selectedTropeName: name }),
       setPlayerName: (name) => set({ playerName: name }),
       setOnboardingAudience: (a) => set({ onboardingAudience: a }),
-      setPendingOpeningMessage: (msg) => set({ pendingOpeningMessage: msg }),
+      setPendingOpeningMessage: (msg) =>
+        set((s) => ({
+          pendingOpeningMessage: msg,
+          lastOpeningMessage: msg ?? s.lastOpeningMessage,
+          openingError: msg ? null : s.openingError,
+        })),
       resetOnboarding: () =>
         set({
           onboardingStep: 1,
@@ -251,6 +303,8 @@ export const useUIStore = create<UIState>()(
         settingsOpen: s.settingsOpen,
         theme: s.theme,
         messageFontSize: s.messageFontSize,
+        reader: s.reader,
+        readerByStory: s.readerByStory,
         webSearchOn: s.webSearchOn,
         mcpActive: s.mcpActive,
         formatModel: s.formatModel,
@@ -272,10 +326,34 @@ export const useUIStore = create<UIState>()(
         delete raw.appPhase;
         delete raw.onboardingStep;
         delete raw.createMode;
+        delete raw.readerSettingsOpen;
+        delete raw.readerStoryId;
+        delete raw.openingError;
+        delete raw.lastOpeningMessage;
         for (const key of Object.keys(raw)) {
           if (key.startsWith("selected")) delete raw[key];
         }
-        return { ...currentState, ...raw };
+        const persistedReader = raw.reader;
+        delete raw.reader;
+        const persistedByStory = raw.readerByStory;
+        delete raw.readerByStory;
+        const migratedSize = readerFontSizeFromMessage(
+          typeof raw.messageFontSize === "string" ? raw.messageFontSize : undefined,
+        );
+        const reader = clampReaderPrefs({
+          ...DEFAULT_READER_PREFS,
+          ...(migratedSize ? { fontSize: migratedSize } : {}),
+          ...(persistedReader && typeof persistedReader === "object"
+            ? (persistedReader as Partial<ReaderPrefs>)
+            : {}),
+        });
+        const readerByStory: Record<string, ReaderPrefs> = {};
+        if (persistedByStory && typeof persistedByStory === "object") {
+          for (const [k, v] of Object.entries(persistedByStory as Record<string, unknown>)) {
+            if (v && typeof v === "object") readerByStory[k] = clampReaderPrefs(v as Partial<ReaderPrefs>);
+          }
+        }
+        return { ...currentState, ...raw, reader, readerByStory };
       },
     },
   ),

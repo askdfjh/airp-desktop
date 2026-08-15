@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useStoryStore } from "@/stores/storyStore";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useWorldStore } from "@/stores/worldStore";
 import { useUIStore } from "@/stores/uiStore";
 import { BookCover } from "./BookCover";
 import { exportStoryTxt } from "@/lib/storyExport";
+import { loadExtractedCardsForStory } from "@/lib/db";
 import { NarraBack, NarraExport } from "@/components/icons/NarraIcon";
 
 export function BookDetail({ storyId, onClose }: { storyId: string; onClose: () => void }) {
@@ -13,10 +14,19 @@ export function BookDetail({ storyId, onClose }: { storyId: string; onClose: () 
   const books = useWorldStore((s) => s.books);
   const [busy, setBusy] = useState(false);
   const [titling, setTitling] = useState(false);
+  const [roster, setRoster] = useState<{ id: string; name: string; description: string; personality: string; scenario: string }[]>([]);
   const vols = useMemo(
     () => sessions.filter((s) => s.storyId === storyId).sort((a, b) => (a.chainIndex ?? 1) - (b.chainIndex ?? 1)),
     [sessions, storyId],
   );
+  useEffect(() => {
+    let cancelled = false;
+    loadExtractedCardsForStory(storyId)
+      .then((rows) => { if (!cancelled) setRoster(rows); })
+      .catch(() => { if (!cancelled) setRoster([]); });
+    return () => { cancelled = true; };
+  }, [storyId]);
+
   if (!story) return null;
   const bookName = books.find((b) => b.id === story.worldBookId)?.name;
 
@@ -61,6 +71,17 @@ export function BookDetail({ storyId, onClose }: { storyId: string; onClose: () 
           <p className="narra-detail-wc">{story.wordCount > 0 ? `约 ${story.wordCount} 字` : "字数将在续写后累计"}</p>
           <div className="narra-detail-actions">
             <button className="narra-btn-primary" onClick={() => { void useStoryStore.getState().openStory(story.id); onClose(); }}>继续书写</button>
+            {story.kind !== "blank" && (
+              <button
+                className="narra-btn-ghost"
+                onClick={() => {
+                  useStoryStore.getState().startSameWorld(story.id);
+                  onClose();
+                }}
+              >
+                同世界再开一本
+              </button>
+            )}
             <button
               className="narra-btn-ghost"
               disabled={titling}
@@ -78,6 +99,16 @@ export function BookDetail({ storyId, onClose }: { storyId: string; onClose: () 
           </div>
         </div>
       </div>
+      <h2 className="narra-detail-h">角色名册</h2>
+      <ul className="narra-roster">
+        {roster.map((c) => (
+          <li key={c.id}>
+            <strong>{c.name}</strong>
+            <span>{c.personality || c.description || c.scenario || "尚无摘录"}</span>
+          </li>
+        ))}
+        {roster.length === 0 && <li className="narra-muted">整理长对话后抽出的角色会记在这里</li>}
+      </ul>
       <h2 className="narra-detail-h">卷次</h2>
       <ul className="narra-vol-list">
         {vols.map((v) => (

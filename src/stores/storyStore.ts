@@ -4,7 +4,9 @@ import {
   loadStories, loadTrashedStories, insertStory, updateStory,
   softDeleteStory, restoreStory, purgeStory,
 } from "@/lib/db";
-import { generateStoryTitle, isPlaceholderTitle } from "@/lib/storyTitle";
+import { generateStoryTitle, isBadGeneratedTitle, isPlaceholderTitle } from "@/lib/storyTitle";
+import { getTopicScheme } from "@/lib/topicSchemes";
+import { getWorldFoundation } from "@/lib/worldFoundations";
 import { useSessionStore } from "./sessionStore";
 import { useUIStore } from "./uiStore";
 import { useWorldStore } from "./worldStore";
@@ -21,6 +23,7 @@ interface StoryState {
   loadTrash: () => Promise<void>;
   openStory: (id: string) => Promise<void>;
   startNewAdventure: () => void;
+  startSameWorld: (id: string) => void;
   createDraftStory: () => Promise<string>;
   addStory: (s: Story) => void;
   rename: (id: string, title: string) => void;
@@ -81,8 +84,27 @@ export const useStoryStore = create<StoryState>((set, get) => ({
     if (story.generationPresetId) {
       useGenerationStore.getState().setActivePreset(story.generationPresetId);
     }
+    useUIStore.getState().hydrateReaderForStory(id);
     useUIStore.getState().setAppPhase("reading");
     void get().autoTitle(id, { silent: true });
+  },
+
+  startSameWorld: (id: string) => {
+    const story = get().stories.find((s) => s.id === id);
+    if (!story) return;
+    const ui = useUIStore.getState();
+    ui.resetOnboarding();
+    const topic = getTopicScheme(story.topicSchemeId);
+    const book = story.worldBookId
+      ? useWorldStore.getState().books.find((b) => b.id === story.worldBookId)
+      : null;
+    const foundation = getWorldFoundation(story.worldBaseId);
+    const worldId = story.worldBaseId || story.worldBookId || null;
+    const worldName = book?.name || foundation.label || story.worldBaseId || null;
+    ui.setSelectedWorld(worldId, worldName);
+    if (topic) ui.setSelectedTopicScheme(topic.id, topic.label);
+    ui.setOnboardingStep(topic || worldId ? 2 : 1);
+    ui.setAppPhase("onboarding");
   },
 
   startNewAdventure: () => {
@@ -126,7 +148,7 @@ export const useStoryStore = create<StoryState>((set, get) => ({
     if (opts?.force) useUIStore.getState().notify("正在取书名…");
     try {
       const { title, error } = await generateStoryTitle(story, { allowMetaOnly: true });
-      if (!title || title === story.title) {
+      if (!title || title === story.title || isBadGeneratedTitle(title)) {
         if (opts?.force) useUIStore.getState().notify(error ? `取书名失败：${error}` : "取书名失败，请稍后再试");
         return null;
       }

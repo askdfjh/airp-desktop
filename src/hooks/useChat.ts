@@ -108,6 +108,8 @@ export function useChat() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   // 格式分析（章节/场景/对话推荐独立请求）进行中
   const [analysingScene, setAnalysingScene] = useState(false);
+  const [sceneError, setSceneError] = useState<string | null>(null);
+  const lastSceneTargetRef = useRef<{ msgId: string; body: string } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
   const messagesRef = useRef<Message[]>([]);
@@ -477,6 +479,8 @@ export function useChat() {
       }
     }
 
+    lastSceneTargetRef.current = { msgId, body };
+    setSceneError(null);
     setAnalysingScene(true);
     try {
       const includeHidden = useUIStore.getState().hiddenProgressOn;
@@ -507,25 +511,29 @@ export function useChat() {
           console.error("[db] updateMessageTokenUsage failed:", e),
         );
       } else if (!result) {
+        const reason = analyzeError ?? "模型未返回有效内容";
+        setSceneError(reason);
         const now = Date.now();
         logError("useChat.runSceneAnalysis", "场景分析未产出结果", {
           model,
           provider: provider.baseUrl,
-          reason: analyzeError ?? "模型未返回有效内容",
+          reason,
         });
         if (now - lastSceneFailNotifyAt > 60_000) {
           lastSceneFailNotifyAt = now;
-          useUIStore.getState().notify(
-            analyzeError
-              ? `场景生成失败：${analyzeError}`
-              : "场景生成失败：模型服务未返回结果，已跳过场景信息",
-          );
+          useUIStore.getState().notify(`场景生成失败：${reason}`);
         }
       }
     } finally {
       setAnalysingScene(false);
     }
   }, []);
+
+  const retrySceneAnalysis = useCallback(() => {
+    const t = lastSceneTargetRef.current;
+    if (!t || analysingScene) return;
+    void runSceneAnalysis(t.msgId, t.body);
+  }, [analysingScene, runSceneAnalysis]);
 
   const startStream = useCallback(
     (sessionId: string, apiMessages: ApiMessage[], tools?: ToolDefinition[]): Promise<{ toolCalls?: ToolCall[]; content: string; thinking: string }> => {
@@ -694,10 +702,15 @@ export function useChat() {
       if (streaming) return;
       const blocker = getSendBlocker();
       if (blocker) {
+        if (opts?.opening) useUIStore.getState().setOpeningError(blocker);
         blockSend(blocker);
         return;
       }
-      if (!activeProvider || !activeModel || !activeSession) return;
+      if (!activeProvider || !activeModel || !activeSession) {
+        if (opts?.opening) useUIStore.getState().setOpeningError("还没准备好模型，开篇发不出去");
+        return;
+      }
+      if (opts?.opening) useUIStore.getState().setOpeningError(null);
       const sessionId = activeSession.id;
       activeSessionIdRef.current = sessionId;
 
@@ -754,7 +767,16 @@ export function useChat() {
       console.log("[tools] sendMessage: _toolsEnabled =", _toolsEnabled);
       const tools = _toolsEnabled ? await collectTools() : [];
       console.log("[tools] sendMessage: tools.length =", tools.length);
-      let result = await startStream(sessionId, apiMessages, tools.length > 0 ? tools : undefined);
+      let result;
+      try {
+        result = await startStream(sessionId, apiMessages, tools.length > 0 ? tools : undefined);
+      } catch (e) {
+        if (opts?.opening) {
+          const msg = e instanceof Error ? e.message : String(e);
+          useUIStore.getState().setOpeningError(msg || "开篇没有写出来");
+        }
+        throw e;
+      }
       console.log("[tools] first stream done, toolCalls:", result?.toolCalls?.length || 0, "contentLen:", result?.content?.length || 0);
 
       // Fallback: retry only if user query clearly needs real-time info but model didn't call tools
@@ -1203,6 +1225,8 @@ export function useChat() {
     toolRunning,
     loadingMessages,
     analysingScene,
+    sceneError,
+    retrySceneAnalysis,
     sendMessage,
     stopStreaming,
     clearMessages,

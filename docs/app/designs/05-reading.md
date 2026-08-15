@@ -12,7 +12,7 @@
 
 - 左：← 回书架（`setAppPhase("bookshelf")`，不要清 messages 以外的持久数据）
 - 中：当前 Story.title（无 story 则 session.title）
-- 右：可空，或「详情」（详情未做时可 no-op / 不画）
+- 右：阅读排版（`NarraAppearance`，打开书内设置底栏）
 
 不要用桌面 TitleBar 替代这条（安卓无窗口按钮）。
 
@@ -36,6 +36,18 @@
 - 去掉「新故事」「空白会话」全库入口（全库只留书架）
 
 可新组件 `VolumeSheet.tsx`，不要继续堆 `SessionPopup.tsx`。旧 SessionPopup 可留作死代码一版，或改造成 VolumeSheet。
+
+## 阅读排版（legado 阅读界面，不是书源）
+
+书内独立于应用主题，持久化在 `uiStore.reader`：
+
+- 日间 / 夜间
+- 背景：素纸、羊皮、护眼、青灰、跟随应用
+- 字体：宋 / 楷 / 黑 / 圆 / 系统
+- 字号、行距、段距、字距、边距
+- 正文加粗
+
+入口：顶栏右钮 + 底栏字体钮。安卓返回先关排版栏。不做翻页模式、朗读、简繁、自定义背景图。
 
 ## 验收
 

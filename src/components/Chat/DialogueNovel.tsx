@@ -1,11 +1,15 @@
-import { useRef, useEffect, useState, useCallback, useMemo } from "react";
+import { useRef, useEffect, useState, useCallback, useMemo, type CSSProperties } from "react";
 import { useChat, getSendBlocker } from "@/hooks/useChat";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useStoryStore } from "@/stores/storyStore";
-import { NarraBack } from "@/components/icons/NarraIcon";
+import { NarraBack, NarraAppearance } from "@/components/icons/NarraIcon";
 import { StreamingText } from "./StreamingText";
 import { FunctionBar } from "./FunctionBar";
+import { ReaderSettings } from "./ReaderSettings";
+import { ChapterSheet } from "./ChapterSheet";
+import { BookDetail } from "@/components/Bookshelf/BookDetail";
+import { readerBgAttr } from "@/lib/readerPrefs";
 import { ConfirmDialog } from "@/components/Layout/ConfirmDialog";
 import { MarkdownRender } from "./MarkdownRender";
 import { parseSceneAnalysis, type SceneAnalysis } from "@/lib/sceneAnalyzer";
@@ -16,7 +20,7 @@ import { fitTextarea } from "@/lib/autoGrow";
 import { ART } from "@/assets/art";
 
 export function DialogueNovel() {
-  const { messages, sendMessage, streaming, stopStreaming, regenerate, editAndSend, editMessage, deleteMessage, analysingScene } = useChat();
+  const { messages, sendMessage, streaming, stopStreaming, regenerate, editAndSend, editMessage, deleteMessage, analysingScene, sceneError, retrySceneAnalysis } = useChat();
   const activeSession = useSessionStore((s) =>
     s.activeId ? s.sessions.find((ss) => ss.id === s.activeId) : null
   );
@@ -24,7 +28,10 @@ export function DialogueNovel() {
   const targetMessageId = useSessionStore((s) => s.targetMessageId);
   const targetKeyword = useSessionStore((s) => s.targetKeyword);
   const clearTargetMessage = useSessionStore((s) => s.clearTargetMessage);
-  const { selectedWorldName, selectedCharacterName, selectedMode, messageFontSize, notify, setAppPhase } = useUIStore();
+  const { selectedWorldName, selectedCharacterName, selectedMode, notify, setAppPhase } = useUIStore();
+  const reader = useUIStore((s) => s.reader);
+  const setReaderSettingsOpen = useUIStore((s) => s.setReaderSettingsOpen);
+  const readerSettingsOpen = useUIStore((s) => s.readerSettingsOpen);
   const activeStory = useStoryStore((s) => s.stories.find((x) => x.id === (s.activeStoryId || activeSession?.storyId)));
   const [resumeChip, setResumeChip] = useState(true);
   const compressing = useUIStore((s) => s.compressing);
@@ -55,7 +62,22 @@ export function DialogueNovel() {
   const [settlingId, setSettlingId] = useState<string | null>(null);
   const lastStreamingRef = useRef(false);
 
-  // Android 返回手势：压缩确认框打开时先取消
+  // 空白会话（kind=blank，无角色设定）使用普通对话排版，冒险会话使用小说排版
+  const isBlank = (activeSession?.kind ?? "adventure") === "blank";
+  // 格式可用：冒险会话，或空白会话开启了「冒险格式」开关（formatEnabled：仅格式排版，不注入世界书/角色卡/文风）
+  const hasFormat = !isBlank || !!activeSession?.formatEnabled;
+
+  // Auto-scroll when at bottom
+  const [inputHidden, setInputHidden] = useState(false);
+  const [chromeTapHidden, setChromeTapHidden] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [tocOpen, setTocOpen] = useState(false);
+  const openingError = useUIStore((s) => s.openingError);
+  const lastOpeningMessage = useUIStore((s) => s.lastOpeningMessage);
+  const setPendingOpeningMessage = useUIStore((s) => s.setPendingOpeningMessage);
+  const setOpeningError = useUIStore((s) => s.setOpeningError);
+  const chromeHidden = inputHidden || chromeTapHidden;
+
   useEffect(() => {
     const unregister = registerBackHandler(() => {
       const prompt = useUIStore.getState().compressPrompt;
@@ -64,18 +86,22 @@ export function DialogueNovel() {
         callbacks.onCancel();
         return true;
       }
+      if (useUIStore.getState().readerSettingsOpen) {
+        useUIStore.getState().setReaderSettingsOpen(false);
+        return true;
+      }
+      if (detailOpen) {
+        setDetailOpen(false);
+        return true;
+      }
+      if (tocOpen) {
+        setTocOpen(false);
+        return true;
+      }
       return false;
     });
     return unregister;
-  }, []);
-
-  // 空白会话（kind=blank，无角色设定）使用普通对话排版，冒险会话使用小说排版
-  const isBlank = (activeSession?.kind ?? "adventure") === "blank";
-  // 格式可用：冒险会话，或空白会话开启了「冒险格式」开关（formatEnabled：仅格式排版，不注入世界书/角色卡/文风）
-  const hasFormat = !isBlank || !!activeSession?.formatEnabled;
-
-  // Auto-scroll when at bottom
-  const [inputHidden, setInputHidden] = useState(false);
+  }, [detailOpen, tocOpen]);
   const lastScrollTopRef = useRef(0);
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
@@ -228,9 +254,7 @@ export function DialogueNovel() {
     infoParts.push(selectedMode === "novel" ? "小说视角" : selectedMode === "player" ? "玩家视角" : "自定义");
   }
 
-  // Font size mapping
-  const fontSizeMap: Record<string, number> = { xs: 13, sm: 15, md: 17, lg: 19, xl: 21 };
-  const msgFontSize = fontSizeMap[messageFontSize] || 15;
+  const msgFontSize = reader.fontSize;
 
   // Filter visible messages (user + assistant only)
   const allVisible = messages.filter((m) => m.role !== "system");
@@ -238,6 +262,21 @@ export function DialogueNovel() {
   const openingMsg = allVisible.find((m) => m.opening);
   const visibleMessages = allVisible.filter((m) => !m.opening);
   const lastMsg = visibleMessages[visibleMessages.length - 1];
+  const chapterItems = useMemo(() => {
+    const seen = new Set<string>();
+    const items: { id: string; title: string }[] = [];
+    for (const m of visibleMessages) {
+      if (m.role !== "assistant" || !m.content) continue;
+      const title =
+        parseSceneAnalysis(m.sceneAnalysis || "")?.chapterTitle ||
+        parseSceneReply(m.content).chapterTitle ||
+        "";
+      if (!title || seen.has(title)) continue;
+      seen.add(title);
+      items.push({ id: m.id, title });
+    }
+    return items;
+  }, [visibleMessages]);
 
   // 版面数据（章节/场景/推荐）：读最新一条 assistant 消息的 sceneAnalysis（独立格式分析请求结果）
   const lastAssistantMsg = (() => {
@@ -425,19 +464,87 @@ export function DialogueNovel() {
   const historyTokens = useMemo(() => estimateHistoryTokens(messages), [messages]);
 
   return (
-    <div className="seed-dialogue">
+    <div
+      className="seed-dialogue"
+      data-reader-bg={readerBgAttr(reader)}
+      data-reader-font={reader.font}
+      data-reader-bold={reader.bold ? "1" : "0"}
+      style={{
+        ["--reader-size" as string]: `${reader.fontSize}px`,
+        ["--reader-lh" as string]: String(reader.lineHeight),
+        ["--reader-gap" as string]: `${reader.paragraphGap}px`,
+        ["--reader-ls" as string]: `${reader.letterSpacing}em`,
+        ["--reader-pad" as string]: `${reader.pagePadding}px`,
+        ["--reader-weight" as string]: reader.bold ? 600 : 400,
+      } as CSSProperties}
+    >
       <img className="seed-dialogue-paper" src={ART.paper} alt="" />
       <div className="narra-read-bar">
         <button className="narra-icon-btn" aria-label="回书架" onClick={() => setAppPhase("bookshelf")}>
           <NarraBack size={18} />
         </button>
-        <div className="narra-read-title">{activeStory?.title || activeSession?.title || "书写"}</div>
-        <span style={{ width: 40 }} />
+        <button
+          type="button"
+          className="narra-read-title narra-read-title-btn"
+          onClick={() => activeStory && setDetailOpen(true)}
+        >
+          {activeStory?.title || activeSession?.title || "书写"}
+        </button>
+        <div className="narra-read-actions">
+          <button
+            className={"narra-icon-btn" + (tocOpen ? " is-on" : "")}
+            aria-label="章节目录"
+            onClick={() => setTocOpen((v) => !v)}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <path d="M5 7 H19 M5 12 H15 M5 17 H19" />
+            </svg>
+          </button>
+          <button
+            className={"narra-icon-btn" + (readerSettingsOpen ? " is-on" : "")}
+            aria-label="阅读设置"
+            onClick={() => setReaderSettingsOpen(!readerSettingsOpen)}
+          >
+            <NarraAppearance size={18} />
+          </button>
+        </div>
       </div>
+      <ReaderSettings />
+      <ChapterSheet
+        open={tocOpen}
+        onClose={() => setTocOpen(false)}
+        items={chapterItems}
+        onJump={(id) => {
+          setTocOpen(false);
+          setHighlightId(id);
+          const el = document.querySelector(`[data-msg-id="${id}"]`) as HTMLElement | null;
+          el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }}
+      />
+      {detailOpen && activeStory && (
+        <div className="narra-read-detail">
+          <BookDetail storyId={activeStory.id} onClose={() => setDetailOpen(false)} />
+        </div>
+      )}
       {/* Atmospheric background particles */}
       <div className="seed-particles" style={{ position: "absolute" }}>
         {particles}
       </div>
+      {openingError && (
+        <div className="narra-opening-fail">
+          <span>{openingError}</span>
+          <button type="button" onClick={() => { setOpeningError(null); useUIStore.getState().setSettingsOpen(true); }}>去设置</button>
+          {lastOpeningMessage && (
+            <button type="button" onClick={() => { setOpeningError(null); setPendingOpeningMessage(lastOpeningMessage); }}>再试一次</button>
+          )}
+        </div>
+      )}
+      {sceneError && !analysingScene && (
+        <div className="narra-scene-fail">
+          <span>场景没分析出来：{sceneError}</span>
+          <button type="button" onClick={() => retrySceneAnalysis()}>重试</button>
+        </div>
+      )}
       {resumeChip && sceneAnalysisData?.chapterTitle && (
         <div className="narra-resume-chip">
           <span>上次写到：{sceneAnalysisData.chapterTitle}</span>
@@ -522,7 +629,18 @@ export function DialogueNovel() {
       )}
 
       {/* Scrollable content */}
-      <div className="seed-dialogue-scroll" ref={scrollRef} onScroll={handleScroll} style={{ paddingBottom: inputHidden ? 8 : 152 }}>
+      <div
+        className="seed-dialogue-scroll"
+        ref={scrollRef}
+        onScroll={handleScroll}
+        onClick={(e) => {
+          const t = e.target as HTMLElement;
+          if (t.closest("button, a, textarea, input, .seed-msg-actions, .narra-reader-sheet, .narra-read-bar, .narra-opening-fail, .narra-scene-fail")) return;
+          if (window.getSelection()?.toString()) return;
+          setChromeTapHidden((v) => !v);
+        }}
+        style={{ paddingBottom: chromeHidden ? 8 : 152 }}
+      >
         <div className="seed-dialogue-content">
           {/* Chapter divider：第 N 章 · 章节名（格式分析动态更新，仅冒险会话；无分析数据固定第一章） */}
           {visibleMessages.length > 0 && hasFormat && (
@@ -741,7 +859,7 @@ export function DialogueNovel() {
           left: 0,
           right: 0,
           bottom: 0,
-          transform: inputHidden ? "translateY(calc(100% + 2px))" : "none",
+          transform: chromeHidden ? "translateY(calc(100% + 2px))" : "none",
         }}
       >
         {/* 对话推荐条（输入框上方，可折叠）：与输入区同属底部浮层，一起隐藏/显示；
@@ -774,7 +892,7 @@ export function DialogueNovel() {
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
               onInput={(e) => fitTextarea(e.currentTarget, 160)}
-              onFocus={() => setInputHidden(false)}
+              onFocus={() => { setInputHidden(false); setChromeTapHidden(false); }}
               rows={1}
               disabled={streaming}
               style={{ resize: "none" }}

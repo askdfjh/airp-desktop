@@ -6,6 +6,8 @@ import { useUIStore } from "@/stores/uiStore";
 import { useWorldStore } from "@/stores/worldStore";
 import { inferWorldBase } from "@/lib/worldBaseMatch";
 import { pickMainEntries } from "./onboardingHelpers";
+import { artForTopic, artUrl } from "@/lib/worldArt";
+import { ART } from "@/assets/art";
 
 export function TopicSelect() {
   const {
@@ -297,35 +299,13 @@ export function TopicSelect() {
 
   return (
     <div>
-      <div style={{ textAlign: "center", marginBottom: 42 }}>
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "6px 16px",
-            background: "var(--seed-accent-bg)",
-            border: "1px solid color-mix(in srgb, var(--seed-accent) 15%, transparent)",
-            borderRadius: 999,
-            fontSize: 12,
-            fontWeight: 500,
-            color: "var(--seed-accent)",
-            letterSpacing: "0.05em",
-            textTransform: "uppercase",
-            marginBottom: 24,
-          }}
-        >
-          灵叙 Narra
-        </div>
-        <h1 style={{ fontSize: 40, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--seed-fg)", marginBottom: 12, lineHeight: 1.2 }}>
-          选择你想玩的题材
-        </h1>
-        <p style={{ fontSize: 16, color: "var(--seed-muted)", maxWidth: 520, margin: "0 auto" }}>
-          先选题材，系统会自动匹配世界与基础规则。
-        </p>
+      <div className="seed-topic-hero">
+        <em>开局</em>
+        <h1>选一页要写的世界</h1>
+        <p>题材决定气味。点进去，底座和规则会跟着落定。</p>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 26 }}>
+      <div className="seed-topic-tabs">
         {([
           { key: "all", label: "全部" },
           { key: "male", label: "男频" },
@@ -336,18 +316,8 @@ export function TopicSelect() {
           return (
             <button
               key={tab.key}
+              className={"seed-topic-tab" + (active ? " is-on" : "")}
               onClick={() => switchTab(tab.key as "all" | "male" | "female" | "custom")}
-              style={{
-                padding: "9px 24px",
-                borderRadius: 999,
-                fontSize: 13.5,
-                fontWeight: 500,
-                fontFamily: "inherit",
-                cursor: "pointer",
-                background: active ? "var(--seed-accent-bg)" : "transparent",
-                color: active ? "var(--seed-accent)" : "var(--seed-muted)",
-                border: active ? "1px solid color-mix(in srgb, var(--seed-accent) 40%, transparent)" : "1px solid var(--seed-border)",
-              }}
             >
               {tab.label}
               {tab.key === "custom" && <span style={{ opacity: 0.7, fontSize: 11, marginLeft: 4 }}>{customBooks.length}</span>}
@@ -362,13 +332,16 @@ export function TopicSelect() {
           customBooks.map((book) => {
             const isSelectedCard = customSelectedId === book.id;
             const baseId = inferWorldBase(book);
+            const art = artUrl(baseId);
             return (
               <div
                 key={book.id}
-                className={`seed-card ${isSelectedCard ? "seed-card--selected" : ""}`}
+                className={`seed-card seed-topic-card ${isSelectedCard ? "seed-card--selected" : ""}`}
                 onClick={() => chooseCustomBook(book.id)}
-                style={{ padding: "22px 20px", cursor: "pointer" }}
               >
+                {art && <img className="seed-topic-art" src={art} alt="" />}
+                <div className="seed-topic-veil" />
+                <div className="seed-topic-body">
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
                   <div className="seed-card-title" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{book.name}</div>
                   <span style={{ fontSize: 11, color: "var(--seed-muted)", flexShrink: 0 }}>{worldFoundationLabel(baseId)}</span>
@@ -390,25 +363,21 @@ export function TopicSelect() {
                     </span>
                   )}
                 </div>
+                </div>
               </div>
             );
           })
         ) : (
         <>
         {/* 随机题材卡固定第一位，锁定收缩时保持可见（与选中卡同行） */}
-        <div
-          className="seed-card seed-card--custom"
-          onClick={randomTopic}
-          style={{
-            padding: "22px 20px",
-            cursor: "pointer",
-            border: "1px dashed color-mix(in srgb, var(--seed-accent) 45%, transparent)",
-            background: "color-mix(in srgb, var(--seed-accent) 6%, transparent)",
-          }}
-        >
-          <div className="seed-card-title" style={{ marginBottom: 8 }}>随机题材</div>
-          <div className="seed-card-desc">
-            {audienceFilter === "all" ? "从全部题材里随机" : audienceFilter === "male" ? "只从男频题材里随机" : "只从女频题材里随机"}
+        <div className="seed-card seed-card--custom seed-topic-card seed-topic-card--random" onClick={randomTopic}>
+          <img className="seed-topic-art" src={ART.paper} alt="" />
+          <div className="seed-topic-veil" />
+          <div className="seed-topic-body">
+            <div className="seed-card-title" style={{ marginBottom: 8 }}>随手翻一页</div>
+            <div className="seed-card-desc">
+              {audienceFilter === "all" ? "从全部题材里随机落笔" : audienceFilter === "male" ? "只从男频题材里随机" : "只从女频题材里随机"}
+            </div>
           </div>
         </div>
 
@@ -419,12 +388,13 @@ export function TopicSelect() {
           const baseOptions = [topic.worldBaseId, ...topic.expandableWorldBaseIds];
           const isSelectedCard = selected === topic.id;
           const hidden = labelLock && !isSelectedCard;
+          const art = artForTopic(topic, isSelectedCard ? selectedBase : topic.worldBaseId);
           return (
             <div
               key={topic.id}
               data-topic={topic.id}
               ref={isSelectedCard ? selectedCardRef : undefined}
-              className={`seed-card ${isSelectedCard ? "seed-card--selected" : ""} ${hidden ? "seed-card--collapsed" : ""} ${labelLock && isSelectedCard ? "seed-card--locked" : ""}`}
+              className={`seed-card seed-topic-card ${isSelectedCard ? "seed-card--selected" : ""} ${hidden ? "seed-card--collapsed" : ""} ${labelLock && isSelectedCard ? "seed-card--locked" : ""}`}
               onClick={() => {
                 if (contractTimerRef.current) clearTimeout(contractTimerRef.current);
                 setContracted(false);
@@ -437,8 +407,10 @@ export function TopicSelect() {
                 setLabelLock(false);
                 void chooseTopic(topic);
               }}
-              style={{ padding: "22px 20px", cursor: "pointer" }}
             >
+              {art && <img className="seed-topic-art" src={art} alt="" />}
+              <div className="seed-topic-veil" />
+              <div className="seed-topic-body">
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
                 <div className="seed-card-title">{topic.label}</div>
                 <span style={{ fontSize: 11, color: "var(--seed-muted)" }}>
@@ -477,6 +449,7 @@ export function TopicSelect() {
                     </button>
                   );
                 })}
+              </div>
               </div>
             </div>
           );
