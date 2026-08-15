@@ -37,13 +37,14 @@ export function isPlaceholderTitle(title: string | null | undefined): boolean {
 function stripThink(raw: string): string {
   return (raw || "")
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<think>[\s\S]*$/gi, "")
     .replace(/<\/?think>/gi, "")
     .trim();
 }
 
 function polishTitleLine(line: string): string {
   let t = line.trim();
-  t = t.replace(/^[\s"'「」『』【】《》〈〉*#-]+|[\s"'「」『』【】《》〈〉]+$/g, "");
+  t = t.replace(/^[\s"'「」『』【】《》〈〉*#\->]+|[\s"'「」『』【】《》〈〉]+$/g, "");
   t = t.replace(/^(?:书名|标题|书名是|推荐书名|输出|答案)[:：]\s*/, "");
   t = t.replace(/^\d+[\.、.)）]\s*/, "");
   t = t.replace(/\s+/g, "");
@@ -54,48 +55,76 @@ function polishTitleLine(line: string): string {
 export function isBadGeneratedTitle(title: string): boolean {
   const t = (title || "").trim();
   if (!t) return true;
-  if (t.length < 2 || t.length > 22) return true;
+  if (t.length < 4 || t.length > 20) return true;
   if (isPlaceholderTitle(t)) return true;
   if (REASONING_MARK.test(t)) return true;
   if (/[。！？!?…]/.test(t)) return true;
-  if (/[：:]/.test(t)) return true;
-  if (/^(建议|如下|可以叫|好的|当然|书名|标题)/.test(t)) return true;
+  if (/因为|所以|但是|然后|首先|如果|可以|应该|需要|我们|这个|那个|素材|模型/.test(t)) return true;
+  if (/^(建议|如下|可以叫|好的|当然|书名|标题|嗯|哦)/.test(t)) return true;
   if (/(的书名|这本书|起名|取名|命名)$/.test(t)) return true;
+  if (!/[\u4e00-\u9fff]/.test(t)) return true;
   return false;
 }
 
 function quotedTitle(text: string): string | null {
-  const m = text.match(/[《「『【]([^》」』】]{2,22})[》」』】]/);
-  if (!m) return null;
-  const t = polishTitleLine(m[1]);
-  return isBadGeneratedTitle(t) ? null : t;
+  const matches = [...text.matchAll(/[《「『【]([^》」』】]{4,20})[》」』】]/g)];
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const t = polishTitleLine(matches[i][1]);
+    if (t && !isBadGeneratedTitle(t)) return t;
+  }
+  return null;
 }
 
-/** 从模型输出里抠出一行书名。推理句、复述素材一律丢弃。 */
+function titleFromJson(text: string): string | null {
+  const m = text.match(/"title"\s*:\s*"([^"]{2,24})"/);
+  if (!m) return null;
+  const t = polishTitleLine(m[1]);
+  return t && !isBadGeneratedTitle(t) ? t : null;
+}
+
+/** 从模型输出里抠书名。推理句丢掉，优先取最后一行像书名的短句。 */
 export function parseGeneratedTitle(raw: string): string | null {
   let t = stripThink(raw);
   if (!t) return null;
   const fence = t.match(/```(?:\w+)?\s*([\s\S]*?)```/);
   if (fence) t = fence[1].trim();
-  const quoted = quotedTitle(t);
-  if (quoted) return quoted;
+  const fromJson = titleFromJson(t);
+  if (fromJson) return fromJson;
   try {
     const parsed = JSON.parse(t) as unknown;
     if (parsed && typeof parsed === "object" && typeof (parsed as { title?: unknown }).title === "string") {
-      t = (parsed as { title: string }).title;
-    } else if (typeof parsed === "string") {
-      t = parsed;
+      const one = polishTitleLine((parsed as { title: string }).title);
+      if (one && !isBadGeneratedTitle(one)) return one;
     }
   } catch {
     /* 按纯文本处理 */
   }
-  const lines = t.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-  const candidates = lines.map(polishTitleLine).filter(Boolean);
-  const scored = candidates
-    .filter((c) => !isBadGeneratedTitle(c))
-    .sort((a, b) => a.length - b.length);
-  if (scored[0]) return scored[0];
+  const quoted = quotedTitle(t);
+  if (quoted) return quoted;
+  const labeled = t.match(/(?:书名|标题)\s*[:：是为]\s*[「『《"]?([^\n」』》"]{4,20})/);
+  if (labeled) {
+    const one = polishTitleLine(labeled[1]);
+    if (one && !isBadGeneratedTitle(one)) return one;
+  }
+  const lines = t.split(/\r?\n/).map((s) => polishTitleLine(s)).filter(Boolean);
+  const good = lines.filter((c) => !isBadGeneratedTitle(c));
+  if (good.length) return good[good.length - 1];
   return null;
+}
+
+export function composeFallbackTitle(story: Story): string {
+  const topic = getTopicScheme(story.topicSchemeId)?.label || "";
+  const name = (story.protagonistName || "").replace(/\s+/g, "");
+  const world = WORLD_FOUNDATIONS.find((f) => f.id === story.worldBaseId)?.label || "";
+  const genre = topic || world;
+  if (name && genre && name !== "主角") {
+    const a = `${name}${genre}开局`;
+    if (a.length <= 16) return a;
+    return `${genre}里的${name}`.slice(0, 16);
+  }
+  if (genre) return `${genre}开局我能翻盘`.slice(0, 16);
+  if (name && name !== "主角") return `${name}开局就翻盘`.slice(0, 16);
+  return "开局一把破剑走天下";
 }
 
 function clip(s: string, max: number): string {
@@ -182,23 +211,14 @@ export function buildTitlePrompt(input: {
     input.chapters.length && `已出现章节：${input.chapters.join("、")}`,
   ].filter(Boolean).join("\n");
 
-  return `你只负责起书名。回复里只能有书名这一行，禁止任何解释、分析、复述。
+  return `素材：
+${meta || "（无）"}
 
-要求：起点/番茄风，把身份或金手指或处境一次说清；必须贴合素材；8–16 个汉字；可含逗号或「后」。
-
-像这样（学句式，勿照搬）：
-开局觉醒SSS级天赋
-我在末世囤积百亿物资
-离婚后，前夫他慌了
-苟在宗门当咸鱼
-
-不要：XX的冒险、之旅、传奇、命运的交织、书名号、序号、副标题。
-
-素材：
-${meta || "（无元信息）"}
-
-${input.excerpt ? `摘录：\n${clip(input.excerpt, 1200)}` : "正文尚少，按世界与题材起开局书名。"}`;
+${input.excerpt ? `摘录：\n${clip(input.excerpt, 1000)}` : "正文尚少，按题材起开局书名。"}`;
 }
+
+const TITLE_SYSTEM =
+  '你是网文书名机。只输出一行 JSON：{"title":"八到十六个汉字的书名"}。不要解释，不要分析素材，不要复述任务。书名要像起点/番茄封面：身份或金手指一次说清。禁止「XX的冒险」「之旅」「传奇」。';
 
 export async function generateStoryTitle(story: Story, opts?: { allowMetaOnly?: boolean }): Promise<{ title: string | null; error?: string }> {
   const creds = resolveProvider();
@@ -214,7 +234,7 @@ export async function generateStoryTitle(story: Story, opts?: { allowMetaOnly?: 
   if (!excerpt && !opts?.allowMetaOnly) return { title: null, error: "正文还太少" };
   if (!excerpt && !story.protagonistName && !topic && !worldName) return { title: null, error: "缺少故事素材" };
 
-  const prompt = buildTitlePrompt({
+  const material = buildTitlePrompt({
     protagonist: story.protagonistName,
     worldName,
     topic,
@@ -222,41 +242,51 @@ export async function generateStoryTitle(story: Story, opts?: { allowMetaOnly?: 
     chapters,
     excerpt,
   });
-  const messages: ApiMessage[] = [
-    { role: "system", content: prompt },
-    { role: "user", content: "书名" },
-  ];
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(new Error("取书名超时")), 30_000);
-  let out = "";
-  try {
-    for await (const chunk of chatStream(
-      messages,
-      creds.model,
-      creds.baseUrl,
-      creds.apiKey,
-      false,
-      undefined,
-      controller.signal,
-      { temperature: 0.55, max_tokens: 256 },
-    )) {
-      if (controller.signal.aborted) break;
-      if (chunk.done) break;
-      out += chunk.content;
+  const ask = async (user: string): Promise<string> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new Error("取书名超时")), 45_000);
+    let content = "";
+    let thinking = "";
+    try {
+      for await (const chunk of chatStream(
+        [
+          { role: "system", content: TITLE_SYSTEM },
+          { role: "user", content: user },
+        ] as ApiMessage[],
+        creds.model,
+        creds.baseUrl,
+        creds.apiKey,
+        false,
+        undefined,
+        controller.signal,
+        { temperature: 0.4, max_tokens: 800 },
+      )) {
+        if (controller.signal.aborted) break;
+        if (chunk.done) break;
+        content += chunk.content || "";
+        thinking += chunk.thinking || "";
+      }
+    } finally {
+      clearTimeout(timer);
     }
+    return parseGeneratedTitle(content) || parseGeneratedTitle(thinking) || "";
+  };
+
+  try {
+    let title = await ask(`${material}\n\n只输出 JSON，例如 {"title":"我在末世囤积百亿物资"}`);
+    if (!title) {
+      title = await ask(`${material}\n\n现在只写书名四个字到十六个字，不要其他字。`);
+    }
+    if (!title || isBadGeneratedTitle(title)) {
+      const fallback = composeFallbackTitle(story);
+      logError("storyTitle", "取书名走题材兜底", { topic, worldBase });
+      return { title: fallback, error: "模型没给可用书名，已用题材兜底" };
+    }
+    return { title };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     logError("storyTitle", "取书名请求失败", { model: creds.model, reason: msg });
-    return { title: null, error: msg };
-  } finally {
-    clearTimeout(timer);
+    return { title: composeFallbackTitle(story), error: msg };
   }
-
-  const title = parseGeneratedTitle(out);
-  if (!title) {
-    logError("storyTitle", "取书名无法解析", { head: out.slice(0, 200) });
-    return { title: null, error: out.trim() ? "模型返回的书名无法识别" : "模型未返回书名" };
-  }
-  return { title };
 }
