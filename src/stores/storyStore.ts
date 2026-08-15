@@ -87,10 +87,8 @@ export const useStoryStore = create<StoryState>((set, get) => ({
 
   createDraftStory: async () => {
     const now = Date.now();
-    const storyId = crypto.randomUUID();
-    const sessionId = crypto.randomUUID();
     const story: Story = {
-      id: storyId,
+      id: crypto.randomUUID(),
       title: "未命名稿纸",
       kind: "blank",
       status: "writing",
@@ -99,29 +97,15 @@ export const useStoryStore = create<StoryState>((set, get) => ({
       pinned: false,
       synopsis: "",
       tags: [],
-      lastVolumeId: sessionId,
       wordCount: 0,
       createdAt: now,
       updatedAt: now,
     };
     await insertStory(story);
     set((st) => ({ stories: [story, ...st.stories] }));
-    useSessionStore.getState().add({
-      id: sessionId,
-      title: "未命名稿纸",
-      systemPrompt: "",
-      providerId: "",
-      model: "",
-      thinkingEnabled: true,
-      kind: "blank",
-      createdAt: now,
-      updatedAt: now,
-      storyId,
-      chainId: storyId,
-      chainIndex: 1,
-    });
-    await get().openStory(storyId);
-    return storyId;
+    useSessionStore.getState().createBlankSession(story.id);
+    await get().openStory(story.id);
+    return story.id;
   },
 
   addStory: (s) => set((st) => ({ stories: [s, ...st.stories], activeStoryId: s.id })),
