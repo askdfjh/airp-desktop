@@ -5,7 +5,7 @@ import {
   softDeleteStory, restoreStory, purgeStory, purgeExpiredStories, loadMessages,
 } from "@/lib/db";
 import { countStoryChars } from "@/lib/storyExport";
-import { generateStoryTitle, isBadGeneratedTitle, isPlaceholderTitle } from "@/lib/storyTitle";
+import { composeLocalTitle, generateStoryTitle, isBadGeneratedTitle, isPlaceholderTitle } from "@/lib/storyTitle";
 import { getTopicScheme } from "@/lib/topicSchemes";
 import { getWorldFoundation } from "@/lib/worldFoundations";
 import { useSessionStore } from "./sessionStore";
@@ -151,9 +151,12 @@ export const useStoryStore = create<StoryState>((set, get) => ({
     titling.add(id);
     if (opts?.force) useUIStore.getState().notify("正在取书名…");
     try {
-      const { title, error } = await generateStoryTitle(story, { allowMetaOnly: true });
-      if (!title || title === story.title || isBadGeneratedTitle(title)) {
-        if (opts?.force) useUIStore.getState().notify(error ? `取书名失败：${error}` : "取书名失败，请稍后再试");
+      const { title: raw } = await generateStoryTitle(story, { allowMetaOnly: true, avoid: story.title });
+      const title = raw && !isBadGeneratedTitle(raw) && raw !== story.title
+        ? raw
+        : composeLocalTitle(story, story.title);
+      if (!title || title === story.title) {
+        if (opts?.force) useUIStore.getState().notify("换一个书名再试");
         return null;
       }
       get().rename(id, title);
@@ -164,7 +167,7 @@ export const useStoryStore = create<StoryState>((set, get) => ({
         }
       }
       if (!opts?.silent) {
-        useUIStore.getState().notify(error ? `${error}：${title}` : `书名：${title}`);
+        useUIStore.getState().notify(`书名：${title}`);
       }
       return title;
     } catch (e) {
