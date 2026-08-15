@@ -9,7 +9,7 @@ import { FunctionBar } from "./FunctionBar";
 import { ConfirmDialog } from "@/components/Layout/ConfirmDialog";
 import { MarkdownRender } from "./MarkdownRender";
 import { parseSceneAnalysis, type SceneAnalysis } from "@/lib/sceneAnalyzer";
-import type { SceneInfo } from "@/lib/sceneTemplate";
+import { parseSceneReply, type SceneInfo } from "@/lib/sceneTemplate";
 import { stopCompress, estimateHistoryTokens } from "@/lib/contextCompress";
 import { registerBackHandler } from "@/lib/androidBack";
 import { fitTextarea } from "@/lib/autoGrow";
@@ -257,7 +257,8 @@ export function DialogueNovel() {
   const sceneInfo = sceneAnalysisData
     ? { location: sceneAnalysisData.location ?? "", time: sceneAnalysisData.time ?? "", characters: sceneAnalysisData.characters ?? "", cause: sceneAnalysisData.cause ?? "" }
     : null;
-  const suggestions = sceneAnalysisData?.suggestions ?? [];
+  const templateSuggestions = lastAssistantMsg ? parseSceneReply(lastAssistantMsg.content).suggestions : [];
+  const suggestions = (sceneAnalysisData?.suggestions?.length ? sceneAnalysisData.suggestions : templateSuggestions);
   const hasSceneAnalysis = !!sceneAnalysisData;
 
   // 开局生成状态：已有开局消息且第一条 AI 回复尚未完成 → 显示「规则书生成中...」/「完成规划」

@@ -9,7 +9,6 @@ import type { Message, Story } from "@/types";
 import { useProviderStore } from "@/stores/providerStore";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useWorldStore } from "@/stores/worldStore";
-import { useUIStore } from "@/stores/uiStore";
 
 const PLACEHOLDER_EXACT = new Set([
   "新冒险",
@@ -31,9 +30,26 @@ export function isPlaceholderTitle(title: string | null | undefined): boolean {
   return false;
 }
 
+function stripThink(raw: string): string {
+  return (raw || "")
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<\/?think>/gi, "")
+    .trim();
+}
+
+function polishTitleLine(line: string): string {
+  let t = line.trim();
+  t = t.replace(/^[\s"'「」『』【】《》〈〉*#-]+|[\s"'「」『』【】《》〈〉]+$/g, "");
+  t = t.replace(/^(?:书名|标题|书名是|推荐书名|输出)[:：]\s*/, "");
+  t = t.replace(/^\d+[\.、.)）]\s*/, "");
+  t = t.replace(/\s+/g, "");
+  if (/[。！？.!?…]$/.test(t)) t = t.slice(0, -1);
+  return t;
+}
+
 /** 从模型输出里抠出一行书名 */
 export function parseGeneratedTitle(raw: string): string | null {
-  let t = (raw || "").trim();
+  let t = stripThink(raw);
   if (!t) return null;
   const fence = t.match(/```(?:\w+)?\s*([\s\S]*?)```/);
   if (fence) t = fence[1].trim();
@@ -47,16 +63,18 @@ export function parseGeneratedTitle(raw: string): string | null {
   } catch {
     /* 按纯文本处理 */
   }
-  t = t.split(/\r?\n/).map((s) => s.trim()).find(Boolean) || "";
-  t = t.replace(/^[\s"'「」『』【】《》〈〉]+|[\s"'「」『』【】《》〈〉]+$/g, "");
-  t = t.replace(/^(?:书名|标题|书名是|推荐书名)[:：]\s*/, "");
-  t = t.replace(/^\d+[\.、.)）]\s*/, "");
-  t = t.replace(/\s+/g, "");
-  if (/[。！？.!?…]$/.test(t)) t = t.slice(0, -1);
-  if (t.length < 2 || t.length > 24) return null;
-  if (isPlaceholderTitle(t)) return null;
-  if (/^(建议|如下|可以叫)/.test(t)) return null;
-  return t || null;
+  const lines = t.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  const candidates = lines.map(polishTitleLine).filter(Boolean);
+  for (const c of candidates) {
+    if (c.length < 2 || c.length > 28) continue;
+    if (isPlaceholderTitle(c)) continue;
+    if (/^(建议|如下|可以叫|好的|当然)/.test(c)) continue;
+    if (/[：:]/.test(c) && c.length > 20) continue;
+    return c;
+  }
+  const joined = polishTitleLine(candidates[0] || "");
+  if (joined.length >= 2) return joined.slice(0, 28);
+  return null;
 }
 
 function clip(s: string, max: number): string {
@@ -77,9 +95,14 @@ function chapterOf(m: Message): string {
 }
 
 async function collectExcerpt(story: Story): Promise<{ excerpt: string; chapters: string[] }> {
-  const vols = useSessionStore.getState().sessions
+  const all = useSessionStore.getState().sessions;
+  let vols = all
     .filter((s) => s.storyId === story.id)
     .sort((a, b) => (a.chainIndex ?? 1) - (b.chainIndex ?? 1));
+  if (vols.length === 0 && story.lastVolumeId) {
+    const one = all.find((s) => s.id === story.lastVolumeId);
+    if (one) vols = [one];
+  }
   const bags: Message[][] = [];
   const pick = vols.length <= 2 ? vols : [vols[0], vols[vols.length - 1]];
   for (const v of pick) bags.push(await loadMessages(v.id));
@@ -109,15 +132,13 @@ async function collectExcerpt(story: Story): Promise<{ excerpt: string; chapters
 
 function resolveProvider(): { baseUrl: string; apiKey: string; model: string } | null {
   const ps = useProviderStore.getState();
-  const fm = useUIStore.getState().formatModel;
-  let provider = ps.providers.find((p) => p.id === ps.activeProviderId);
-  let model = ps.activeModel;
-  if (fm?.mode === "custom") {
-    const cp = ps.providers.find((p) => p.id === fm.providerId);
-    if (cp && fm.model) {
-      provider = cp;
-      model = fm.model;
-    }
+  const session = useSessionStore.getState();
+  const active = session.activeId ? session.sessions.find((s) => s.id === session.activeId) : null;
+  let provider = ps.providers.find((p) => p.id === (active?.providerId || ps.activeProviderId));
+  let model = active?.model || ps.activeModel;
+  if (!provider || !model) {
+    provider = ps.providers.find((p) => p.id === ps.activeProviderId);
+    model = ps.activeModel;
   }
   if (!provider || !model || !provider.baseUrl || !provider.apiKey?.trim()) return null;
   if (ps.enabledProviders[provider.id] === false) return null;
@@ -165,9 +186,9 @@ ${meta || "（无元信息）"}
 ${input.excerpt ? `【正文摘录】\n${clip(input.excerpt, 1600)}` : "【正文摘录】（尚少，请根据世界与题材起一个能当封面的开局书名）"}`;
 }
 
-export async function generateStoryTitle(story: Story, opts?: { allowMetaOnly?: boolean }): Promise<string | null> {
+export async function generateStoryTitle(story: Story, opts?: { allowMetaOnly?: boolean }): Promise<{ title: string | null; error?: string }> {
   const creds = resolveProvider();
-  if (!creds) return null;
+  if (!creds) return { title: null, error: "没有可用的模型服务" };
 
   const { excerpt, chapters } = await collectExcerpt(story);
   const topic = getTopicScheme(story.topicSchemeId)?.label;
@@ -176,8 +197,8 @@ export async function generateStoryTitle(story: Story, opts?: { allowMetaOnly?: 
     : null;
   const worldBase = WORLD_FOUNDATIONS.find((f) => f.id === story.worldBaseId)?.label;
 
-  if (!excerpt && !opts?.allowMetaOnly) return null;
-  if (!excerpt && !story.protagonistName && !topic && !worldName) return null;
+  if (!excerpt && !opts?.allowMetaOnly) return { title: null, error: "正文还太少" };
+  if (!excerpt && !story.protagonistName && !topic && !worldName) return { title: null, error: "缺少故事素材" };
 
   const prompt = buildTitlePrompt({
     protagonist: story.protagonistName,
@@ -204,7 +225,7 @@ export async function generateStoryTitle(story: Story, opts?: { allowMetaOnly?: 
       false,
       undefined,
       controller.signal,
-      { temperature: 0.85, max_tokens: 64 },
+      { temperature: 0.7, max_tokens: 800 },
     )) {
       if (controller.signal.aborted) break;
       if (chunk.done) break;
@@ -214,7 +235,7 @@ export async function generateStoryTitle(story: Story, opts?: { allowMetaOnly?: 
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     logError("storyTitle", "取书名请求失败", { model: creds.model, reason: msg });
-    return null;
+    return { title: null, error: msg };
   } finally {
     clearTimeout(timer);
   }
@@ -222,6 +243,7 @@ export async function generateStoryTitle(story: Story, opts?: { allowMetaOnly?: 
   const title = parseGeneratedTitle(out);
   if (!title) {
     logError("storyTitle", "取书名无法解析", { head: out.slice(0, 200) });
+    return { title: null, error: out.trim() ? "模型返回的书名无法识别" : "模型未返回书名" };
   }
-  return title;
+  return { title };
 }
