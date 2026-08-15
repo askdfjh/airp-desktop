@@ -1,7 +1,7 @@
 {
     "name": "airp-desktop",
     "private": true,
-    "version": "0.2.1",
+    "version": "0.2.2",
     "type": "module",
     "scripts": {
         "dev": "vite",
@@ -36,11 +36,12 @@
         "@tauri-apps/cli": "^2",
         "@types/react": "^19",
         "@types/react-dom": "^19",
-        "@vitejs/plugin-react": "^4",
+        "@vitejs/plugin-react": "^4.7.0",
         "autoprefixer": "^10",
         "postcss": "^8",
         "tailwindcss": "^4",
-        "typescript": "^5"
+        "typescript": "^5",
+        "vite": "^4.5.14"
     },
     "license": "MIT"
 }

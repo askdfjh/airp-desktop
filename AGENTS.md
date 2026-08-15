@@ -19,6 +19,15 @@
 
 ## 安卓打包流程（重要）
 
+**每次打 APK 必须先升版本号**，否则手机上「应用信息」和书架顶栏都显示同一串 `0.2.x`，无法区分包。改这四处的同一版本：
+
+- `package.json` → `version`
+- `src-tauri/tauri.conf.json` → `version`
+- `src-tauri/Cargo.toml` / `Cargo.lock` 里 `airp-desktop` 的 `version`
+- `src-tauri/gen/android/app/tauri.properties`：`versionName` 同步，`versionCode` **必须 +1**（如 0.2.1→2001，0.2.2→2002）
+
+产物文件名带版本：`releases/Narra_<version>_android-arm64.apk`。
+
 **前端资源不是从 APK assets 加载的！** Tauri Android 的资源由 `generate_context!` 在**编译期嵌入 `.so`**（lib.rs 有注释），WebView 走 `Rust.handleRequest`（RustWebViewClient.kt 中 `withAssetLoader=false` 分支）。**改前端后必须重新编译 `.so`，光复制 assets 不生效**（这是"安卓端和桌面端不同步"的根因）。
 
 完整流程（在 src-tauri 目录）：
