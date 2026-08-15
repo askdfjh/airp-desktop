@@ -652,6 +652,10 @@ export function useChat() {
             if ((activeSession?.kind !== "blank" || activeSession?.formatEnabled) && !abortController.signal.aborted && finalContent.trim()) {
               void runSceneAnalysis(placeholderMsg.id, finalContent);
             }
+            if (!abortController.signal.aborted && finalContent.trim()) {
+              const storyId = useStoryStore.getState().activeStoryId || activeSession?.storyId;
+              if (storyId) void useStoryStore.getState().autoTitle(storyId);
+            }
             resolve({ content: finalContent, thinking: finalThinking });
           } catch (err: unknown) {
             if (err instanceof Error && err.name === "AbortError") {
