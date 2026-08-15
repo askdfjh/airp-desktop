@@ -4,7 +4,7 @@ import { useSessionStore } from "@/stores/sessionStore";
 import { useWorldStore } from "@/stores/worldStore";
 import { useUIStore } from "@/stores/uiStore";
 import { BookCover } from "./BookCover";
-import { exportStoryTxt } from "@/lib/storyExport";
+import { saveStoryTxt } from "@/lib/storyExport";
 import { loadExtractedCardsForStory } from "@/lib/db";
 import { NarraBack, NarraExport } from "@/components/icons/NarraIcon";
 
@@ -14,6 +14,10 @@ export function BookDetail({ storyId, onClose }: { storyId: string; onClose: () 
   const books = useWorldStore((s) => s.books);
   const [busy, setBusy] = useState(false);
   const [titling, setTitling] = useState(false);
+  const [includePlayer, setIncludePlayer] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [synDraft, setSynDraft] = useState<string | null>(null);
   const [roster, setRoster] = useState<{ id: string; name: string; description: string; personality: string; scenario: string }[]>([]);
   const vols = useMemo(
     () => sessions.filter((s) => s.storyId === storyId).sort((a, b) => (a.chainIndex ?? 1) - (b.chainIndex ?? 1)),
@@ -33,24 +37,24 @@ export function BookDetail({ storyId, onClose }: { storyId: string; onClose: () 
   const doExport = async () => {
     setBusy(true);
     try {
-      const text = await exportStoryTxt(story, false);
-      const { save } = await import("@tauri-apps/plugin-dialog");
-      const { writeTextFile } = await import("@tauri-apps/plugin-fs");
-      const path = await save({ defaultPath: `${story.title}.txt`, filters: [{ name: "Text", extensions: ["txt"] }] });
-      if (path) {
-        await writeTextFile(path, text);
-        useStoryStore.getState();
-      }
+      const how = await saveStoryTxt(story, includePlayer);
+      useUIStore.getState().notify(how === "copied" ? "已复制到剪贴板" : "已导出文稿");
     } catch (e) {
-      try {
-        await navigator.clipboard.writeText(await exportStoryTxt(story, false));
-        alert("已复制到剪贴板");
-      } catch {
-        alert("导出失败：" + (e instanceof Error ? e.message : String(e)));
-      }
+      useUIStore.getState().notify("导出失败：" + (e instanceof Error ? e.message : String(e)));
     } finally {
       setBusy(false);
     }
+  };
+
+  const commitTitle = () => {
+    const t = titleDraft.trim();
+    if (t && t !== story.title) useStoryStore.getState().rename(story.id, t);
+    setEditingTitle(false);
+  };
+  const commitSyn = () => {
+    if (synDraft === null) return;
+    useStoryStore.getState().patch(story.id, { synopsis: synDraft.trim(), updatedAt: Date.now() });
+    setSynDraft(null);
   };
 
   return (
@@ -63,12 +67,40 @@ export function BookDetail({ storyId, onClose }: { storyId: string; onClose: () 
       <div className="narra-detail-hero">
         <BookCover story={story} />
         <div>
-          <h1>{story.title}</h1>
+          {editingTitle ? (
+            <input
+              className="narra-rename"
+              value={titleDraft}
+              autoFocus
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={commitTitle}
+              onKeyDown={(e) => { if (e.key === "Enter") commitTitle(); if (e.key === "Escape") setEditingTitle(false); }}
+            />
+          ) : (
+            <h1 onClick={() => { setTitleDraft(story.title); setEditingTitle(true); }} style={{ cursor: "text" }}>{story.title}</h1>
+          )}
           <p className="narra-detail-sub">
             {[story.protagonistName, bookName, story.status === "finished" ? "完结" : "在写"].filter(Boolean).join(" · ")}
           </p>
-          {story.synopsis && <p className="narra-detail-syn">{story.synopsis}</p>}
+          {synDraft !== null ? (
+            <textarea
+              className="narra-syn-edit"
+              value={synDraft}
+              rows={3}
+              autoFocus
+              onChange={(e) => setSynDraft(e.target.value)}
+              onBlur={commitSyn}
+            />
+          ) : (
+            <p className="narra-detail-syn" onClick={() => setSynDraft(story.synopsis || "")} style={{ cursor: "text" }}>
+              {story.synopsis || "点此写一句简介"}
+            </p>
+          )}
           <p className="narra-detail-wc">{story.wordCount > 0 ? `约 ${story.wordCount} 字` : "字数将在续写后累计"}</p>
+          <label className="narra-export-opt">
+            <input type="checkbox" checked={includePlayer} onChange={(e) => setIncludePlayer(e.target.checked)} />
+            导出时保留玩家行动
+          </label>
           <div className="narra-detail-actions">
             <button className="narra-btn-primary" onClick={() => { void useStoryStore.getState().openStory(story.id); onClose(); }}>继续书写</button>
             {story.kind !== "blank" && (
@@ -95,6 +127,22 @@ export function BookDetail({ storyId, onClose }: { storyId: string; onClose: () 
               }}
             >
               {titling ? "取名中…" : "取书名"}
+            </button>
+            <button
+              className="narra-btn-ghost"
+              onClick={() => useStoryStore.getState().setStatus(story.id, story.status === "finished" ? "writing" : "finished")}
+            >
+              {story.status === "finished" ? "标为在写" : "标为完结"}
+            </button>
+            <button
+              className="narra-btn-ghost"
+              onClick={() => {
+                if (!confirm(`删除「${story.title}」？可在书架回收站恢复。`)) return;
+                useStoryStore.getState().remove(story.id);
+                onClose();
+              }}
+            >
+              删除
             </button>
           </div>
         </div>

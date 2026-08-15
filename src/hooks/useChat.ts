@@ -131,7 +131,9 @@ export function useChat() {
     if (!story?.worldBookId) return null;
     return useWorldStore.getState().books.find((b) => b.id === story.worldBookId) || null;
   });
-  const worldBookForChat = storyBoundBook ?? activeWorldBook;
+  const activeStoryId = useStoryStore((s) => s.activeStoryId);
+  // 有当前书时只信 Story.worldBookId，禁止回落到上一本的 activeBook（切书串世界）
+  const worldBookForChat = activeStoryId ? storyBoundBook : activeWorldBook;
   const [sessionCards, setSessionCards] = useState<LoadedExtractedCard[]>([]);
   // 父卷消息缓存（续集触发式注入用：切换会话时预加载）
   const parentMessagesRef = useRef<Message[]>([]);
@@ -662,7 +664,10 @@ export function useChat() {
             }
             if (!abortController.signal.aborted && finalContent.trim()) {
               const storyId = useStoryStore.getState().activeStoryId || activeSession?.storyId;
-              if (storyId) void useStoryStore.getState().autoTitle(storyId);
+              if (storyId) {
+                void useStoryStore.getState().autoTitle(storyId);
+                void useStoryStore.getState().recountWords(storyId);
+              }
             }
             resolve({ content: finalContent, thinking: finalThinking });
           } catch (err: unknown) {

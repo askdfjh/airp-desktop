@@ -56,3 +56,48 @@ export async function exportStoryTxt(story: Story, includePlayer = false): Promi
   for (const v of volumes) bags.push(await loadMessages(v.id));
   return buildStoryText(story, volumes, bags, includePlayer);
 }
+
+export function countStoryChars(messagesByVolume: Message[][]): number {
+  let n = 0;
+  for (const msgs of messagesByVolume) {
+    for (const m of msgs) {
+      if (m.opening || (m.role !== "user" && m.role !== "assistant")) continue;
+      const body = m.role === "assistant" ? (parseSceneReply(m.content || "").body || m.content || "") : (m.content || "");
+      n += body.replace(/\s+/g, "").length;
+    }
+  }
+  return n;
+}
+
+export async function saveStoryTxt(story: Story, includePlayer = false): Promise<"saved" | "copied"> {
+  const text = await exportStoryTxt(story, includePlayer);
+  const name = `${(story.title || "未命名").replace(/[\\/:*?"<>|]/g, "_").slice(0, 40)}.txt`;
+  try {
+    const { save } = await import("@tauri-apps/plugin-dialog");
+    const { writeTextFile } = await import("@tauri-apps/plugin-fs");
+    const path = await save({ defaultPath: name, filters: [{ name: "Text", extensions: ["txt"] }] });
+    if (path) {
+      await writeTextFile(path, text);
+      return "saved";
+    }
+  } catch {
+    /* 安卓选路径经常不可用 */
+  }
+  try {
+    const { writeTextFile, BaseDirectory } = await import("@tauri-apps/plugin-fs");
+    await writeTextFile(name, text, { baseDir: BaseDirectory.Download });
+    return "saved";
+  } catch {
+    /* 下载目录不可写时走剪贴板 */
+  }
+  if (typeof navigator.share === "function") {
+    try {
+      await navigator.share({ title: story.title, text });
+      return "saved";
+    } catch {
+      /* 用户取消分享 */
+    }
+  }
+  await navigator.clipboard.writeText(text);
+  return "copied";
+}
