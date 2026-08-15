@@ -644,6 +644,26 @@ button.ghost:hover { color:var(--seed-accent); }
 }
 
 /* 鈺愨晲鈺?ONBOARDING CARDS 鈺愨晲鈺?*/
+.seed-card-art {
+  display: block;
+  width: calc(100% + 48px);
+  height: 108px;
+  margin: -28px -24px 16px;
+  object-fit: cover;
+  pointer-events: none;
+}
+.seed-welcome-art, .narra-create-art, .seed-dialogue-paper {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; pointer-events: none;
+}
+.seed-welcome-art { opacity: 0.42; z-index: 0; }
+.narra-create-art { opacity: 0.22; z-index: 0; }
+.seed-dialogue-paper { opacity: 0.14; mix-blend-mode: soft-light; z-index: 0; }
+.narra-empty-art {
+  width: min(220px, 70vw); height: 160px; object-fit: cover;
+  border-radius: 12px; margin-bottom: 16px; opacity: 0.9;
+}
+
 .seed-card {
   position: relative;
   background: var(--seed-surface);
