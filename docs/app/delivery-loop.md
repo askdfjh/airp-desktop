@@ -1,121 +1,85 @@
-# APP 全自动交付回路
+# APP 交付回路（优化后）
 
 > 分支：`APP`  
-> 工作流：`.grok/workflows/app-delivery-loop.rhai`  
-> 产品规格：[`product-spec.md`](./product-spec.md)（总）· [`bookshelf-design.md`](./bookshelf-design.md)（缘起）· [`designs/`](./designs/)（分块）
+> 现行工作流：`.grok/workflows/app-ship-loop.rhai`  
+> 旧工作流：`.grok/workflows/app-delivery-loop.rhai`（**已退役**，启动即退出，不再改代码）
 
-本回路把「交付一个完整可用的 APP」拆成固定任务队列，每个任务走同一条无人值守流水线。设计意图写在这里；编排实现写在工作流里。人只看 `/workflows` 和最终报告。
-
----
-
-## 1. 回路在解决什么
-
-书架规格已经拍板。剩下的不是再开会，而是按任务把代码做完、审完、测完、修完、验完，再自动开下一个任务，直到 P0+薄 P1 可用。
-
-不用人在每个阶段点下一步。失败有上限重试；基础任务失败则停，避免在错误模型上继续盖楼。
+人只看 `/workflows` 和最终报告。同一时刻只允许一圈。
 
 ---
 
-## 2. 单任务状态机
+## 1. 旧回路为什么废了
+
+上一版按 10 个 P0/P1 任务从零走 Design→Plan→Execute→Review→Test→Fix→Verify。实际出了这些问题：
+
+| 问题 | 后果 |
+|---|---|
+| 同时起了 `app-delivery-loop` 和 `app-delivery-loop-2` | 两个实现 agent 抢同一工作区，互相覆盖 |
+| 不检查「这任务是不是已经做完」 | 书架做好后还在重做 `story-model` / `story-store-nav` / `bookshelf-ui` |
+| 每个任务都先 Design+Plan | 已完成功能仍烧掉大量预算，一圈十几个小时 |
+| Review 过严 → 必进 Fix | 已通过的代码被再改一轮，出现重复 commit |
+| 实现切片比已落地功能更窄 | `bookshelf-ui` 执行器要把搜索/长按/详情拆掉 |
+| 禁止 push、不打包 | 和「审完、测完、提交、打 APK、钉钉发给于翔」对不上 |
+
+旧队列（story-model … resume-context）代码已经在 `APP` 上。不要再开那条 10 任务循环。
+
+---
+
+## 2. 新回路（`app-ship-loop`）
+
+一次运行只做 **收口发版**，不再扫未完成任务清单。
 
 ```
-                ┌──────────┐
-                │  Design  │  只读：把总规格裁成本任务切片
-                └────┬─────┘
-                     ▼
-                ┌──────────┐
-                │   Plan   │  只读：步骤 + 验收 + 改哪些文件
-                └────┬─────┘
-                     ▼
-                ┌──────────┐
-                │ Execute  │  读写：按计划改代码，跑 tsc
-                └────┬─────┘
-                     ▼
-           ┌─────────┴─────────┐
-           ▼                   ▼
-     ┌──────────┐        ┌──────────┐
-     │  Review  │        │   Test   │  并行：规范/规格审查 + tsc/build
-     └────┬─────┘        └────┬─────┘
-          └─────────┬─────────┘
-                    ▼
-              有 blocker？──是──► Fix（最多 2 轮）──► 再 Review+Test
-                    │否
-                    ▼
-                ┌──────────┐
-                │  Verify  │  失败闭合：无证据 = 不通过
-                └────┬─────┘
-                     ▼
-              通过 → 下一任务
-              基础任务失败 → 整圈停止
-              非基础失败 → 记入报告，继续
+Detect（只读：已完成则跳过实现；发现另一圈在写则立刻停）
+    ▼
+Review + Test 并行（tsc 必须实跑）
+    ▼
+最多 1 轮 Fix（只修 blocker / tsc，禁止重开 P0/P1）
+    ▼
+Commit + push APP
+    ▼
+Package（重编前端 → 嵌进 .so → assembleArm64Release）
+    ▼
+Send（dws 私聊发给于翔）
 ```
 
-审查与测试并行。修复串行写回同一工作区（不用 isolation worktree，否则改动回不来）。
+默认预算够 8 个 agent，不要 256。
 
----
-
-## 3. 固定任务队列（确定性，不靠 agent 自己发现范围）
-
-| # | id | 优先级 | 设计 | 验收一句话 |
-|---|---|---|---|---|
-| 0 | `story-model` | P0 地基 | [01](./designs/01-story-model.md) | Story 表 + 迁移 |
-| 1 | `story-store-nav` | P0 地基 | [02](./designs/02-navigation.md) | 冷启动进书架，不自动建空白会话 |
-| 2 | `bookshelf-ui` | P0 | [03](./designs/03-bookshelf.md) | 空态 + 新故事/稿纸 + 书卡 |
-| 3 | `onboarding-bind` | P0 地基 | [04](./designs/04-onboarding.md) | 开局写书，取消回书架，切书不串世界 |
-| 4 | `reading-exit` | P0 | [05](./designs/05-reading.md) | 返回书架，卷次仅本书 |
-| 5 | `book-manage` | P0 | [06](./designs/06-book-manage.md) | 改名/置顶/删除/封面/继续条 |
-| 6 | `shelf-views` | P1 | [07](./designs/07-shelf-views.md) | 分组/搜索/排序/网格列表 |
-| 7 | `book-detail` | P1 | [03](./designs/03-bookshelf.md) | 详情与卷列表 |
-| 8 | `export-txt` | P1 | [08](./designs/08-export.md) | 干净 TXT，不覆盖对话 |
-| 9 | `resume-context` | P1 | [09](./designs/09-resume-context.md) | 切书恢复文风与现场 |
-
-P2（AI 作品、自定义书架等）见 [10-later](./designs/10-later.md)，**本圈不排队**。
-
----
-
-## 4. 角色与权限
-
-| 阶段 | 能力 | 失败策略 |
-|---|---|---|
-| Design / Plan / Review | read-only | 缺输出当空，不编造 |
-| Execute / Fix | all | 必须改磁盘上的真实文件 |
-| Test | execute | 必须跑 `npx tsc --noEmit`，必要时 `npm run build` |
-| Verify | execute | **失败闭合**：没读到代码或没跑命令 = `accepted=false` |
-
-禁止给实现 agent 开 isolation worktree。并行只用于只读审查 + 测试。
-
----
-
-## 5. 预算与停止条件
-
-- 最坏约 12 次 agent / 任务 × 10 任务 ≈ 120，另加收尾。真跑预算 256。
-- `story-model`、`story-store-nav`、`onboarding-bind` 验证失败 → 整圈停止。
-- 单任务修复最多 2 轮。
-- 不 `await_user`。本回路按已拍板规格自动跑。
-- 实现可在 `APP` 分支提交原子 commit，不 push、不碰 `master`。
-
----
-
-## 6. 怎么跑
-
-```text
-/workflow app-delivery-loop
-```
-
-或带参数：
+参数：
 
 ```json
-{ "max_tasks": 10, "start": 0 }
+{ "package": true, "send": true }
 ```
 
-冒烟只走 `max_tasks=1` 的一条路径。真跑用满队列。进度在 `/workflows`。
+冒烟：`{ "package": false, "send": false }`。
+
+启动：
+
+```text
+/workflow app-ship-loop
+```
+
+**禁止**再跑 `/workflow app-delivery-loop`。若误启动，stub 会立即 `complete`，不改仓库。
+
+**禁止**同时再开一圈 `app-ship-loop`。
 
 ---
 
-## 7. 什么叫整圈成功
+## 3. 停旧圈
 
-对照 `bookshelf-design.md` §15：
+在 `/workflows` 里对仍显示 active 的 `app-delivery-loop` / `app-delivery-loop-2` 按 `x`，或：
 
-打开 App → 书架看到故事 → 再开一个新故事 → 回到书架 → 点回旧故事接着写。切书后注入的规则书是该书绑定的那本。压缩后续集不在书架上多出一本书。
+```text
+/workflow stop app-delivery-loop
+/workflow stop app-delivery-loop-2
+```
 
-技术门：`npx tsc --noEmit` 通过。
+Agent 无法代发这条斜杠命令；子代理已被取消。宿主持有的 run 还要在面板上停掉，否则它可能再拉实现 agent。
+
+---
+
+## 4. 发版验收
+
+- `npx tsc --noEmit` 退出码 0
+- APK 存在且 `.so` 是这次 `npm run build` 之后编的
+- 钉钉私聊于翔能下载该 APK

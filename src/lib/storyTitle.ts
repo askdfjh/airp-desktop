@@ -55,7 +55,7 @@ export function parseGeneratedTitle(raw: string): string | null {
   if (/[。！？.!?…]$/.test(t)) t = t.slice(0, -1);
   if (t.length < 2 || t.length > 24) return null;
   if (isPlaceholderTitle(t)) return null;
-  if (/建议|如下|可以叫|本书|书名|标题/.test(t)) return null;
+  if (/^(建议|如下|可以叫)/.test(t)) return null;
   return t || null;
 }
 
