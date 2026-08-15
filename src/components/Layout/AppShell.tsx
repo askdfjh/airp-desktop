@@ -201,7 +201,7 @@ export function AppShell() {
         s.setAppPhase("bookshelf");
         return true;
       }
-      if (s.appPhase === "reading") {
+      if (s.appPhase === "reading" || (s.appPhase as string) === "dialogue") {
         s.setAppPhase("bookshelf");
         return true;
       }
@@ -293,7 +293,7 @@ export function AppShell() {
     setWelcomeView("setup");
   };
 
-  // 独立 API 配置页保存完成：标记已见 → 进入世界选择页（开局流程）
+  // 独立 API 配置页保存完成：标记已见 → 书架（不走开局、不进对话）
   const handleWelcomeApiSaved = () => {
     try {
       localStorage.setItem("airp-welcome-v1", "1");
@@ -392,7 +392,7 @@ export function AppShell() {
     );
   }
 
-  const inReading = appPhase === "reading";
+  const inReading = appPhase === "reading" || (appPhase as string) === "dialogue";
 
   return (
     <div data-platform={isAndroid ? "android" : "desktop"} className={`theme-${eff}`} style={{ height: "100vh", width: "100vw", position: "relative", overflow: "hidden", background: "var(--seed-bg)" }}>

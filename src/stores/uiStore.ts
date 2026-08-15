@@ -184,7 +184,11 @@ export const useUIStore = create<UIState>()(
         return t;
       },
       // Onboarding methods
-      setAppPhase: (phase) => set({ appPhase: phase }),
+      // welcome/create 只走 overlay，不写入 live phase
+      setAppPhase: (phase) => {
+        if (phase === "welcome" || phase === "create") return;
+        set({ appPhase: phase });
+      },
       shelfView: "grid",
       shelfSort: "opened",
       shelfGroup: "all",
@@ -259,6 +263,20 @@ export const useUIStore = create<UIState>()(
         shelfSort: s.shelfSort,
         shelfGroup: s.shelfGroup,
       }),
+      // 旧 airp-ui-v3 可能仍带 appPhase/onboardingStep/selected*，禁止回灌
+      merge: (persistedState, currentState) => {
+        const raw =
+          persistedState && typeof persistedState === "object"
+            ? { ...(persistedState as Record<string, unknown>) }
+            : {};
+        delete raw.appPhase;
+        delete raw.onboardingStep;
+        delete raw.createMode;
+        for (const key of Object.keys(raw)) {
+          if (key.startsWith("selected")) delete raw[key];
+        }
+        return { ...currentState, ...raw };
+      },
     },
   ),
 );

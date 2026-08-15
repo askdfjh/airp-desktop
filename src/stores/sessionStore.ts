@@ -48,7 +48,7 @@ interface SessionState {
   clearSearch: () => void;
   jumpToMessage: (sessionId: string, messageId: string, keyword?: string) => void;
   clearTargetMessage: () => void;
-  createBlankSession: () => string;
+  createBlankSession: (storyId?: string) => string;
   updateSystemPrompt: (id: string, systemPrompt: string) => void;
   toggleThinking: (id: string) => void;
   setThinkingEnabled: (id: string, enabled: boolean) => void;
@@ -291,19 +291,20 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   clearTargetMessage: () => set({ targetMessageId: null, targetKeyword: null }),
 
-  createBlankSession: () => {
+  createBlankSession: (storyId?) => {
     const now = Date.now();
     const id = 's_' + now + '_' + Math.random().toString(36).slice(2, 8);
-    const session = {
+    const session: Session = {
       id,
-      title: '空白会话',
+      title: storyId ? '未命名稿纸' : '空白会话',
       systemPrompt: '',
       providerId: '',
       model: '',
       thinkingEnabled: true,
-      kind: 'blank' as const,
+      kind: 'blank',
       createdAt: now,
       updatedAt: now,
+      ...(storyId ? { storyId, chainId: storyId, chainIndex: 1 } : {}),
     };
     set((st) => ({ sessions: [session, ...st.sessions], activeId: id }));
     insertSession(session).catch((e) => console.error('[db] insertSession failed:', e));
