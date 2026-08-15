@@ -3126,6 +3126,110 @@ details > :not(summary) { margin-top: 6px; }
 
 [data-platform="android"] .narra-shelf-bar { padding-top: calc(14px + env(safe-area-inset-top, 0px)); }
 [data-platform="android"] .narra-icon-btn, [data-platform="android"] .narra-btn-primary, [data-platform="android"] .narra-fab { min-width: 44px; min-height: 44px; }
+[data-platform="android"] .narra-desk-hint { display: none; }
+
+/* ===== 桌面端：让开标题栏，用宽屏密度把书架/阅读/详情铺开 ===== */
+[data-platform="desktop"] .narra-shelf {
+  padding-top: 40px;
+}
+[data-platform="desktop"] .seed-dialogue {
+  height: calc(100vh - 40px);
+  margin-top: 40px;
+}
+[data-platform="desktop"] .narra-detail,
+[data-platform="desktop"] .narra-read-detail {
+  top: 40px;
+}
+[data-platform="desktop"] .seed-onboarding {
+  top: 40px;
+}
+[data-platform="desktop"] .seed-onboarding-content {
+  max-width: 1080px;
+  padding: 36px 40px 96px;
+}
+[data-platform="desktop"] .narra-shelf-bar,
+[data-platform="desktop"] .narra-shelf-search,
+[data-platform="desktop"] .narra-continue,
+[data-platform="desktop"] .narra-shelf-tabs {
+  width: min(1240px, calc(100% - 64px));
+  margin-left: auto;
+  margin-right: auto;
+}
+[data-platform="desktop"] .narra-shelf-bar { padding: 14px 0 12px; }
+[data-platform="desktop"] .narra-continue {
+  padding: 10px 18px 10px 10px;
+  margin-bottom: 16px;
+}
+[data-platform="desktop"] .narra-continue .narra-cover--compact { width: 44px; height: 62px; }
+[data-platform="desktop"] .narra-shelf-grid {
+  width: min(1240px, 100%);
+  margin: 0 auto;
+  padding: 8px 32px 56px;
+  grid-template-columns: repeat(auto-fill, minmax(186px, 1fr));
+  gap: 28px 20px;
+}
+[data-platform="desktop"] .narra-shelf-list {
+  width: min(920px, calc(100% - 64px));
+  margin: 0 auto;
+  padding: 4px 0 56px;
+}
+[data-platform="desktop"] .narra-book:hover .narra-cover {
+  transform: translateY(-5px);
+  box-shadow: 0 16px 28px rgba(0,0,0,0.22);
+}
+[data-platform="desktop"] .narra-desk-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--seed-muted);
+}
+[data-platform="desktop"] .narra-detail-grid {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  gap: 8px 36px;
+  padding: 4px 32px 48px;
+  align-items: start;
+}
+[data-platform="desktop"] .narra-detail-hero {
+  grid-template-columns: 168px 1fr;
+  padding: 8px 0 12px;
+}
+[data-platform="desktop"] .narra-detail-hero h1 { font-size: 26px; }
+[data-platform="desktop"] .narra-detail-h-row,
+[data-platform="desktop"] .narra-detail-h { margin-left: 0; margin-right: 0; }
+[data-platform="desktop"] .narra-roster,
+[data-platform="desktop"] .narra-vol-list { padding-left: 0; padding-right: 0; }
+[data-platform="desktop"] .narra-detail-bar {
+  width: min(1100px, calc(100% - 64px));
+  margin: 0 auto;
+  padding: 12px 0;
+}
+[data-platform="desktop"] .seed-dialogue-scroll { padding: 56px 32px 120px; }
+[data-platform="desktop"] .seed-dialogue-content,
+[data-platform="desktop"] .seed-input-inner,
+[data-platform="desktop"] .seed-scene-bar-head,
+[data-platform="desktop"] .seed-suggest-head {
+  max-width: 780px;
+}
+[data-platform="desktop"] .seed-func-bar { gap: 6px; padding: 10px 0 12px; }
+[data-platform="desktop"] .seed-func-btn { width: 34px; height: 34px; }
+[data-platform="desktop"] .narra-read-bar { padding: 10px 20px 8px; }
+[data-platform="desktop"] .narra-read-title { font-size: 14px; letter-spacing: 0.06em; }
+[data-platform="desktop"] .narra-resume-chip {
+  left: 50%;
+  right: auto;
+  width: min(780px, calc(100% - 64px));
+  transform: translateX(-50%);
+  top: 56px;
+}
+[data-platform="desktop"] .seed-text-input:focus {
+  border-color: var(--seed-accent-border);
+}
+[data-platform="desktop"] [data-onboarding-grid] {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
 
 /* ---- Reading page typography & paper ---- */
 .seed-dialogue[data-reader-font="song"] { --reader-font: "Songti SC", "STSong", "SimSun", "Noto Serif SC", "Source Han Serif SC", "Songti TC", serif; }

@@ -62,6 +62,18 @@ export function Bookshelf() {
     }).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    const onSearch = () => {
+      setSearchOn(true);
+      window.setTimeout(() => {
+        const el = document.querySelector(".narra-shelf-search input") as HTMLInputElement | null;
+        el?.focus();
+      }, 0);
+    };
+    window.addEventListener("narra-focus-search", onSearch);
+    return () => window.removeEventListener("narra-focus-search", onSearch);
+  }, []);
+
   const placeholderIds = stories.filter((s) => isPlaceholderTitle(s.title)).map((s) => s.id).join(",");
   useEffect(() => {
     if (!placeholderIds) return;
@@ -154,7 +166,13 @@ export function Bookshelf() {
       {searchOn && (
         <div className="narra-shelf-search">
           <NarraSeek size={16} />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜书名、主角、标签" autoFocus />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="搜书名、主角、标签"
+            autoFocus
+            onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setSearchOn(false); } }}
+          />
         </div>
       )}
 
@@ -187,6 +205,7 @@ export function Bookshelf() {
           <img className="narra-empty-art" src={ART.empty} alt="" />
           <h1>还没有故事</h1>
           <p>从一本新故事开始，或先写一页草稿。</p>
+          <p className="narra-desk-hint">Ctrl+N 新故事 · Ctrl+F 搜索 · Ctrl+, 设置 · Esc 返回</p>
           <div className="narra-empty-actions">
             <button className="narra-btn-primary" onClick={startNew}><NarraPlus size={16} /> 写下第一个故事</button>
             <button className="narra-btn-ghost" onClick={() => void createDraft()}><NarraDraft size={16} /> 先写一页草稿</button>

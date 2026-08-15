@@ -22,8 +22,10 @@ import { CreateModeView } from "@/components/Create/CreateModeView";
 import { useCreateStore } from "@/stores/createStore";
 import { useStoryStore } from "@/stores/storyStore";
 import { Bookshelf } from "@/components/Bookshelf/Bookshelf";
+import { useDesktopHotkeys } from "@/hooks/useDesktopHotkeys";
 
 export function AppShell() {
+  useDesktopHotkeys();
   const {
     sidebarOpen,
     settingsOpen,

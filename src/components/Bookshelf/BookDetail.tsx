@@ -88,6 +88,8 @@ export function BookDetail({ storyId, onClose }: { storyId: string; onClose: () 
         <span>书籍</span>
         <button className="narra-icon-btn" onClick={() => void doExport()} disabled={busy} aria-label="导出"><NarraExport size={18} /></button>
       </header>
+      <div className="narra-detail-grid">
+      <div className="narra-detail-main">
       <div className="narra-detail-hero">
         <BookCover story={story} />
         <div>
@@ -171,6 +173,8 @@ export function BookDetail({ storyId, onClose }: { storyId: string; onClose: () 
           </div>
         </div>
       </div>
+      </div>
+      <div className="narra-detail-side">
       <div className="narra-detail-h-row">
         <h2 className="narra-detail-h">角色名册</h2>
         <button className="narra-btn-ghost narra-roster-btn" disabled={rosterBusy} onClick={() => void doRoster()}>
@@ -214,6 +218,8 @@ export function BookDetail({ storyId, onClose }: { storyId: string; onClose: () 
         ))}
         {vols.length === 0 && <li className="narra-muted">尚无卷次</li>}
       </ul>
+      </div>
+      </div>
     </div>
   );
 }

@@ -43,13 +43,19 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const [showMore, setShowMore] = useState(false);
   const [narrow, setNarrow] = useState(
-    () => typeof window !== "undefined" && (window.matchMedia("(max-width: 720px)").matches || /Android/i.test(navigator.userAgent)),
+    () => typeof window !== "undefined" && /Android/i.test(navigator.userAgent),
   );
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 720px)");
-    const on = (e: MediaQueryListEvent) => setNarrow(e.matches || /Android/i.test(navigator.userAgent));
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
+    const android = /Android/i.test(navigator.userAgent);
+    if (android) {
+      setNarrow(true);
+      return;
+    }
+    const mq = window.matchMedia("(max-width: 820px)");
+    const apply = () => setNarrow(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
   }, []);
   const barRef = useRef<HTMLDivElement>(null);
   const chipRefs = {
