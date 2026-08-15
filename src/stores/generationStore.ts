@@ -129,7 +129,13 @@ export const useGenerationStore = create<GenerationState>()(
       presets: BUILTIN_PRESETS,
       activePresetId: "balanced",
 
-      setActivePreset: (id) => set({ activePresetId: id }),
+      setActivePreset: (id) => {
+        set({ activePresetId: id });
+        import("./storyStore").then(({ useStoryStore }) => {
+          const sid = useStoryStore.getState().activeStoryId;
+          if (sid) useStoryStore.getState().patch(sid, { generationPresetId: id, updatedAt: Date.now() });
+        }).catch(() => {});
+      },
 
       getActivePreset: () => {
         const { presets, activePresetId } = get();

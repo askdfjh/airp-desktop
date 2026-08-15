@@ -154,6 +154,7 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
         : "";
 
     const now = Date.now();
+    const storyId = crypto.randomUUID();
     const session = {
       id: crypto.randomUUID(),
       title: playerName ? playerName + "的冒险" : "新冒险",
@@ -164,9 +165,38 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
       kind: "adventure" as const,
       createdAt: now,
       updatedAt: now,
+      storyId,
+      chainId: storyId,
+      chainIndex: 1,
     };
 
-    // 开局全部设置完成后才激活所选规则书
+    const { insertStory } = await import("@/lib/db");
+    const { useStoryStore } = await import("@/stores/storyStore");
+    const { useGenerationStore } = await import("@/stores/generationStore");
+    const story = {
+      id: storyId,
+      title: session.title,
+      kind: "adventure" as const,
+      status: "writing" as const,
+      cover: null,
+      groupId: "writing",
+      pinned: false,
+      worldBookId: resolvedBookId,
+      generationPresetId: useGenerationStore.getState().activePresetId,
+      protagonistName: playerName,
+      topicSchemeId: selectedTopicSchemeId,
+      worldBaseId: selectedWorldId,
+      synopsis: "",
+      tags: [],
+      lastOpenedAt: now,
+      lastVolumeId: session.id,
+      wordCount: 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await insertStory(story);
+    useStoryStore.getState().addStory(story);
+
     if (resolvedBookId) {
       await worldState.setActiveBook(resolvedBookId);
     } else {
@@ -174,10 +204,9 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
     }
 
     addSession(session);
-    // 激活新创建的会话，让 DialogueNovel/useChat 能正确加载
     setActive(session.id);
     resetOnboarding();
-    setAppPhase("dialogue");
+    setAppPhase("reading");
     if (openingMessage) {
       setPendingOpeningMessage(openingMessage);
     }

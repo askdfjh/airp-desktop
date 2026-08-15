@@ -274,7 +274,7 @@ export async function initDb(): Promise<void> {
       kind TEXT NOT NULL DEFAULT 'adventure',
       status TEXT NOT NULL DEFAULT 'writing',
       cover TEXT,
-      groupId TEXT NOT NULL DEFAULT 'all',
+      groupId TEXT NOT NULL DEFAULT 'writing',
       pinned INTEGER NOT NULL DEFAULT 0,
       worldBookId TEXT,
       generationPresetId TEXT,
@@ -296,7 +296,7 @@ export async function initDb(): Promise<void> {
   await db.execute(`ALTER TABLE stories ADD COLUMN kind TEXT NOT NULL DEFAULT 'adventure';`).catch(() => {});
   await db.execute(`ALTER TABLE stories ADD COLUMN status TEXT NOT NULL DEFAULT 'writing';`).catch(() => {});
   await db.execute(`ALTER TABLE stories ADD COLUMN cover TEXT;`).catch(() => {});
-  await db.execute(`ALTER TABLE stories ADD COLUMN groupId TEXT NOT NULL DEFAULT 'all';`).catch(() => {});
+  await db.execute(`ALTER TABLE stories ADD COLUMN groupId TEXT NOT NULL DEFAULT 'writing';`).catch(() => {});
   await db.execute(`ALTER TABLE stories ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
   await db.execute(`ALTER TABLE stories ADD COLUMN worldBookId TEXT;`).catch(() => {});
   await db.execute(`ALTER TABLE stories ADD COLUMN generationPresetId TEXT;`).catch(() => {});
@@ -312,8 +312,9 @@ export async function initDb(): Promise<void> {
   await db.execute(`ALTER TABLE stories ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
   await db.execute(`ALTER TABLE stories ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0;`).catch(() => {});
   await db.execute(`ALTER TABLE stories ADD COLUMN deletedAt INTEGER;`).catch(() => {});
-  const { migrateStoriesOnInit } = await import("./storyMigrate");
+  const { migrateStoriesOnInit, repairMissingStoryIds } = await import("./storyMigrate");
   await migrateStoriesOnInit();
+  await repairMissingStoryIds();
 }
 
 function getDb(): Database {
@@ -1410,7 +1411,7 @@ function rowToStory(r: StoryRow): Story {
     kind: r.kind === "blank" ? "blank" : "adventure",
     status: (r.status === "paused" || r.status === "finished" ? r.status : "writing") as StoryStatus,
     cover: r.cover,
-    groupId: r.groupId || "all",
+    groupId: r.groupId || "writing",
     pinned: r.pinned === 1,
     worldBookId: r.worldBookId,
     generationPresetId: r.generationPresetId,
@@ -1500,9 +1501,7 @@ export async function purgeExpiredStories(): Promise<number> {
     "SELECT id FROM stories WHERE deleted = 1 AND deletedAt IS NOT NULL AND deletedAt < $1;",
     [cutoff]
   );
-  for (const r of rows) {
-    await getDb().execute("DELETE FROM stories WHERE id = $1;", [r.id]);
-  }
+  for (const r of rows) await purgeStory(r.id);
   return rows.length;
 }
 
@@ -1852,6 +1851,7 @@ export interface SettingsDbSnapshot {
   worldRules: Record<string, unknown>[];
   worldBooks: Record<string, unknown>[];
   worldBookEntries: Record<string, unknown>[];
+  stories: Record<string, unknown>[];
 }
 
 export const SETTINGS_SNAPSHOT_TABLES: (keyof SettingsDbSnapshot)[] = [
@@ -1863,6 +1863,7 @@ export const SETTINGS_SNAPSHOT_TABLES: (keyof SettingsDbSnapshot)[] = [
   "worldRules",
   "worldBooks",
   "worldBookEntries",
+  "stories",
 ];
 
 const SETTINGS_TABLE_SELECTS: Record<keyof SettingsDbSnapshot, string> = {
@@ -1874,6 +1875,7 @@ const SETTINGS_TABLE_SELECTS: Record<keyof SettingsDbSnapshot, string> = {
   worldRules: "SELECT * FROM world_rules ORDER BY createdAt ASC;",
   worldBooks: "SELECT * FROM world_books ORDER BY isBuiltin DESC, name ASC;",
   worldBookEntries: 'SELECT * FROM world_book_entries ORDER BY bookId ASC, "order" ASC, uid ASC;',
+  stories: "SELECT * FROM stories ORDER BY createdAt ASC;",
 };
 
 /** 数值型列：导入时强制转数字 */
@@ -1943,6 +1945,10 @@ const SETTINGS_TABLE_COLUMNS: Record<string, { columns: string[]; defaults: Reco
   world_rules: { columns: ["id", "name", "description", "rules", "isActive", "isBuiltin", "createdAt", "updatedAt"], defaults: { name: "", description: "", rules: "", isActive: 0, isBuiltin: 0, createdAt: 0, updatedAt: 0 } },
   world_books: { columns: ["id", "name", "theme", "description", "tags", "isActive", "isBuiltin", "violationWords", "worldBaseId", "customOpenings", "createdAt", "updatedAt"], defaults: { name: "", theme: "", description: "", tags: "[]", isActive: 0, isBuiltin: 0, violationWords: "[]", worldBaseId: "", customOpenings: "[]", createdAt: 0, updatedAt: 0 } },
   world_book_entries: { columns: ["id", "bookId", "uid", "category", "title", "key", "keysecondary", "content", "constant", "selective", "order", "position", "insertion_depth", "disable", "linkedCharacterIds", "createdAt", "updatedAt"], defaults: { bookId: "", uid: 0, category: "", title: "", key: "[]", keysecondary: "[]", content: "", constant: 0, selective: 0, order: 100, position: "system", insertion_depth: 50, disable: 0, linkedCharacterIds: "[]", createdAt: 0, updatedAt: 0 } },
+  stories: {
+    columns: ["id", "title", "kind", "status", "cover", "groupId", "pinned", "worldBookId", "generationPresetId", "protagonistName", "topicSchemeId", "worldBaseId", "synopsis", "tags", "lastOpenedAt", "lastVolumeId", "wordCount", "createdAt", "updatedAt", "deleted", "deletedAt"],
+    defaults: { title: "未命名稿纸", kind: "adventure", status: "writing", cover: null, groupId: "all", pinned: 0, worldBookId: null, generationPresetId: null, protagonistName: null, topicSchemeId: null, worldBaseId: null, synopsis: "", tags: "[]", lastOpenedAt: null, lastVolumeId: null, wordCount: 0, createdAt: 0, updatedAt: 0, deleted: 0, deletedAt: null },
+  },
 };
 
 /** 导出所选设置表（原始行，含 isBuiltin 等标记，保证导入后可完整还原；不传则导出全部设置表） */
@@ -1968,6 +1974,7 @@ export async function restoreSettingsTables(snap: Partial<SettingsDbSnapshot>): 
   if (snap.promptTemplates !== undefined) await db.execute("DELETE FROM prompt_templates;");
   if (snap.mcpServers !== undefined) await db.execute("DELETE FROM mcp_servers;");
   if (snap.appSettings !== undefined) await db.execute("DELETE FROM app_settings;");
+  if (snap.stories !== undefined) await db.execute("DELETE FROM stories;");
 
   const tableOf: Record<keyof SettingsDbSnapshot, string> = {
     appSettings: "app_settings",
@@ -1978,6 +1985,7 @@ export async function restoreSettingsTables(snap: Partial<SettingsDbSnapshot>): 
     worldRules: "world_rules",
     worldBooks: "world_books",
     worldBookEntries: "world_book_entries",
+    stories: "stories",
   };
   for (const key of SETTINGS_SNAPSHOT_TABLES) {
     const rows = snap[key];
@@ -2012,7 +2020,6 @@ export async function snapshotConversations(): Promise<ConversationsSnapshot> {
     sessionCharacters: await q("SELECT * FROM session_characters;"),
     sessionCharacterCards: await q("SELECT * FROM session_character_cards;"),
     characterArcs: await q("SELECT * FROM character_arcs;"),
-    stories: await q("SELECT * FROM stories;"),
   };
 }
 
@@ -2020,10 +2027,7 @@ export async function snapshotConversations(): Promise<ConversationsSnapshot> {
 export async function restoreConversations(snap: ConversationsSnapshot): Promise<void> {
   const db = getDb();
 
-  const storiesCfg = {
-    columns: ["id", "title", "kind", "status", "cover", "groupId", "pinned", "worldBookId", "generationPresetId", "protagonistName", "topicSchemeId", "worldBaseId", "synopsis", "tags", "lastOpenedAt", "lastVolumeId", "wordCount", "createdAt", "updatedAt", "deleted", "deletedAt"],
-    defaults: { title: "未命名稿纸", kind: "adventure", status: "writing", cover: null, groupId: "all", pinned: 0, worldBookId: null, generationPresetId: null, protagonistName: null, topicSchemeId: null, worldBaseId: null, synopsis: "", tags: "[]", lastOpenedAt: null, lastVolumeId: null, wordCount: 0, createdAt: 0, updatedAt: 0, deleted: 0, deletedAt: null },
-  };
+  const storiesCfg = SETTINGS_TABLE_COLUMNS.stories;
   for (const row of snap.stories ?? []) {
     await insertRowIgnore(db, "stories", storiesCfg.columns, row, storiesCfg.defaults);
   }

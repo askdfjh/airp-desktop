@@ -2,6 +2,8 @@ import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import { useChat, getSendBlocker } from "@/hooks/useChat";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useUIStore } from "@/stores/uiStore";
+import { useStoryStore } from "@/stores/storyStore";
+import { NarraBack } from "@/components/icons/NarraIcon";
 import { StreamingText } from "./StreamingText";
 import { FunctionBar } from "./FunctionBar";
 import { ConfirmDialog } from "@/components/Layout/ConfirmDialog";
@@ -21,7 +23,9 @@ export function DialogueNovel() {
   const targetMessageId = useSessionStore((s) => s.targetMessageId);
   const targetKeyword = useSessionStore((s) => s.targetKeyword);
   const clearTargetMessage = useSessionStore((s) => s.clearTargetMessage);
-  const { selectedWorldName, selectedCharacterName, selectedScenarioName, selectedMode, messageFontSize, notify } = useUIStore();
+  const { selectedWorldName, selectedCharacterName, selectedMode, messageFontSize, notify, setAppPhase } = useUIStore();
+  const activeStory = useStoryStore((s) => s.stories.find((x) => x.id === (s.activeStoryId || activeSession?.storyId)));
+  const [resumeChip, setResumeChip] = useState(true);
   const compressing = useUIStore((s) => s.compressing);
   const compressStage = useUIStore((s) => s.compressStage);
   const compressPrompt = useUIStore((s) => s.compressPrompt);
@@ -420,10 +424,25 @@ export function DialogueNovel() {
 
   return (
     <div className="seed-dialogue">
+      <div className="narra-read-bar">
+        <button className="narra-icon-btn" aria-label="回书架" onClick={() => setAppPhase("bookshelf")}>
+          <NarraBack size={18} />
+        </button>
+        <div className="narra-read-title">{activeStory?.title || activeSession?.title || "书写"}</div>
+        <span style={{ width: 40 }} />
+      </div>
       {/* Atmospheric background particles */}
       <div className="seed-particles" style={{ position: "absolute" }}>
         {particles}
       </div>
+      {resumeChip && sceneAnalysisData?.chapterTitle && (
+        <div className="narra-resume-chip">
+          <span>上次写到：{sceneAnalysisData.chapterTitle}</span>
+          <button className="narra-icon-btn" aria-label="关闭" onClick={() => setResumeChip(false)}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6 L18 18 M18 6 L6 18" /></svg>
+          </button>
+        </div>
+      )}
 
       {/* Info badge：[紫色圆点] 世界 · 角色 · 模式（贴合设计稿） */}
       {infoParts.length > 0 && (

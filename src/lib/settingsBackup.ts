@@ -15,6 +15,7 @@ import { useTemplateStore } from "@/stores/templateStore";
 import { useCharacterStore } from "@/stores/characterStore";
 import { useMcpStore } from "@/stores/mcpStore";
 import { useSessionStore } from "@/stores/sessionStore";
+import { useStoryStore } from "@/stores/storyStore";
 
 /** 备份文件标识与版本 */
 export const SETTINGS_BACKUP_TYPE = "airp-settings-backup";
@@ -33,7 +34,8 @@ export type BackupGroupKey =
   | "characters"
   | "worldRules"
   | "worldBooks"
-  | "conversations";
+  | "conversations"
+  | "stories";
 
 export const ALL_BACKUP_GROUPS: BackupGroupKey[] = [
   "providers",
@@ -48,6 +50,7 @@ export const ALL_BACKUP_GROUPS: BackupGroupKey[] = [
   "worldRules",
   "worldBooks",
   "conversations",
+  "stories",
 ];
 
 export const BACKUP_GROUP_LABELS: Record<BackupGroupKey, string> = {
@@ -63,6 +66,7 @@ export const BACKUP_GROUP_LABELS: Record<BackupGroupKey, string> = {
   worldRules: "旧规则表（已废弃，仅兼容导入）",
   worldBooks: "规则书与词条",
   conversations: "会话与消息（含收藏 / 回收站 / 角色弧光 / 提取角色卡）",
+  stories: "故事 / 书架",
 };
 
 /** 每个数据项对应的 localStorage 键 */
@@ -79,6 +83,7 @@ const GROUP_LOCAL_STORAGE_KEYS: Record<BackupGroupKey, string[]> = {
   worldRules: [],
   worldBooks: [],
   conversations: [],
+  stories: [],
 };
 
 /** 每个数据项对应的 SQLite 设置表 */
@@ -95,6 +100,7 @@ const GROUP_DB_TABLES: Record<BackupGroupKey, (keyof SettingsDbSnapshot)[]> = {
   worldRules: ["worldRules"],
   worldBooks: ["worldBooks", "worldBookEntries"],
   conversations: [],
+  stories: [],
 };
 
 export interface SettingsBackup {
@@ -218,16 +224,18 @@ export function summarizeGroups(data: SettingsBackup, groups: BackupGroupKey[]):
       const entries = data.database?.worldBookEntries?.length ?? 0;
       return `规则书与词条（${books} 本 / ${entries} 词条）`;
     }
+    if (key === "stories") {
+      const n = data.database?.stories?.length ?? 0;
+      return `故事（${n} 本）`;
+    }
     if (key === "conversations") {
       const sessions = data.conversations?.sessions?.length ?? 0;
       const messages = data.conversations?.messages?.length ?? 0;
       const trash = data.conversations?.sessions?.filter((s) => Number(s.deleted) === 1).length ?? 0;
       const cards = data.conversations?.sessionCharacterCards?.length ?? 0;
-      const stories = data.conversations?.stories?.length ?? 0;
       const trashText = trash > 0 ? `，含回收站 ${trash} 个` : "";
       const cardsText = cards > 0 ? `，提取角色卡 ${cards} 张` : "";
-      const storiesText = stories > 0 ? `，故事 ${stories} 本` : "";
-      return `会话与消息（${sessions} 个会话 / ${messages} 条消息${trashText}${cardsText}${storiesText}）`;
+      return `会话与消息（${sessions} 个会话 / ${messages} 条消息${trashText}${cardsText}）`;
     }
     return `${BACKUP_GROUP_LABELS[key]}（${countGroupItems(data, key)} 项）`;
   });
@@ -307,4 +315,8 @@ export async function importAllData(data: SettingsBackup, groups?: BackupGroupKe
     useMcpStore.getState().loadFromDb(),
     useSessionStore.getState().loadFromDb(),
   ]);
+  const loadStoriesFromDb = useStoryStore.getState().loadFromDb;
+  if (typeof loadStoriesFromDb === "function") {
+    await loadStoriesFromDb();
+  }
 }

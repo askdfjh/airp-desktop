@@ -4,6 +4,13 @@
 
 灵叙 Narra：本地文字创作与排版工具。桌面端（Tauri Windows）+ 安卓端（Tauri Android，`src-tauri/gen/android`，gitignore 不入库）。
 
+## APP 分支
+
+当前若在 `APP` 分支：本阶段主线是 **书架作为 APP 首页**，让用户随时进出、切换、新建故事。设计与分期见 [`docs/app/bookshelf-design.md`](docs/app/bookshelf-design.md)。未读该文档不要改导航或会话模型。
+
+产品规格：[`docs/app/product-spec.md`](docs/app/product-spec.md)。分块设计：`docs/app/designs/`。  
+全自动交付回路见 [`docs/app/delivery-loop.md`](docs/app/delivery-loop.md)，编排脚本 `.grok/workflows/app-delivery-loop.rhai`。
+
 ## 关键命令
 
 - 前端构建：`npm run build`（tsc + vite，产物在 `dist/`）

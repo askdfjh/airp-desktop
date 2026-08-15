@@ -20,6 +20,8 @@ import { WelcomeScreen } from "@/components/Layout/WelcomeScreen";
 import { WelcomeApiSetup } from "@/components/Layout/WelcomeApiSetup";
 import { CreateModeView } from "@/components/Create/CreateModeView";
 import { useCreateStore } from "@/stores/createStore";
+import { useStoryStore } from "@/stores/storyStore";
+import { Bookshelf } from "@/components/Bookshelf/Bookshelf";
 
 export function AppShell() {
   const {
@@ -47,6 +49,7 @@ export function AppShell() {
   const clearCardTrash = useCharacterStore((s) => s.clearExpiredTrash);
   const loadWorldTrash = useWorldStore((s) => s.loadTrashFromDb);
   const clearWorldTrash = useWorldStore((s) => s.clearExpiredTrash);
+  const loadStories = useStoryStore((s) => s.loadFromDb);
   const [eff, setEff] = useState<"dark" | "light">(() => {
     try {
       const raw = localStorage.getItem("airp-ui-v3") || localStorage.getItem("airp-ui-v2");
@@ -102,6 +105,7 @@ export function AppShell() {
       .then(() => loadCardTrash())
       .then(() => clearWorldTrash())
       .then(() => loadWorldTrash())
+      .then(() => loadStories())
       .then(async () => {
         // Initialize tools enabled flag from DB
         try {
@@ -128,19 +132,7 @@ export function AppShell() {
         // 仅首次启动时判定一次，避免后续切换会话被覆盖
         if (!phaseInitializedRef.current) {
           phaseInitializedRef.current = true;
-          const { sessions, activeId, createBlankSession } = useSessionStore.getState();
-          // 若无任何会话，自动创建一个空白会话
-          if (sessions.length === 0) {
-            createBlankSession();
-          }
-          const hasActive = activeId && sessions.some((s) => s.id === activeId);
-          // 若无活跃会话且有历史会话，激活最近一条
-          if (!hasActive && sessions.length > 0) {
-            const latest = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt)[0];
-            if (latest) useSessionStore.getState().setActive(latest.id);
-          }
-          const finalActiveId = useSessionStore.getState().activeId;
-          setAppPhase(finalActiveId ? "dialogue" : "onboarding");
+          setAppPhase("bookshelf");
         }
 
         setDbReady(true);
@@ -203,6 +195,15 @@ export function AppShell() {
       }
       if (s.appPhase === "onboarding" && s.onboardingStep > 1) {
         s.setOnboardingStep((s.onboardingStep - 1) as any);
+        return true;
+      }
+      if (s.appPhase === "onboarding") {
+        s.resetOnboarding();
+        s.setAppPhase("bookshelf");
+        return true;
+      }
+      if (s.appPhase === "reading" || s.appPhase === "dialogue") {
+        s.setAppPhase("bookshelf");
         return true;
       }
       return false;
@@ -276,14 +277,8 @@ export function AppShell() {
   // 开局流程退出：有活跃会话 → 回到对话模式；无会话（首次进入）→ 退出应用确认
   const handleOnboardingExit = () => {
     const ui = useUIStore.getState();
-    const { activeId, sessions } = useSessionStore.getState();
-    const hasActive = activeId && sessions.some((s) => s.id === activeId);
-    if (hasActive) {
-      ui.resetOnboarding();
-      ui.setAppPhase("dialogue");
-    } else {
-      setShowExitConfirm(true);
-    }
+    ui.resetOnboarding();
+    ui.setAppPhase("bookshelf");
   };
 
   // 欢迎页：跳过 → 直接进入对话；配置完成（关闭设置面板且已配置 provider）→ 进入正常流程
@@ -292,7 +287,7 @@ export function AppShell() {
       localStorage.setItem("airp-welcome-v1", "1");
     } catch {}
     setWelcomeSeen(true);
-    setAppPhase("dialogue");
+    setAppPhase("bookshelf");
   };
 
   const handleWelcomeConfigure = () => {
@@ -305,7 +300,7 @@ export function AppShell() {
       localStorage.setItem("airp-welcome-v1", "1");
     } catch {}
     setWelcomeSeen(true);
-    setAppPhase("onboarding");
+    setAppPhase("bookshelf");
   };
 
   useEffect(() => {
@@ -314,7 +309,7 @@ export function AppShell() {
       localStorage.setItem("airp-welcome-v1", "1");
     } catch {}
     setWelcomeSeen(true);
-    setAppPhase(useSessionStore.getState().activeId ? "dialogue" : "onboarding");
+    setAppPhase("bookshelf");
   }, [settingsOpen, welcomeSeen, providerCount, setAppPhase]);
 
   const handleDeleteConfirm = () => {
@@ -398,15 +393,13 @@ export function AppShell() {
     );
   }
 
-  // 对话模式：全屏沉浸式小说对话（DialogueNovel 内置 FunctionBar 与会话管理）
-  // 设计稿 dialogue 页面无顶部 header，仅靠右上角 info-badge 与底部 FunctionBar
+  const inReading = appPhase === "reading" || appPhase === "dialogue";
+
   return (
     <div data-platform={isAndroid ? "android" : "desktop"} className={`theme-${eff}`} style={{ height: "100vh", width: "100vw", position: "relative", overflow: "hidden", background: "var(--seed-bg)" }}>
-      {/* 自绘标题栏：无边框窗口的拖拽区 + 窗口控制按钮 */}
       <TitleBar />
 
-
-      <DialogueNovel />
+      {inReading ? <DialogueNovel /> : <Bookshelf />}
 
       {/* 传统 Sidebar：默认不显示，仅当用户从 FunctionBar 外的途径打开时渲染 */}
       {sidebarAnim.mounted && (

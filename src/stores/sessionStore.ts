@@ -323,7 +323,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       createdAt: now,
       updatedAt: now,
       storyId: source.storyId,
-      chainId: source.chainId || source.id,
+      chainId: source.chainId || source.storyId || source.id,
       chainIndex: (source.chainIndex ?? 1) + 1,
       parentId: source.id,
       archive: opts.archive,
@@ -346,6 +346,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
     insertSession(session).catch((e) => console.error("[db] insertSession(continuation) failed:", e));
     set((st) => ({ sessions: [session, ...st.sessions], activeId: id }));
+    if (session.storyId) {
+      import("./storyStore").then(({ useStoryStore }) => {
+        useStoryStore.getState().patch(session.storyId!, { lastVolumeId: id, updatedAt: now });
+      }).catch(() => {});
+    }
     return id;
   },
 
