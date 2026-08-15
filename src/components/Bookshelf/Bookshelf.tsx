@@ -3,6 +3,7 @@ import { useStoryStore } from "@/stores/storyStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useSessionStore } from "@/stores/sessionStore";
 import { BookCover } from "./BookCover";
+import { BookCard } from "./BookCard";
 import { BookDetail } from "./BookDetail";
 import {
   NarraPlus, NarraDraft, NarraSeek, NarraGrid, NarraRows,
@@ -127,9 +128,12 @@ export function Bookshelf() {
 
       {last && (
         <button className="narra-continue" onClick={() => openStory(last.id)}>
+          <BookCover story={last} compact />
           <NarraBookmark size={16} />
-          <span className="narra-continue-k">继续</span>
-          <span className="narra-continue-t">{last.title}</span>
+          <div className="narra-continue-copy">
+            <span className="narra-continue-k">继续 · {volumeLabel(last)}</span>
+            <span className="narra-continue-t">{last.title}</span>
+          </div>
           <span className="narra-continue-m">{relTime(last.lastOpenedAt)}</span>
         </button>
       )}
@@ -146,12 +150,15 @@ export function Bookshelf() {
         </select>
       </nav>
 
-      {filtered.length === 0 ? (
+      {stories.length === 0 ? (
         <div className="narra-shelf-empty">
-          <svg className="narra-empty-mark" viewBox="0 0 120 120" fill="none" aria-hidden>
-            <rect x="28" y="18" width="64" height="84" rx="2" stroke="currentColor" strokeWidth="1.4" />
-            <path d="M40 36 H80 M40 48 H72 M40 60 H80 M40 72 H64" stroke="currentColor" strokeWidth="1.2" />
-            <path d="M28 18 H44 L48 24 H92" stroke="currentColor" strokeWidth="1.4" />
+          <svg className="narra-empty-mark" viewBox="0 0 160 120" fill="none" aria-hidden>
+            <rect x="18" y="38" width="40" height="58" rx="2" stroke="currentColor" strokeWidth="1.4" transform="rotate(-8 38 67)" />
+            <rect x="60" y="28" width="46" height="68" rx="2" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M70 44 H96 M70 54 H90 M70 64 H96" stroke="currentColor" strokeWidth="1.1" />
+            <rect x="108" y="36" width="38" height="60" rx="2" stroke="currentColor" strokeWidth="1.4" transform="rotate(7 127 66)" />
+            <circle cx="80" cy="88" r="10" stroke="currentColor" strokeWidth="1.2" />
+            <path d="M80 80 L83 88 L80 96 L77 88 Z" stroke="currentColor" strokeWidth="1.1" />
           </svg>
           <h1>还没有故事</h1>
           <p>从一本新故事开始，或先写一页草稿。</p>
@@ -160,54 +167,38 @@ export function Bookshelf() {
             <button className="narra-btn-ghost" onClick={() => void createDraft()}><NarraDraft size={16} /> 先写一页草稿</button>
           </div>
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="narra-shelf-empty narra-shelf-empty--quiet">
+          <p>没有符合的书</p>
+        </div>
       ) : (
         <div className={shelfView === "grid" ? "narra-shelf-grid" : "narra-shelf-list"}>
           {filtered.map((s) => (
-            <article
+            <BookCard
               key={s.id}
-              className="narra-book"
-              onClick={() => openStory(s.id)}
-              onContextMenu={(e) => { e.preventDefault(); setMenuId(s.id); }}
-              onPointerDown={(e) => {
-                if (e.pointerType === "touch") {
-                  const t = window.setTimeout(() => setMenuId(s.id), 480);
-                  const clear = () => window.clearTimeout(t);
-                  e.currentTarget.addEventListener("pointerup", clear, { once: true });
-                  e.currentTarget.addEventListener("pointercancel", clear, { once: true });
-                }
-              }}
-            >
-              <BookCover story={s} compact={shelfView === "list"} />
-              <div className="narra-book-meta">
-                {renameId === s.id ? (
-                  <input
-                    className="narra-rename"
-                    value={renameVal}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => setRenameVal(e.target.value)}
-                    onBlur={commitRename}
-                    onKeyDown={(e) => { if (e.key === "Enter") commitRename(); }}
-                    autoFocus
-                  />
-                ) : (
-                  <h2>{s.title}</h2>
-                )}
-                <p>{volumeLabel(s)} · {relTime(s.updatedAt)}</p>
-              </div>
-              {menuId === s.id && (
+              story={s}
+              compact={shelfView === "list"}
+              subtitle={`${volumeLabel(s)} · ${relTime(s.updatedAt)}`}
+              renaming={renameId === s.id}
+              renameVal={renameVal}
+              onOpen={() => openStory(s.id)}
+              onMenu={() => setMenuId(s.id)}
+              onRenameChange={setRenameVal}
+              onRenameCommit={commitRename}
+              menu={menuId === s.id ? (
                 <BookMenu
                   story={s}
                   onClose={() => setMenuId(null)}
                   onRename={() => startRename(s)}
                   onDetail={() => { setDetailId(s.id); setMenuId(null); }}
                 />
-              )}
-            </article>
+              ) : null}
+            />
           ))}
         </div>
       )}
 
-      {filtered.length > 0 && (
+      {stories.length > 0 && (
         <button className="narra-fab" onClick={startNew} aria-label="新故事">
           <NarraPlus size={22} />
         </button>
