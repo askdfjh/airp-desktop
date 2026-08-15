@@ -78,7 +78,9 @@ function buildStoryFromGroup(
   deletedSiblings: Session[],
 ): Story {
   const latest = pickLatest(group);
-  const raw = (latest.title ?? "").trim();
+  const unlocked = group.filter((s) => !s.locked);
+  const titleSrc = unlocked.length > 0 ? pickLatest(unlocked) : latest;
+  const raw = (titleSrc.title ?? "").trim();
   const title = !raw || raw === "空白会话" ? "未命名稿纸" : raw;
   const kind = group.some((s) => s.kind !== "blank") ? "adventure" : "blank";
   const createdAt = group.reduce((min, s) => Math.min(min, s.createdAt), group[0].createdAt);

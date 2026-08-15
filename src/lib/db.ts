@@ -2020,6 +2020,7 @@ export async function snapshotConversations(): Promise<ConversationsSnapshot> {
     sessionCharacters: await q("SELECT * FROM session_characters;"),
     sessionCharacterCards: await q("SELECT * FROM session_character_cards;"),
     characterArcs: await q("SELECT * FROM character_arcs;"),
+    stories: await q("SELECT * FROM stories;"),
   };
 }
 
