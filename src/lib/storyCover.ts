@@ -25,7 +25,7 @@ export function coverThemeFor(worldBaseId?: string | null, kind?: string): Cover
   return COVER_THEMES[id] || COVER_THEMES.custom;
 }
 
-export function verticalTitle(title: string, max = 8): string {
+export function verticalTitle(title: string, max = 16): string {
   const t = (title || "").replace(/\s+/g, "");
   return t.slice(0, max);
 }

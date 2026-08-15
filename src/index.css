@@ -2817,7 +2817,7 @@ details > :not(summary) { margin-top: 6px; }
 }
 
 .narra-cover {
-  position: relative; aspect-ratio: 3 / 4; border-radius: 2px 7px 8px 3px; overflow: hidden;
+  position: relative; isolation: isolate; aspect-ratio: 3 / 4; border-radius: 2px 7px 8px 3px; overflow: hidden;
   background: var(--cover-wash, #c4bdd4); color: var(--cover-ink, #2a2438);
   box-shadow: 0 12px 22px rgba(0,0,0,0.2), 2px 2px 0 color-mix(in srgb, var(--cover-ink) 12%, transparent);
   transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
@@ -2829,11 +2829,12 @@ details > :not(summary) { margin-top: 6px; }
 .narra-cover.has-art .narra-cover-wash {
   z-index: 1;
   background:
-    linear-gradient(90deg, transparent 0 42%, color-mix(in srgb, var(--cover-wash) 55%, transparent) 68%, color-mix(in srgb, var(--cover-wash) 88%, #1c1710) 100%),
-    linear-gradient(180deg, color-mix(in srgb, #000 18%, transparent), transparent 28%, color-mix(in srgb, var(--cover-wash) 35%, transparent) 100%);
+    linear-gradient(180deg, rgba(0,0,0,0.16), transparent 26%),
+    linear-gradient(90deg, rgba(0,0,0,0.14), transparent 24%);
 }
-.narra-cover.has-art .narra-cover-rules { opacity: 0.12; }
-.narra-cover.has-art .narra-cover-grain { opacity: 0.22; }
+.narra-cover.has-art .narra-cover-rules { opacity: 0.08; }
+.narra-cover.has-art .narra-cover-grain { opacity: 0.16; }
+.narra-cover.has-art .narra-cover-ribbon { opacity: 0.38; left: 26%; right: auto; }
 .narra-cover--compact { width: 48px; height: 68px; flex-shrink: 0; }
 .narra-cover-wash {
   position: absolute; inset: 0;
@@ -2895,22 +2896,36 @@ details > :not(summary) { margin-top: 6px; }
 .narra-cover-corners i:nth-child(2) { top: 0; right: 0; border-top-width: 1px; border-right-width: 1px; }
 .narra-cover-corners i:nth-child(3) { bottom: 0; left: 0; border-bottom-width: 1px; border-left-width: 1px; }
 .narra-cover-corners i:nth-child(4) { bottom: 0; right: 0; border-bottom-width: 1px; border-right-width: 1px; }
-.narra-cover-title {
-  position: absolute; right: 16%; top: 14%; bottom: 20%;
-  z-index: 5;
-  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
-  font-size: 15px; font-weight: 650; letter-spacing: 0.12em; writing-mode: vertical-rl;
+.narra-cover-frost {
+  position: absolute; z-index: 2; top: 0; right: 0; bottom: 0; width: 46%;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(255,248,236,0) 0%, rgba(255,248,236,0.14) 28%, rgba(255,248,236,0.26) 100%);
+  -webkit-backdrop-filter: blur(14px) saturate(1.18);
+  backdrop-filter: blur(14px) saturate(1.18);
 }
-.narra-cover.has-art .narra-cover-title {
-  right: 10%;
-  padding: 10px 5px 12px;
-  background: color-mix(in srgb, var(--cover-wash) 82%, #f4ead4);
-  border-radius: 2px;
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--cover-ink) 14%, transparent);
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .narra-cover-frost {
+    background: linear-gradient(90deg, rgba(255,248,236,0) 0%, rgba(32,24,16,0.22) 40%, rgba(32,24,16,0.38) 100%);
+  }
+}
+.narra-cover-title {
+  position: absolute; right: 10%; top: 15%;
+  z-index: 5;
+  max-height: 70%;
+  max-width: 38%;
+  overflow: hidden;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-family: "Songti SC", "STSong", "SimSun", "Noto Serif SC", "Source Han Serif SC", serif;
+  font-size: 14px; font-weight: 600; letter-spacing: 0.08em; line-height: 1.28;
   color: var(--cover-ink);
 }
-.narra-cover--compact .narra-cover-title { font-size: 9px; right: 14%; }
-.narra-cover--compact.has-art .narra-cover-title { right: 8%; padding: 4px 2px 5px; }
+.narra-cover.has-art .narra-cover-title {
+  color: color-mix(in srgb, var(--cover-ink) 88%, #1a1410);
+  text-shadow: 0 1px 1px rgba(255,248,236,0.35);
+}
+.narra-cover--compact .narra-cover-title { font-size: 8px; right: 10%; letter-spacing: 0.04em; max-width: 42%; }
+.narra-cover--compact .narra-cover-frost { width: 48%; }
 .narra-cover-seal {
   position: absolute; left: 18%; bottom: 12%; width: 28px; height: 28px;
   color: var(--cover-seal); opacity: 0.85; z-index: 4;

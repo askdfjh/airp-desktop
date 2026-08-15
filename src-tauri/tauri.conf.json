@@ -1,6 +1,6 @@
 {
   "productName": "灵叙 Narra",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "identifier": "com.airp.app",
   "build": {
     "beforeBuildCommand": "npm run build",

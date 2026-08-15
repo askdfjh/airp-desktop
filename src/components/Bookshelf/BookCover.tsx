@@ -29,7 +29,7 @@ function Motif({ id }: { id: string }) {
 
 export function BookCover({ story, compact }: { story: Story; compact?: boolean }) {
   const theme = coverThemeFor(story.worldBaseId, story.kind);
-  const title = verticalTitle(story.title, compact ? 5 : 8);
+  const title = verticalTitle(story.title, compact ? 8 : 16);
   const art = artForStory(story);
   return (
     <div
@@ -44,6 +44,7 @@ export function BookCover({ story, compact }: { story: Story; compact?: boolean 
     >
       {art && <img className="narra-cover-art" src={art} alt="" />}
       <div className="narra-cover-wash" />
+      {art && <div className="narra-cover-frost" />}
       <div className="narra-cover-grain" />
       <div className="narra-cover-headband" />
       <div className="narra-cover-pages" />
@@ -53,7 +54,7 @@ export function BookCover({ story, compact }: { story: Story; compact?: boolean 
         <i /><i /><i />
       </div>
       <div className="narra-cover-ribbon" />
-      <div className="narra-cover-title">{title.split("").map((ch, i) => <span key={i}>{ch}</span>)}</div>
+      <div className="narra-cover-title">{title}</div>
       <svg className="narra-cover-seal" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.3">
         <circle cx="24" cy="24" r="16" />
         <Motif id={theme.id} />
