@@ -7,9 +7,11 @@ import { BookCard } from "./BookCard";
 import { BookDetail } from "./BookDetail";
 import {
   NarraPlus, NarraDraft, NarraSeek, NarraGrid, NarraRows,
-  NarraSettings, NarraBookmark,
+  NarraSettings, NarraBookmark, NarraBack,
 } from "@/components/icons/NarraIcon";
 import { isPlaceholderTitle } from "@/lib/storyTitle";
+import { saveStoryTxt } from "@/lib/storyExport";
+import { registerBackHandler } from "@/lib/androidBack";
 import { ART } from "@/assets/art";
 import type { Story } from "@/types";
 
@@ -41,6 +43,7 @@ const GROUPS: { id: "all" | "writing" | "finished" | "draft"; label: string }[] 
 
 export function Bookshelf() {
   const stories = useStoryStore((s) => s.stories);
+  const trash = useStoryStore((s) => s.trash);
   const openStory = useStoryStore((s) => s.openStory);
   const startNew = useStoryStore((s) => s.startNewAdventure);
   const createDraft = useStoryStore((s) => s.createDraftStory);
@@ -49,6 +52,7 @@ export function Bookshelf() {
   const [searchOn, setSearchOn] = useState(false);
   const [menuId, setMenuId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [trashOn, setTrashOn] = useState(false);
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
   const [appVer, setAppVer] = useState("");
@@ -71,6 +75,21 @@ export function Bookshelf() {
     })();
     return () => { cancelled = true; };
   }, [placeholderIds]);
+
+  useEffect(() => {
+    const unregister = registerBackHandler(() => {
+      if (detailId) {
+        setDetailId(null);
+        return true;
+      }
+      if (trashOn) {
+        setTrashOn(false);
+        return true;
+      }
+      return false;
+    });
+    return unregister;
+  }, [detailId, trashOn]);
 
   const last = useMemo(() => {
     return [...stories].filter((s) => s.lastOpenedAt).sort((a, b) => (b.lastOpenedAt ?? 0) - (a.lastOpenedAt ?? 0))[0] ?? null;
@@ -122,6 +141,11 @@ export function Bookshelf() {
           <button className="narra-icon-btn" aria-label="搜索" onClick={() => setSearchOn((v) => !v)}><NarraSeek size={18} /></button>
           <button className="narra-icon-btn" aria-label={shelfView === "grid" ? "列表" : "网格"} onClick={() => setShelfView(shelfView === "grid" ? "list" : "grid")}>
             {shelfView === "grid" ? <NarraRows size={18} /> : <NarraGrid size={18} />}
+          </button>
+          <button className={"narra-icon-btn" + (trashOn ? " is-on" : "")} aria-label="回收站" onClick={() => setTrashOn((v) => !v)}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 7 H20" /><path d="M9 7 V5 H15 V7" /><path d="M7 7 L8 20 H16 L17 7" />
+            </svg>
           </button>
           <button className="narra-icon-btn" aria-label="设置" onClick={() => setSettingsOpen(true)}><NarraSettings size={18} /></button>
         </div>
@@ -179,7 +203,7 @@ export function Bookshelf() {
               key={s.id}
               story={s}
               compact={shelfView === "list"}
-              subtitle={`${volumeLabel(s)} · ${relTime(s.updatedAt)}`}
+              subtitle={`${volumeLabel(s)}${s.wordCount > 0 ? ` · 约 ${s.wordCount} 字` : ""} · ${relTime(s.updatedAt)}`}
               renaming={renameId === s.id}
               renameVal={renameVal}
               onOpen={() => openStory(s.id)}
@@ -206,6 +230,33 @@ export function Bookshelf() {
       )}
 
       {detailId && <BookDetail storyId={detailId} onClose={() => setDetailId(null)} />}
+      {trashOn && (
+        <div className="narra-detail">
+          <header className="narra-detail-bar">
+            <button className="narra-icon-btn" onClick={() => setTrashOn(false)} aria-label="返回"><NarraBack size={18} /></button>
+            <span>回收站</span>
+            <span style={{ width: 40 }} />
+          </header>
+          <p className="narra-muted" style={{ padding: "0 20px 12px" }}>删除的书保留 30 天，可恢复。</p>
+          <ul className="narra-vol-list">
+            {trash.map((s) => (
+              <li key={s.id}>
+                <div className="narra-trash-row">
+                  <div>
+                    <strong>{s.title}</strong>
+                    <em>{relTime(s.deletedAt)}</em>
+                  </div>
+                  <div>
+                    <button type="button" onClick={() => useStoryStore.getState().restore(s.id)}>恢复</button>
+                    <button type="button" className="is-danger" onClick={() => { if (confirm(`彻底删除「${s.title}」？`)) useStoryStore.getState().purge(s.id); }}>清除</button>
+                  </div>
+                </div>
+              </li>
+            ))}
+            {trash.length === 0 && <li className="narra-muted">回收站是空的</li>}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -219,6 +270,7 @@ function BookMenu({ story, onClose, onRename, onDetail }: { story: Story; onClos
       <button onClick={onRename}>重命名</button>
       <button onClick={() => { void st.autoTitle(story.id, { force: true }); onClose(); }}>取书名</button>
       <button onClick={() => { st.setPinned(story.id, !story.pinned); onClose(); }}>{story.pinned ? "取消置顶" : "置顶"}</button>
+      <button onClick={() => { void saveStoryTxt(story).then((how) => useUIStore.getState().notify(how === "copied" ? "已复制到剪贴板" : "已导出文稿")); onClose(); }}>导出</button>
       <button onClick={() => { st.setStatus(story.id, story.status === "finished" ? "writing" : "finished"); onClose(); }}>
         {story.status === "finished" ? "继续写" : "标为完结"}
       </button>

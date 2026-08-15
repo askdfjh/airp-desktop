@@ -67,6 +67,7 @@ export function CharacterPanel() {
   useEffect(() => { loadTrashFromDb(); }, []);
 
   const extractedCards = cards.filter((c) => c.isExtracted);
+  const helperCards = cards.filter((c) => c.isBuiltin && !c.isExtracted);
   const selected = detailId ? characters.find(c => c.id === detailId) ?? null : null;
 
   useEffect(() => {
@@ -266,6 +267,22 @@ export function CharacterPanel() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {helperCards.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--seed-muted)", textTransform: "uppercase", letterSpacing: "0.06em", padding: "2px 2px 0" }}>
+                    写作助手 · {helperCards.length}
+                  </div>
+                  {helperCards.map((c) => (
+                    <div key={c.id}
+                      onClick={() => roleplayFromCard(c)}
+                      style={{ padding: 12, borderRadius: 16, cursor: "pointer", background: "var(--seed-surface)", border: "1px solid var(--seed-border)", display: "flex", flexDirection: "column", gap: 6 }}>
+                      <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)" }}>{c.name}</span>
+                      <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.35 }}>{c.description}</div>
+                    </div>
+                  ))}
                 </div>
               )}
 

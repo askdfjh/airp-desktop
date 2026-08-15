@@ -2,8 +2,9 @@ import { create } from "zustand";
 import type { Story } from "@/types";
 import {
   loadStories, loadTrashedStories, insertStory, updateStory,
-  softDeleteStory, restoreStory, purgeStory,
+  softDeleteStory, restoreStory, purgeStory, purgeExpiredStories, loadMessages,
 } from "@/lib/db";
+import { countStoryChars } from "@/lib/storyExport";
 import { generateStoryTitle, isBadGeneratedTitle, isPlaceholderTitle } from "@/lib/storyTitle";
 import { getTopicScheme } from "@/lib/topicSchemes";
 import { getWorldFoundation } from "@/lib/worldFoundations";
@@ -34,6 +35,7 @@ interface StoryState {
   remove: (id: string) => void;
   restore: (id: string) => void;
   purge: (id: string) => void;
+  recountWords: (id: string) => Promise<number>;
   volumesOf: (storyId: string) => ReturnType<typeof useSessionStore.getState>["sessions"];
 }
 
@@ -45,6 +47,7 @@ export const useStoryStore = create<StoryState>((set, get) => ({
 
   loadFromDb: async () => {
     try {
+      await purgeExpiredStories().catch(() => 0);
       const [stories, trash] = await Promise.all([loadStories(), loadTrashedStories()]);
       set({ stories, trash, loaded: true });
     } catch (e) {
@@ -87,6 +90,7 @@ export const useStoryStore = create<StoryState>((set, get) => ({
     useUIStore.getState().hydrateReaderForStory(id);
     useUIStore.getState().setAppPhase("reading");
     void get().autoTitle(id, { silent: true });
+    void get().recountWords(id);
   },
 
   startSameWorld: (id: string) => {
@@ -211,6 +215,17 @@ export const useStoryStore = create<StoryState>((set, get) => ({
   purge: (id) => {
     set((st) => ({ trash: st.trash.filter((s) => s.id !== id) }));
     purgeStory(id).catch((e) => console.error("[story] purge failed:", e));
+  },
+
+  recountWords: async (id) => {
+    const vols = useSessionStore.getState().sessions
+      .filter((s) => s.storyId === id)
+      .sort((a, b) => (a.chainIndex ?? 1) - (b.chainIndex ?? 1));
+    const bags = [];
+    for (const v of vols) bags.push(await loadMessages(v.id));
+    const wordCount = countStoryChars(bags);
+    get().patch(id, { wordCount });
+    return wordCount;
   },
 
   volumesOf: (storyId) =>

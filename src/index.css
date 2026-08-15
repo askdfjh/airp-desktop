@@ -2970,7 +2970,28 @@ details > :not(summary) { margin-top: 6px; }
 .narra-detail-actions .narra-btn-primary,
 .narra-detail-actions .narra-btn-ghost { flex: 1; min-width: 108px; }
 .narra-detail-sub, .narra-detail-wc, .narra-muted { color: var(--seed-muted); font-size: 12px; }
-.narra-detail-syn { font-size: 13px; line-height: 1.65; }
+.narra-detail-syn { font-size: 13px; line-height: 1.65; min-height: 1.6em; }
+.narra-syn-edit {
+  width: 100%; min-height: 72px; font: inherit; font-size: 13px; line-height: 1.65;
+  border: 1px solid var(--seed-accent-border); background: var(--seed-input-bg);
+  color: var(--seed-fg); border-radius: 8px; padding: 8px 10px; resize: vertical;
+}
+.narra-export-opt {
+  display: flex; align-items: center; gap: 8px; margin: 8px 0 0;
+  font-size: 12px; color: var(--seed-muted); cursor: pointer;
+}
+.narra-trash-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 12px 14px; margin-bottom: 8px; border-radius: 12px;
+  border: 1px solid var(--seed-border); background: var(--seed-surface);
+}
+.narra-trash-row strong { display: block; font-size: 14px; }
+.narra-trash-row em { font-style: normal; font-size: 11px; color: var(--seed-muted); }
+.narra-trash-row button {
+  border: 1px solid var(--seed-border); background: transparent; color: var(--seed-fg);
+  border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 12px; cursor: pointer; margin-left: 6px;
+}
+.narra-trash-row .is-danger { color: var(--danger); }
 .narra-detail-h { margin: 8px 20px 8px; font-size: 13px; letter-spacing: 0.16em; color: var(--seed-muted); font-weight: 600; }
 .narra-vol-list { list-style: none; margin: 0; padding: 0 16px 24px; }
 .narra-vol-list button {
