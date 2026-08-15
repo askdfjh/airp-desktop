@@ -189,6 +189,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   loadFromDb: async () => {
+    // 只加载；不 createBlankSession，也不按上次会话 setActive
     try {
       const sessions = await loadSessions();
       const favorites = await loadFavorites();

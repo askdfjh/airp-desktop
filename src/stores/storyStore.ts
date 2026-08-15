@@ -38,8 +38,8 @@ export const useStoryStore = create<StoryState>((set, get) => ({
 
   loadFromDb: async () => {
     try {
-      const stories = await loadStories();
-      set({ stories, loaded: true });
+      const [stories, trash] = await Promise.all([loadStories(), loadTrashedStories()]);
+      set({ stories, trash, loaded: true });
     } catch (e) {
       console.error("[story] load failed:", e);
       set({ loaded: true });
@@ -58,15 +58,16 @@ export const useStoryStore = create<StoryState>((set, get) => ({
     const story = get().stories.find((s) => s.id === id);
     if (!story) return;
     const now = Date.now();
-    const sessions = useSessionStore.getState().sessions.filter((s) => s.storyId === id && !s.deletedAt);
-    const unlocked = sessions.filter((s) => !s.locked);
-    const targetId =
-      (story.lastVolumeId && unlocked.some((s) => s.id === story.lastVolumeId) && story.lastVolumeId) ||
-      [...unlocked].sort((a, b) => (b.chainIndex ?? 1) - (a.chainIndex ?? 1))[0]?.id ||
-      sessions[0]?.id ||
-      null;
+    const unlocked = useSessionStore.getState().sessions.filter((s) => s.storyId === id && !s.locked);
+    const lastOk = story.lastVolumeId && unlocked.some((s) => s.id === story.lastVolumeId);
+    const targetId = lastOk
+      ? story.lastVolumeId!
+      : [...unlocked].sort((a, b) => {
+          const byChain = (b.chainIndex ?? 1) - (a.chainIndex ?? 1);
+          return byChain !== 0 ? byChain : (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+        })[0]?.id ?? null;
     set({ activeStoryId: id });
-    get().patch(id, { lastOpenedAt: now, lastVolumeId: targetId, updatedAt: now });
+    get().patch(id, { lastOpenedAt: now, lastVolumeId: targetId });
     if (targetId) useSessionStore.getState().setActive(targetId);
     if (story.worldBookId) {
       await useWorldStore.getState().setActiveBook(story.worldBookId).catch(() => {});
@@ -86,10 +87,10 @@ export const useStoryStore = create<StoryState>((set, get) => ({
 
   createDraftStory: async () => {
     const now = Date.now();
-    const sid = useSessionStore.getState().createBlankSession();
-    const id = crypto.randomUUID();
+    const storyId = crypto.randomUUID();
+    const sessionId = crypto.randomUUID();
     const story: Story = {
-      id,
+      id: storyId,
       title: "未命名稿纸",
       kind: "blank",
       status: "writing",
@@ -98,22 +99,29 @@ export const useStoryStore = create<StoryState>((set, get) => ({
       pinned: false,
       synopsis: "",
       tags: [],
-      lastOpenedAt: now,
-      lastVolumeId: sid,
+      lastVolumeId: sessionId,
       wordCount: 0,
       createdAt: now,
       updatedAt: now,
     };
-    const { updateSession } = await import("@/lib/db");
-    await updateSession(sid, { storyId: id, updatedAt: now }).catch(() => {});
-    useSessionStore.setState((st) => ({
-      sessions: st.sessions.map((s) => (s.id === sid ? { ...s, storyId: id, title: "未命名稿纸" } : s)),
-    }));
-    set((st) => ({ stories: [story, ...st.stories], activeStoryId: id }));
-    insertStory(story).catch((e) => console.error("[story] insert draft failed:", e));
-    useSessionStore.getState().setActive(sid);
-    useUIStore.getState().setAppPhase("reading");
-    return id;
+    await insertStory(story);
+    set((st) => ({ stories: [story, ...st.stories] }));
+    useSessionStore.getState().add({
+      id: sessionId,
+      title: "未命名稿纸",
+      systemPrompt: "",
+      providerId: "",
+      model: "",
+      thinkingEnabled: true,
+      kind: "blank",
+      createdAt: now,
+      updatedAt: now,
+      storyId,
+      chainId: storyId,
+      chainIndex: 1,
+    });
+    await get().openStory(storyId);
+    return storyId;
   },
 
   addStory: (s) => set((st) => ({ stories: [s, ...st.stories], activeStoryId: s.id })),
