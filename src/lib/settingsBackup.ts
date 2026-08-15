@@ -100,7 +100,7 @@ const GROUP_DB_TABLES: Record<BackupGroupKey, (keyof SettingsDbSnapshot)[]> = {
   worldRules: ["worldRules"],
   worldBooks: ["worldBooks", "worldBookEntries"],
   conversations: [],
-  stories: [],
+  stories: ["stories"],
 };
 
 export interface SettingsBackup {
