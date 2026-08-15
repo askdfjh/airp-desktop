@@ -349,7 +349,7 @@ export function CharacterPanel() {
           <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
             {extractedCards.length === 0 && (
               <div style={{ padding: "30px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>
-                暂无提取角色卡。对话足够长时点击底栏「保存记忆」，将自动记录出场的重要角色。
+                暂无提取角色卡。可在书详情点「从正文整理」，或对话很长时用底栏「保存记忆」。
               </div>
             )}
             {extractedCards.map((c) => (

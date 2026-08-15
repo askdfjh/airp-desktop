@@ -3008,6 +3008,12 @@ details > :not(summary) { margin-top: 6px; }
 }
 .narra-trash-row .is-danger { color: var(--danger); }
 .narra-detail-h { margin: 8px 20px 8px; font-size: 13px; letter-spacing: 0.16em; color: var(--seed-muted); font-weight: 600; }
+.narra-detail-h-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 8px 16px 8px;
+}
+.narra-detail-h-row .narra-detail-h { margin: 0; }
+.narra-roster-btn { height: 32px; padding: 0 12px; font-size: 12px; }
 .narra-vol-list { list-style: none; margin: 0; padding: 0 16px 24px; }
 .narra-vol-list button {
   width: 100%; display: flex; justify-content: space-between; gap: 12px;

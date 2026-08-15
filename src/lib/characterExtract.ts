@@ -1,4 +1,4 @@
-import type { Message } from "@/types";
+import type { Message, Story } from "@/types";
 import { chatStream } from "@/providers/openai";
 import type { CharacterDraft } from "@/stores/createStore";
 import {
@@ -6,8 +6,13 @@ import {
   updateCharacterCard,
   insertSessionCharacterCard,
   loadSessionCharacterCards,
+  loadMessages,
 } from "./db";
 import { parseSceneReply } from "./sceneTemplate";
+import { parseSceneAnalysis } from "./sceneAnalyzer";
+import { useProviderStore } from "@/stores/providerStore";
+import { useSessionStore } from "@/stores/sessionStore";
+import { useWorldStore } from "@/stores/worldStore";
 
 /** 单次提取的角色上限 */
 export const MAX_EXTRACT_CHARACTERS = 5;
@@ -126,24 +131,28 @@ function cleanCharacters(
  * 兜底提取：遍历消息解析【场景信息】的「出场角色」字段做频率统计，
  * 出场 ≥ MIN_MENTIONS 次的角色按频率降序取前 MAX_EXTRACT_CHARACTERS 个。
  */
+function namesFromSceneLine(block: string | null | undefined): string[] {
+  if (!block) return [];
+  return block.split(/[、，,／/]/).map((s) => s.trim()).filter((name) => name && name.length <= 12);
+}
+
 export function fallbackExtractBySceneFields(
   messages: Message[],
   playerCharacterName?: string,
+  minMentions = MIN_MENTIONS,
 ): ExtractedCharacterInfo[] {
   const counts = new Map<string, number>();
   for (const m of messages) {
-    if (m.role !== "assistant" || !m.content) continue;
-    const scene = parseSceneReply(m.content).scene;
-    if (!scene?.characters) continue;
-    for (const raw of scene.characters.split(/[、，,／/]/)) {
-      const name = raw.trim();
-      if (!name || name.length > 12) continue;
+    if (m.role !== "assistant") continue;
+    const fromTpl = parseSceneReply(m.content || "").scene?.characters;
+    const fromSa = m.sceneAnalysis ? parseSceneAnalysis(m.sceneAnalysis)?.characters : "";
+    for (const name of [...namesFromSceneLine(fromTpl), ...namesFromSceneLine(fromSa)]) {
       if (playerCharacterName && normalizeName(name) === normalizeName(playerCharacterName)) continue;
       counts.set(name, (counts.get(name) || 0) + 1);
     }
   }
   return [...counts.entries()]
-    .filter(([, c]) => c >= MIN_MENTIONS)
+    .filter(([, c]) => c >= minMentions)
     .sort((a, b) => b[1] - a[1])
     .slice(0, MAX_EXTRACT_CHARACTERS)
     .map(([name]) => ({
@@ -199,6 +208,7 @@ export async function extractCharacters(params: ExtractParams): Promise<Extracte
     "对话记录如下（==== 之间）：\n====\n" + windowText + "\n====";
 
   let raw = "";
+  let thinking = "";
   try {
     for await (const chunk of chatStream(
       [
@@ -212,14 +222,15 @@ export async function extractCharacters(params: ExtractParams): Promise<Extracte
       undefined,
       signal,
     )) {
-      raw += chunk.content;
+      raw += chunk.content || "";
+      thinking += chunk.thinking || "";
     }
   } catch (e) {
     console.warn("[characterExtract] LLM call failed, falling back to scene fields:", e);
     return fallbackExtractBySceneFields(messages, playerCharacterName);
   }
 
-  const parsed = parseJsonArray(raw);
+  const parsed = parseJsonArray(raw) || parseJsonArray(thinking);
   if (!parsed || parsed.length === 0) {
     console.warn("[characterExtract] JSON parse failed, falling back to scene fields");
     return fallbackExtractBySceneFields(messages, playerCharacterName);
@@ -357,6 +368,52 @@ export async function saveExtractedCharacters(
     saved++;
   }
   return saved;
+}
+
+function resolveChatProvider(): { baseUrl: string; apiKey: string; model: string } | null {
+  const ps = useProviderStore.getState();
+  const session = useSessionStore.getState();
+  const active = session.activeId ? session.sessions.find((s) => s.id === session.activeId) : null;
+  const pid = active?.providerId || ps.activeProviderId;
+  const provider = ps.providers.find((p) => p.id === pid) || ps.providers.find((p) => p.id === ps.activeProviderId);
+  const model = active?.model || ps.activeModel || provider?.models[0];
+  if (!provider || !model || !provider.baseUrl || !provider.apiKey?.trim()) return null;
+  if (ps.enabledProviders[provider.id] === false) return null;
+  return { baseUrl: provider.baseUrl, apiKey: provider.apiKey, model };
+}
+
+/** 书详情「整理名册」：不依赖长对话压缩，直接从本书正文抽角色。 */
+export async function refreshStoryRoster(story: Story): Promise<{ saved: number; error?: string }> {
+  const vols = useSessionStore.getState().sessions
+    .filter((s) => s.storyId === story.id)
+    .sort((a, b) => (a.chainIndex ?? 1) - (b.chainIndex ?? 1));
+  if (vols.length === 0) return { saved: 0, error: "这本书还没有卷次" };
+
+  const bags: Message[] = [];
+  for (const v of vols) bags.push(...await loadMessages(v.id));
+  const narrative = bags.filter((m) => !m.opening && (m.role === "assistant" || m.role === "user"));
+  if (narrative.length === 0) return { saved: 0, error: "正文还太少" };
+
+  const worldName = story.worldBookId
+    ? useWorldStore.getState().books.find((b) => b.id === story.worldBookId)?.name
+    : undefined;
+  const creds = resolveChatProvider();
+  const chars = creds
+    ? await extractCharacters({
+        messages: bags,
+        playerCharacterName: story.protagonistName || undefined,
+        worldBookName: worldName,
+        provider: creds,
+      })
+    : fallbackExtractBySceneFields(bags, story.protagonistName || undefined, 1);
+
+  if (chars.length === 0) return { saved: 0, error: "没认出稳定出场的角色" };
+
+  const target = (story.lastVolumeId && vols.some((v) => v.id === story.lastVolumeId))
+    ? story.lastVolumeId
+    : vols[vols.length - 1].id;
+  const saved = await saveExtractedCharacters(chars, target, story.worldBookId ?? null);
+  return { saved };
 }
 
 /* ---------- 创建模式：单角色完整提炼 ---------- */

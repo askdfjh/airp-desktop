@@ -6,6 +6,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { BookCover } from "./BookCover";
 import { saveStoryTxt } from "@/lib/storyExport";
 import { loadExtractedCardsForStory } from "@/lib/db";
+import { refreshStoryRoster } from "@/lib/characterExtract";
 import { NarraBack, NarraExport } from "@/components/icons/NarraIcon";
 
 export function BookDetail({ storyId, onClose }: { storyId: string; onClose: () => void }) {
@@ -19,6 +20,7 @@ export function BookDetail({ storyId, onClose }: { storyId: string; onClose: () 
   const [titleDraft, setTitleDraft] = useState("");
   const [synDraft, setSynDraft] = useState<string | null>(null);
   const [roster, setRoster] = useState<{ id: string; name: string; description: string; personality: string; scenario: string }[]>([]);
+  const [rosterBusy, setRosterBusy] = useState(false);
   const vols = useMemo(
     () => sessions.filter((s) => s.storyId === storyId).sort((a, b) => (a.chainIndex ?? 1) - (b.chainIndex ?? 1)),
     [sessions, storyId],
@@ -55,6 +57,28 @@ export function BookDetail({ storyId, onClose }: { storyId: string; onClose: () 
     if (synDraft === null) return;
     useStoryStore.getState().patch(story.id, { synopsis: synDraft.trim(), updatedAt: Date.now() });
     setSynDraft(null);
+  };
+
+  const reloadRoster = async () => {
+    try {
+      setRoster(await loadExtractedCardsForStory(storyId));
+    } catch {
+      setRoster([]);
+    }
+  };
+
+  const doRoster = async () => {
+    if (!story || rosterBusy) return;
+    setRosterBusy(true);
+    try {
+      const { saved, error } = await refreshStoryRoster(story);
+      await reloadRoster();
+      useUIStore.getState().notify(error ? error : saved > 0 ? `名册已记下 ${saved} 人` : "名册没有新角色");
+    } catch (e) {
+      useUIStore.getState().notify("整理名册失败：" + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setRosterBusy(false);
+    }
   };
 
   return (
@@ -147,15 +171,28 @@ export function BookDetail({ storyId, onClose }: { storyId: string; onClose: () 
           </div>
         </div>
       </div>
-      <h2 className="narra-detail-h">角色名册</h2>
+      <div className="narra-detail-h-row">
+        <h2 className="narra-detail-h">角色名册</h2>
+        <button className="narra-btn-ghost narra-roster-btn" disabled={rosterBusy} onClick={() => void doRoster()}>
+          {rosterBusy ? "整理中…" : "从正文整理"}
+        </button>
+      </div>
       <ul className="narra-roster">
-        {roster.map((c) => (
+        {story.protagonistName && (
+          <li>
+            <strong>{story.protagonistName}</strong>
+            <span>本书主角</span>
+          </li>
+        )}
+        {roster.filter((c) => c.name !== story.protagonistName).map((c) => (
           <li key={c.id}>
             <strong>{c.name}</strong>
             <span>{c.personality || c.description || c.scenario || "尚无摘录"}</span>
           </li>
         ))}
-        {roster.length === 0 && <li className="narra-muted">整理长对话后抽出的角色会记在这里</li>}
+        {!story.protagonistName && roster.length === 0 && (
+          <li className="narra-muted">写过几段后点「从正文整理」，出场角色会记在这里</li>
+        )}
       </ul>
       <h2 className="narra-detail-h">卷次</h2>
       <ul className="narra-vol-list">

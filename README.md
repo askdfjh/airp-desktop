@@ -11,7 +11,7 @@
 
 ---
 
-## 这一版（0.2.11）你能做什么
+## 这一版（0.2.12）你能做什么
 
 ### 书架是家
 
@@ -73,7 +73,7 @@
 
 ### 书详情
 
-改名、简介、完结/继续写、删除、导出、取书名、同世界再开一本。能看到本书压缩抽出的角色名册。字数按正文重计。
+改名、简介、完结/继续写、删除、导出、取书名、同世界再开一本。详情里能看到主角，点「从正文整理」从出场角色抽出名册。字数按正文重计。
 
 ### 导出作品
 
@@ -209,7 +209,7 @@ Tauri 2 · React 19 · TypeScript · Vite · Zustand · SQLite（tauri-plugin-sq
 
 | 文件 | SHA-256 |
 |---|---|
-| Narra_0.2.11_android-arm64.apk | `F293DDD03CC7992A682769390E243634802915E31CA034AD3C28C2380C2DF21B` |
+| Narra_0.2.12_android-arm64.apk | `78145BD9A881A6A5CE53024E8B70413F1E1E5A8702E9F9A24BEF9BCF39722B37` |
 | Narra_0.2.1_x64-setup.exe（上游桌面） | `B13CC5C79984DBD741B6978A4EE34CD1810ED713BC05670480BD9C3B77B510FA` |
 | Narra_0.2.1_x64_zh-CN.msi（上游桌面） | `163D603C3740F82CC2AEA5B7905AF9DB34EB6B6FA4F4B2861E37D8BF84BBFFC6` |
 | Narra_0.2.1_android-arm64-release.apk（上游） | `C6CC103A789AFBCA7F7B5C59BA947C3F09391A26CFB946EA93B65B61181756AE` |
