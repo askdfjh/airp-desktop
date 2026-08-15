@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, ExternalLink, Gift, Scale, ShieldAlert } from "lucide-react";
+import { ART } from "@/assets/art";
 import { ComplianceNotice } from "./ComplianceNotice";
 import { RuntimeLogPanel } from "./RuntimeLogPanel";
 
@@ -25,9 +26,7 @@ export function AboutPanel() {
     <div style={{ maxWidth: 760, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ padding: 22, borderRadius: 22, background: "var(--seed-surface)", border: "1px solid var(--seed-border)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 46, height: 46, borderRadius: 18, background: "var(--seed-accent-bg)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--seed-accent)", flexShrink: 0 }}>
-            <Scale size={22} />
-          </div>
+          <img src={ART.appIcon} alt="" style={{ width: 46, height: 46, borderRadius: 14, flexShrink: 0 }} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 18, fontWeight: 700, color: "var(--seed-fg)", marginBottom: 3 }}>关于灵叙 Narra</div>
             <div style={{ fontSize: 12, lineHeight: 1.7, color: "var(--seed-muted)" }}>

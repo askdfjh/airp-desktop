@@ -3,6 +3,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { useWorldStore } from "@/stores/worldStore";
 import { inferWorldBookAudience, type WorldAudienceFilter } from "@/lib/worldAudience";
 import { getCompatibleTropes, worldviewLabelForId } from "@/lib/popularTropes";
+import { WORLD_ART } from "@/assets/art";
 
 // 预设世界 → 内置规则书 id 映射（没有内置书的世界不注入任何条目）
 export const WORLD_BOOK_MAP: Record<string, string> = {
@@ -337,6 +338,7 @@ export function WorldSelect({ onRandomStart }: { onRandomStart?: (filter: WorldA
                 : undefined,
             } as React.CSSProperties}
           >
+            {WORLD_ART[world.id] && <img className="seed-card-art" src={WORLD_ART[world.id]} alt="" />}
             <div className="seed-card-icon" style={{ color: world.color, background: `color-mix(in srgb, ${world.color} 10%, transparent)` }}>
               {world.icon}
             </div>

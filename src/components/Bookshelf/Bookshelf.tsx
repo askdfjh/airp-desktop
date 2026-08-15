@@ -10,6 +10,7 @@ import {
   NarraSettings, NarraBookmark,
 } from "@/components/icons/NarraIcon";
 import { isPlaceholderTitle } from "@/lib/storyTitle";
+import { ART } from "@/assets/art";
 import type { Story } from "@/types";
 
 function relTime(ts?: number | null): string {
@@ -159,14 +160,7 @@ export function Bookshelf() {
 
       {stories.length === 0 ? (
         <div className="narra-shelf-empty">
-          <svg className="narra-empty-mark" viewBox="0 0 160 120" fill="none" aria-hidden>
-            <rect x="18" y="38" width="40" height="58" rx="2" stroke="currentColor" strokeWidth="1.4" transform="rotate(-8 38 67)" />
-            <rect x="60" y="28" width="46" height="68" rx="2" stroke="currentColor" strokeWidth="1.5" />
-            <path d="M70 44 H96 M70 54 H90 M70 64 H96" stroke="currentColor" strokeWidth="1.1" />
-            <rect x="108" y="36" width="38" height="60" rx="2" stroke="currentColor" strokeWidth="1.4" transform="rotate(7 127 66)" />
-            <circle cx="80" cy="88" r="10" stroke="currentColor" strokeWidth="1.2" />
-            <path d="M80 80 L83 88 L80 96 L77 88 Z" stroke="currentColor" strokeWidth="1.1" />
-          </svg>
+          <img className="narra-empty-art" src={ART.empty} alt="" />
           <h1>还没有故事</h1>
           <p>从一本新故事开始，或先写一页草稿。</p>
           <div className="narra-empty-actions">

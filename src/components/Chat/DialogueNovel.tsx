@@ -13,6 +13,7 @@ import type { SceneInfo } from "@/lib/sceneTemplate";
 import { stopCompress, estimateHistoryTokens } from "@/lib/contextCompress";
 import { registerBackHandler } from "@/lib/androidBack";
 import { fitTextarea } from "@/lib/autoGrow";
+import { ART } from "@/assets/art";
 
 export function DialogueNovel() {
   const { messages, sendMessage, streaming, stopStreaming, regenerate, editAndSend, editMessage, deleteMessage, analysingScene } = useChat();
@@ -424,6 +425,7 @@ export function DialogueNovel() {
 
   return (
     <div className="seed-dialogue">
+      <img className="seed-dialogue-paper" src={ART.paper} alt="" />
       <div className="narra-read-bar">
         <button className="narra-icon-btn" aria-label="回书架" onClick={() => setAppPhase("bookshelf")}>
           <NarraBack size={18} />
