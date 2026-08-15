@@ -123,10 +123,11 @@ export const useStoryStore = create<StoryState>((set, get) => ({
     if (!opts?.force && !isPlaceholderTitle(story.title)) return null;
     if (titling.has(id)) return null;
     titling.add(id);
+    if (opts?.force) useUIStore.getState().notify("正在取书名…");
     try {
-      const title = await generateStoryTitle(story, { allowMetaOnly: !!opts?.force });
+      const { title, error } = await generateStoryTitle(story, { allowMetaOnly: true });
       if (!title || title === story.title) {
-        if (opts?.force) useUIStore.getState().notify("取书名失败，请稍后再试");
+        if (opts?.force) useUIStore.getState().notify(error ? `取书名失败：${error}` : "取书名失败，请稍后再试");
         return null;
       }
       get().rename(id, title);
