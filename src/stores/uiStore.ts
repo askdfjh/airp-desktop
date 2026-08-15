@@ -5,6 +5,7 @@ import type { HotTropeId } from "@/lib/popularTropes";
 export type ThemeMode = "dark" | "light" | "system";
 export type MessageFontSize = "xs" | "sm" | "md" | "lg" | "xl";
 export type OnboardingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type AppPhase = "welcome" | "bookshelf" | "onboarding" | "reading" | "create";
 
 /** 格式分析（章节/场景/对话推荐）执行模型设置：跟随当前模型 / 指定模型 / 关闭 */
 export interface FormatModelConfig {
@@ -43,8 +44,8 @@ interface UIState {
   toast: string | null;
   toastAction: "settings" | null;
   notify: (msg: string, action?: "settings" | null) => void;
-  // Onboarding state
-  appPhase: "onboarding" | "dialogue" | "bookshelf" | "reading";
+  // Onboarding state（welcome/create 保留在联合类型，实际走 overlay）
+  appPhase: AppPhase;
   onboardingStep: OnboardingStep;
   selectedWorldId: string | null;
   selectedWorldName: string | null;
@@ -76,7 +77,7 @@ interface UIState {
   setMcpActive: (v: boolean) => void;
   effectiveTheme: () => "dark" | "light";
   // Onboarding methods
-  setAppPhase: (phase: "onboarding" | "dialogue" | "bookshelf" | "reading") => void;
+  setAppPhase: (phase: AppPhase) => void;
   shelfView: "grid" | "list";
   shelfSort: "opened" | "updated" | "title" | "created";
   shelfGroup: "all" | "writing" | "finished" | "draft";
@@ -147,7 +148,7 @@ export const useUIStore = create<UIState>()(
         toastTimer = setTimeout(() => set({ toast: null, toastAction: null }), 2200);
       },
       // Onboarding state defaults
-      appPhase: "onboarding",
+      appPhase: "bookshelf",
       onboardingStep: 1,
       selectedWorldId: null,
       selectedWorldName: null,
@@ -240,8 +241,7 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: "airp-ui-v3",
-      // 仅持久化用户偏好,不持久化开局流程状态
-      // appPhase/onboardingStep/selected* 每次启动由 AppShell 根据有无活跃会话重新判定
+      // 仅持久化用户偏好；appPhase 与开局选择不写入，冷启动由 AppShell 定为 bookshelf
       partialize: (s) => ({
         sidebarOpen: s.sidebarOpen,
         settingsOpen: s.settingsOpen,

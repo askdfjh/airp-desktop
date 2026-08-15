@@ -128,8 +128,7 @@ export function AppShell() {
           }
         } catch {}
 
-        // 启动阶段判定：有活跃会话则进入对话模式，否则进入开局流程
-        // 仅首次启动时判定一次，避免后续切换会话被覆盖
+        // 冷启动进书架；欢迎/创建/设置仍为覆盖层。不按会话进对话，也不建空白会话
         if (!phaseInitializedRef.current) {
           phaseInitializedRef.current = true;
           setAppPhase("bookshelf");
@@ -141,7 +140,7 @@ export function AppShell() {
         console.error("[db] init failed:", e);
         setDbReady(false);
       });
-  }, [loadFromDb, loadTemplates, loadCharacters, loadMcps, loadWorldRules, loadTrashFromDb, clearExpiredTrash, loadCardTrash, clearCardTrash, loadWorldTrash, clearWorldTrash]);
+  }, [loadFromDb, loadTemplates, loadCharacters, loadMcps, loadWorldRules, loadTrashFromDb, clearExpiredTrash, loadCardTrash, clearCardTrash, loadWorldTrash, clearWorldTrash, loadStories]);
 
   useEffect(() => {
     const currentTheme = effectiveTheme();
@@ -202,7 +201,7 @@ export function AppShell() {
         s.setAppPhase("bookshelf");
         return true;
       }
-      if (s.appPhase === "reading" || s.appPhase === "dialogue") {
+      if (s.appPhase === "reading") {
         s.setAppPhase("bookshelf");
         return true;
       }
@@ -274,14 +273,14 @@ export function AppShell() {
     setShowExitConfirm(false);
   };
 
-  // 开局流程退出：有活跃会话 → 回到对话模式；无会话（首次进入）→ 退出应用确认
+  // 开局流程退出：回书架
   const handleOnboardingExit = () => {
     const ui = useUIStore.getState();
     ui.resetOnboarding();
     ui.setAppPhase("bookshelf");
   };
 
-  // 欢迎页：跳过 → 直接进入对话；配置完成（关闭设置面板且已配置 provider）→ 进入正常流程
+  // 欢迎页：跳过 / 配置完成 → 书架（覆盖层，不占 phase）
   const handleWelcomeSkip = () => {
     try {
       localStorage.setItem("airp-welcome-v1", "1");
@@ -393,7 +392,7 @@ export function AppShell() {
     );
   }
 
-  const inReading = appPhase === "reading" || appPhase === "dialogue";
+  const inReading = appPhase === "reading";
 
   return (
     <div data-platform={isAndroid ? "android" : "desktop"} className={`theme-${eff}`} style={{ height: "100vh", width: "100vw", position: "relative", overflow: "hidden", background: "var(--seed-bg)" }}>
