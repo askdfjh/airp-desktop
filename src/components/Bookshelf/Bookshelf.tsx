@@ -50,6 +50,12 @@ export function Bookshelf() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
+  const [appVer, setAppVer] = useState("");
+  useEffect(() => {
+    import("@tauri-apps/api/app").then(({ getVersion }) => {
+      void getVersion().then(setAppVer).catch(() => {});
+    }).catch(() => {});
+  }, []);
 
   const placeholderIds = stories.filter((s) => isPlaceholderTitle(s.title)).map((s) => s.id).join(",");
   useEffect(() => {
@@ -109,6 +115,7 @@ export function Bookshelf() {
             <path d="M16 3 L19 13 L29 16 L19 19 L16 29 L13 19 L3 16 L13 13 Z" stroke="currentColor" strokeWidth="1.4" />
           </svg>
           <span>灵叙</span>
+          {appVer && <em className="narra-shelf-ver">{appVer}</em>}
         </div>
         <div className="narra-shelf-actions">
           <button className="narra-icon-btn" aria-label="搜索" onClick={() => setSearchOn((v) => !v)}><NarraSeek size={18} /></button>

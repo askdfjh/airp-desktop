@@ -207,7 +207,8 @@ if do_package {
     pprompt += "3) copy libairp_desktop_lib.so into gen/android/app/src/main/jniLibs/arm64-v8a ";
     pprompt += "4) gradlew.bat clean assembleArm64Release with -Pairp.android.allowDebugReleaseSigning=true ";
     pprompt += "and -x rustBuildArm64Release -x rustBuildUniversalRelease --no-daemon. ";
-    pprompt += "Copy APK to releases/Narra_0.2.1_android-arm64-bookshelf.apk and sha256 it. ";
+    pprompt += "Bump patch version first (package.json, tauri.conf.json, Cargo.toml, tauri.properties versionCode+1). ";
+    pprompt += "Copy APK to releases/Narra_<version>_android-arm64.apk and sha256 it. ";
     pprompt += "ok=true only if the APK file exists. path=absolute apk path. detail=sha256 and size.\n";
     let pres = agent(pprompt, #{
         label: "package",
