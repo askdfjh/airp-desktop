@@ -727,9 +727,9 @@ button.ghost:hover { color:var(--seed-accent); }
   pointer-events: none;
   background:
     linear-gradient(180deg,
-      color-mix(in srgb, var(--seed-bg) 18%, transparent) 0%,
-      color-mix(in srgb, var(--seed-surface) 42%, transparent) 38%,
-      color-mix(in srgb, var(--seed-surface) 92%, transparent) 78%,
+      color-mix(in srgb, var(--seed-bg) 28%, transparent) 0%,
+      color-mix(in srgb, var(--seed-surface) 58%, transparent) 36%,
+      color-mix(in srgb, var(--seed-surface) 94%, transparent) 76%,
       var(--seed-surface) 100%);
 }
 .seed-topic-body {

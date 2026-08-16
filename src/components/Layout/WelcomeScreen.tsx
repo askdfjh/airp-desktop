@@ -73,13 +73,13 @@ export function WelcomeScreen({
           灵叙 Narra
         </h1>
         <p style={{ margin: 0, fontSize: 14, color: "var(--seed-muted)", letterSpacing: "0.2em" }}>
-          沉浸式 AI 互动小说
+          本地文字创作与排版
         </p>
 
         <p style={{ margin: "18px 0 4px", fontSize: 14, lineHeight: 1.8, color: "var(--seed-muted)" }}>
-          欢迎开启你的冒险之旅。首次使用需要配置模型服务（API），
+          打开就是书架。第一次先接上模型服务，
           <br />
-          配置完成后即可开始创作你的故事。
+          然后就能开一本自己的故事。
         </p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 22, width: "100%", maxWidth: 320 }}>
@@ -105,7 +105,7 @@ export function WelcomeScreen({
             onMouseEnter={(e) => { e.currentTarget.style.color = "var(--seed-fg)"; e.currentTarget.style.borderColor = "var(--seed-accent-border)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.color = "var(--seed-muted)"; e.currentTarget.style.borderColor = "var(--seed-border)"; }}
           >
-            跳过，直接进入对话
+            跳过，先去书架
           </button>
         </div>
 
