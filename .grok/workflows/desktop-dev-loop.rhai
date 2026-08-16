@@ -112,9 +112,10 @@ if ok_out(tres) {
 
 phase("Live");
 let lprompt = rules();
-lprompt += "LIVE DESKTOP TEST. Launch src-tauri\\target\\x86_64-pc-windows-msvc\\release\\airp-desktop.exe if needed. ";
-lprompt += "Use orca computer list-apps, list-windows, get-app-state --app airp-desktop --restore-window. ";
-lprompt += "Walk: bookshelf visible below title bar; settings opens; Esc returns; empty or book grid not clipped. ";
+lprompt += "LIVE DESKTOP TEST. Launch via orca terminal create --worktree path:F:/DocProject/airp-desktop --title narra-live --command src-tauri\\target\\x86_64-pc-windows-msvc\\release\\airp-desktop.exe. Do not use Start-Process. ";
+lprompt += "Then orca computer list-apps, list-windows --app airp-desktop, get-app-state --app airp-desktop --restore-window. ";
+lprompt += "Walk: bookshelf below title bar; open start flow; Esc back; open settings and confirm all tabs; Esc back. ";
+lprompt += "If welcome is visible, copy must say 本地文字创作与排版 and 跳过，先去书架, never 进入对话. ";
 lprompt += "ok=true only if you operated the real window and saw no blocker. blockers = concrete UI bugs. ";
 lprompt += "If orca cannot see the window, ok=false and say so in notes. Do not invent a pass.\n";
 let lres = agent(lprompt, #{

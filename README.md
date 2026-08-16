@@ -213,10 +213,12 @@ Tauri 2 · React 19 · TypeScript · Vite · Zustand · SQLite（tauri-plugin-sq
 - **夸克网盘（镜像）**：https://pan.quark.cn/s/e61c6ce610ad 提取码：`5rjv`
 - **蓝奏云（镜像）**：https://wwbmc.lanzoup.com/b01eup1uib 密码：`b8ia`
 
-本 `APP` 分支的安卓包随仓库 `releases/` 与协作发送提供，请核对哈希：
+本仓库 `vdnight` / `APP` 的安装包随 `releases/` 与协作发送提供，请核对哈希：
 
 | 文件 | SHA-256 |
 |---|---|
+| Narra_0.3.1_x64-setup.exe | `415E52444D60ED71A363A8C53D99B048F40C77D0A53C05E28F28D629DA894985` |
+| Narra_0.3.1_x64_zh-CN.msi | `18FBD9F1C7AE60D08181C18F71187FE777A75AA25B0B9BF513C730804D3AE68F` |
 | Narra_0.3.0_x64-setup.exe | `864A5C58FD0586441F7A19353FE92BF0AE66B218BBE9DCB9C4CE8DBAD1C196F4` |
 | Narra_0.3.0_x64_zh-CN.msi | `47CB8224AA5B93C66A25DA5FCF46D98E903920466C4809696CE16B4C9D8B327B` |
 | Narra_0.2.12_android-arm64.apk | `78145BD9A881A6A5CE53024E8B70413F1E1E5A8702E9F9A24BEF9BCF39722B37` |

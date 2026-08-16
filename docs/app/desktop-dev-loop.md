@@ -38,10 +38,12 @@ Send（DWS 把 setup.exe 发给于翔）
 
 ## Live 必过
 
+- 用 `orca terminal create --worktree path:F:/DocProject/airp-desktop --title narra-live --command <release exe>` 启动，再 `list-apps`。`Start-Process` 经常让 Orca 看不见窗口。
 - 标题栏不压住书架顶栏、开局标题、设置页
 - 空书架能进开局，Esc 回书架
-- 设置能打开，底栏分项齐全
-- 欢迎文案是书架，不是「进入对话」
+- 设置能打开，底栏分项齐全（模型 / 角色 / 规则书 / 输出 / 外部工具 / 插件 / 数据 / 关于）
+- 若冷启动还在欢迎页：文案必须是「本地文字创作与排版」和「跳过，先去书架」，不能是「进入对话」
+- `releases/` 不入库，只把 SHA-256 写进 README
 
 ## 禁止
 
