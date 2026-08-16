@@ -98,6 +98,33 @@ check("export hide player", exported.includes("封住楼道"), false);
 check("export hide suggest tag", exported.includes("对话推荐"), false);
 check("export keep body", exported.includes("应急灯"), true);
 
+const NOTE_TAG_RE = /[（(]\s*(?:伏笔|新钩子|旧钩子|钩子|待补|待续|补细节|加细节|作者注|备注|TODO|todo)\s*[）)]/g;
+const NOTE_PAREN_RE = /[（(](?:等下要加|还要加|待补|待加|补充一下|作者注|注[：:]|TODO|todo)[^）)]*[）)]/g;
+const AUTHOR_PREFIX_RE = /^(?:哦对还要加个细节[：:]?|哦对还要|还要加个细节[：:]?|加个细节[：:]|等下要加[：:]?|补充一下[：:]?|作者注[：:]|注[：:]|TODO[：:]|todo[：:])\s*/;
+const MD_HEADING_RE = /^\s{0,3}#{1,6}\s+\S/;
+function stripDraftNotes(text) {
+  const kept = [];
+  for (const raw of text.split(/\n{2,}/)) {
+    const cleaned = raw.replace(NOTE_TAG_RE, "").replace(NOTE_PAREN_RE, "").split("\n")
+      .map((l) => l.replace(AUTHOR_PREFIX_RE, "").replace(/[ \t]+$/g, ""))
+      .filter((l) => {
+        const t = l.trim();
+        return t && !(MD_HEADING_RE.test(t) && t.length < 40);
+      }).join("\n").trim();
+    if (cleaned) kept.push(cleaned);
+  }
+  return kept.join("\n\n").trim();
+}
+const dirty = "酉时还有不到六个小时。（等下要加细节比如阿婆给的地址有问题？）\n\n哦对还要加个细节：门槛下闻见槐花香。（伏笔）\n\n门外阿婆喊他快走。（新钩子）\n\n### 【错?】";
+const clean = stripDraftNotes(dirty);
+check("strip keep hour", clean.includes("酉时还有不到六个小时"), true);
+check("strip keep locust", clean.includes("门槛下闻见槐花香"), true);
+check("strip keep auntie", clean.includes("门外阿婆喊他快走"), true);
+check("strip drop plan", clean.includes("等下要加"), false);
+check("strip drop hook tag", /伏笔|新钩子/.test(clean), false);
+check("strip drop md", clean.includes("【错?】"), false);
+check("strip drop leftover prefix", clean.includes("加个细节"), false);
+
 if (failed) {
   console.error("failed", failed);
   process.exit(1);

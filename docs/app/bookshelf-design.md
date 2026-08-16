@@ -1,7 +1,7 @@
 # 灵叙 APP：书架与故事空间
 
-> 分支：`APP`  
-> 日期：2026-08-15  
+> 分支：`vdnight`（`APP` 已并入）  
+> 日期：2026-08-15（概念稿；现行实现跟 `vdnight`）  
 > 状态：概念稿（仍有效）  
 > 扩展规格与优先级：[`product-spec.md`](./product-spec.md)  
 > 分块设计：[`designs/`](./designs/)

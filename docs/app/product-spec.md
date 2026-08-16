@@ -1,8 +1,8 @@
 # 灵叙 APP 产品规格（书架时代）
 
-> 分支：`APP`  
-> 日期：2026-08-15  
-> 状态：头脑风暴后的执行规格  
+> 分支：`vdnight`（`APP` 已并入）  
+> 日期：2026-08-17  
+> 状态：头脑风暴后的执行规格；桌面 0.3.2 已按此主线交付  
 > 上级摘要：[`bookshelf-design.md`](./bookshelf-design.md)  
 > 分块设计：[`designs/`](./designs/)  
 > 回路：[`delivery-loop.md`](./delivery-loop.md)

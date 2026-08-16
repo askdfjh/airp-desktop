@@ -161,7 +161,7 @@ export function OnboardingFlow({ onExit }: { onExit?: () => void }) {
       systemPrompt,
       providerId: activeProviderId || "",
       model: activeModel || "",
-      thinkingEnabled: true,
+      thinkingEnabled: false,
       kind: "adventure" as const,
       createdAt: now,
       updatedAt: now,

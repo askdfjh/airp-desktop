@@ -2126,7 +2126,7 @@ export async function restoreConversations(snap: ConversationsSnapshot): Promise
 
   const sessionsCfg = {
     columns: ["id", "title", "systemPrompt", "providerId", "model", "thinkingEnabled", "createdAt", "updatedAt", "deleted", "deletedAt", "kind", "contextSummary", "summaryUpdatedAt", "summaryCount", "lastSummarizedMessageId", "chainId", "chainIndex", "parentId", "locked", "archive", "contextIndex", "formatEnabled", "sessionEntries", "storyId"],
-    defaults: { title: "会话", systemPrompt: "", providerId: "", model: "", thinkingEnabled: 1, createdAt: 0, updatedAt: 0, deleted: 0, deletedAt: null, kind: "adventure", contextSummary: null, summaryUpdatedAt: null, summaryCount: 0, lastSummarizedMessageId: null, chainId: null, chainIndex: null, parentId: null, locked: 0, archive: null, contextIndex: null, formatEnabled: 0, sessionEntries: "[]", storyId: null },
+    defaults: { title: "会话", systemPrompt: "", providerId: "", model: "", thinkingEnabled: 0, createdAt: 0, updatedAt: 0, deleted: 0, deletedAt: null, kind: "adventure", contextSummary: null, summaryUpdatedAt: null, summaryCount: 0, lastSummarizedMessageId: null, chainId: null, chainIndex: null, parentId: null, locked: 0, archive: null, contextIndex: null, formatEnabled: 0, sessionEntries: "[]", storyId: null },
   };
   for (const row of snap.sessions ?? []) {
     await insertRowIgnore(db, "sessions", sessionsCfg.columns, row, sessionsCfg.defaults);

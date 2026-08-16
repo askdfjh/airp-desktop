@@ -147,6 +147,8 @@ export const useStoryStore = create<StoryState>((set, get) => ({
     const story = get().stories.find((s) => s.id === id);
     if (!story) return null;
     if (!opts?.force && !isPlaceholderTitle(story.title)) return null;
+    // 空白稿纸不自动取网文名；只在用户点「取书名」时才问模型
+    if (!opts?.force && story.kind === "blank") return null;
     if (titling.has(id)) return null;
     titling.add(id);
     if (opts?.force) useUIStore.getState().notify("正在取书名…");
@@ -192,10 +194,11 @@ export const useStoryStore = create<StoryState>((set, get) => ({
 
   remove: (id) => {
     const target = get().stories.find((s) => s.id === id);
+    const wasActive = get().activeStoryId === id;
     set((st) => ({
       stories: st.stories.filter((s) => s.id !== id),
       trash: target ? [{ ...target, deletedAt: Date.now() }, ...st.trash] : st.trash,
-      activeStoryId: st.activeStoryId === id ? null : st.activeStoryId,
+      activeStoryId: wasActive ? null : st.activeStoryId,
     }));
     softDeleteStory(id).catch((e) => console.error("[story] delete failed:", e));
     useSessionStore.setState((st) => ({
@@ -204,7 +207,9 @@ export const useStoryStore = create<StoryState>((set, get) => ({
         ...st.sessions.filter((s) => s.storyId === id).map((s) => ({ ...s, deletedAt: Date.now() })),
         ...st.trash,
       ],
+      activeId: st.sessions.find((s) => s.id === st.activeId)?.storyId === id ? null : st.activeId,
     }));
+    if (wasActive) useUIStore.getState().setAppPhase("bookshelf");
   },
 
   restore: (id) => {

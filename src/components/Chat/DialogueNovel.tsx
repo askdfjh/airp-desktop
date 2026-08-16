@@ -33,7 +33,8 @@ export function DialogueNovel() {
   const setReaderSettingsOpen = useUIStore((s) => s.setReaderSettingsOpen);
   const readerSettingsOpen = useUIStore((s) => s.readerSettingsOpen);
   const activeStory = useStoryStore((s) => s.stories.find((x) => x.id === (s.activeStoryId || activeSession?.storyId)));
-  const [resumeChip, setResumeChip] = useState(true);
+  const [resumeChip, setResumeChip] = useState(false);
+  const resumeInitRef = useRef<string | null>(null);
   const compressing = useUIStore((s) => s.compressing);
   const compressStage = useUIStore((s) => s.compressStage);
   const compressPrompt = useUIStore((s) => s.compressPrompt);
@@ -168,6 +169,27 @@ export function DialogueNovel() {
     return () => clearTimeout(t);
   }, [highlightId]);
 
+  // 现场条：只在重开已有正文的书时出现一次；新开局生成过程中不提示「上次写到」
+  useEffect(() => {
+    const sid = activeSession?.id;
+    if (!sid) {
+      resumeInitRef.current = null;
+      setResumeChip(false);
+      return;
+    }
+    if (resumeInitRef.current === sid) return;
+    if (streaming) return;
+    const hasExisting = messages.some((m) => m.role === "assistant" && !!m.content);
+    if (!hasExisting && messages.length === 0) return;
+    resumeInitRef.current = sid;
+    setResumeChip(hasExisting);
+  }, [activeSession?.id, messages, streaming]);
+  useEffect(() => {
+    if (!resumeChip) return;
+    const t = setTimeout(() => setResumeChip(false), 8000);
+    return () => clearTimeout(t);
+  }, [resumeChip]);
+
   const emitUserTurn = (text: string) => {
     const next = text.trim();
     if (!next || streaming) return;
@@ -177,6 +199,7 @@ export function DialogueNovel() {
       return;
     }
     regenerateLockRef.current = false;
+    setResumeChip(false);
     setInputValue("");
     sendMessage(next);
   };
@@ -198,7 +221,8 @@ export function DialogueNovel() {
 
   // Copy message content
   const handleCopy = (msg: typeof messages[0]) => {
-    navigator.clipboard.writeText(msg.content);
+    const text = msg.role === "assistant" ? (parseSceneReply(msg.content).body || msg.content) : msg.content;
+    navigator.clipboard.writeText(text);
     setCopiedId(msg.id);
     setTimeout(() => setCopiedId(null), 1500);
   };
@@ -312,7 +336,8 @@ export function DialogueNovel() {
       setOpeningDone(true);
     }
   }, [allVisible, streaming]);
-  const openingActive = !isBlank && !!openingMsg && !openingDone;
+  const hasAssistantBody = allVisible.some((m) => m.role === "assistant" && !!m.content);
+  const openingActive = !isBlank && !!openingMsg && !openingDone && (streaming || !hasAssistantBody);
   const assistantStarted = openingActive && !!lastAssistantMsg?.content;
 
   // 回复等待计时：流式且尚无正文时点点点旁显示读秒（思考模式显示「规划中」）；完成/中断即停止
@@ -535,15 +560,6 @@ export function DialogueNovel() {
           <button type="button" onClick={() => retrySceneAnalysis()}>重试</button>
         </div>
       )}
-      {resumeChip && sceneAnalysisData?.chapterTitle && (
-        <div className="narra-resume-chip">
-          <span>上次写到：{sceneAnalysisData.chapterTitle}</span>
-          <button className="narra-icon-btn" aria-label="关闭" onClick={() => setResumeChip(false)}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6 L18 18 M18 6 L6 18" /></svg>
-          </button>
-        </div>
-      )}
-
       {/* Info badge：[紫色圆点] 世界 · 角色 · 模式（贴合设计稿） */}
       {infoParts.length > 0 && (
         <div className="seed-info-badge">
@@ -615,6 +631,14 @@ export function DialogueNovel() {
           ) : (
             <SceneInfoBar scene={sceneInfo} streaming={analysisPending} />
           )}
+        </div>
+      )}
+      {resumeChip && sceneAnalysisData?.chapterTitle && (
+        <div className="narra-resume-chip">
+          <span>上次写到：{sceneAnalysisData.chapterTitle}</span>
+          <button className="narra-icon-btn" aria-label="关闭" onClick={() => setResumeChip(false)}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6 L18 18 M18 6 L6 18" /></svg>
+          </button>
         </div>
       )}
 
@@ -760,7 +784,7 @@ export function DialogueNovel() {
                     {isStreaming ? (
                       <StreamingText content={msg.content} active={isStreaming} />
                     ) : hasFormat ? (
-                      hl ? <HighlightText text={msg.content} keyword={hl} /> : msg.content
+                      hl ? <HighlightText text={parseSceneReply(msg.content).body || msg.content} keyword={hl} /> : (parseSceneReply(msg.content).body || msg.content)
                     ) : (
                       <MarkdownRender content={msg.content} highlight={hl || undefined} />
                     )}
@@ -832,9 +856,9 @@ export function DialogueNovel() {
           {/* Empty state */}
           {!openingActive && visibleMessages.length === 0 && (
             <div style={{ textAlign: "center", padding: "80px 0", color: "var(--seed-muted)" }}>
-              <p style={{ fontSize: 16, marginBottom: 8 }}>{isBlank ? "开始对话" : "故事即将开始"}</p>
+              <p style={{ fontSize: 16, marginBottom: 8 }}>{isBlank ? "空白稿纸" : "故事即将开始"}</p>
               <p style={{ fontSize: 14, opacity: 0.7 }}>
-                {isBlank ? "输入你的问题，开始交流" : "输入你的第一句话，开启冒险之旅"}
+                {isBlank ? "写一段、改一页，或先排个版。" : "输入你的第一句话，开启冒险之旅"}
               </p>
             </div>
           )}

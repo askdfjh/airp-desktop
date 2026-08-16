@@ -491,18 +491,46 @@ async function askModelTitle(creds: { baseUrl: string; apiKey: string; model: st
   return parseGeneratedTitle(content) || parseGeneratedTitle(thinking) || parseGeneratedTitle(last) || "";
 }
 
+async function draftContentHint(storyId: string): Promise<string> {
+  try {
+    const { useSessionStore } = await import("@/stores/sessionStore");
+    const { loadMessages } = await import("./db");
+    const sessions = useSessionStore.getState().sessions.filter((s) => s.storyId === storyId);
+    const texts: string[] = [];
+    for (const s of sessions.slice(0, 2)) {
+      const msgs = await loadMessages(s.id);
+      for (const m of msgs) {
+        if (m.opening) continue;
+        const t = (m.content || "").trim();
+        if (t) texts.push(t);
+        if (texts.join("").length > 240) break;
+      }
+    }
+    const blob = texts.join(" ").replace(/\s+/g, " ").trim().slice(0, 240);
+    return blob ? `根据这段文字起一个四到十字的短书名，不要网文金手指套路：${blob}` : "";
+  } catch {
+    return "";
+  }
+}
+
 export async function generateStoryTitle(
   story: Story,
   opts?: { allowMetaOnly?: boolean; avoid?: string },
 ): Promise<{ title: string; error?: string }> {
-  const local = composeLocalTitle(story, opts?.avoid || story.title);
+  const local = story.kind === "blank" ? "" : composeLocalTitle(story, opts?.avoid || story.title);
   const creds = resolveProvider();
   if (!creds) return { title: local };
 
-  const topic = getTopicScheme(story.topicSchemeId)?.label?.replace(/\s*\/\s*/g, "") || "";
-  const world = WORLD_FOUNDATIONS.find((f) => f.id === story.worldBaseId)?.label || "";
-  const name = (story.protagonistName || "").replace(/\s+/g, "");
-  const hint = [topic, world, name && name !== "主角" ? `主角${name}` : ""].filter(Boolean).join(" ") || "网文开局";
+  let hint = "";
+  if (story.kind === "blank") {
+    hint = await draftContentHint(story.id);
+    if (!hint) return { title: "" };
+  } else {
+    const topic = getTopicScheme(story.topicSchemeId)?.label?.replace(/\s*\/\s*/g, "") || "";
+    const world = WORLD_FOUNDATIONS.find((f) => f.id === story.worldBaseId)?.label || "";
+    const name = (story.protagonistName || "").replace(/\s+/g, "");
+    hint = [topic, world, name && name !== "主角" ? `主角${name}` : ""].filter(Boolean).join(" ") || "网文开局";
+  }
 
   try {
     const title = await askModelTitle(creds, hint);

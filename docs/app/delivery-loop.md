@@ -1,8 +1,8 @@
 # APP 交付回路（优化后）
 
-> 分支：`APP`  
-> 现行工作流：`.grok/workflows/app-ship-loop.rhai`  
-> 旧工作流：`.grok/workflows/app-delivery-loop.rhai`（**已退役**，启动即退出，不再改代码）
+> 分支：原 `APP`（已并入 `vdnight` 后删除）  
+> 现行桌面回路：[`desktop-dev-loop.md`](./desktop-dev-loop.md)  
+> 旧工作流：`.grok/workflows/app-ship-loop.rhai` / `app-delivery-loop.rhai`（**已退役**，启动即退出，不再改代码）
 
 人只看 `/workflows` 和最终报告。同一时刻只允许一圈。
 

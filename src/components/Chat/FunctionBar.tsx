@@ -104,8 +104,7 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
     (p) => enabledProviders[p.id] !== false || p.id === activeProviderId,
   );
   const models = activeProvider?.models || [];
-  // 思考模式默认开启：仅当会话明确关闭（DB 存 0）时才关闭
-  const thinkingEnabled = activeSession?.thinkingEnabled ?? true;
+  const thinkingEnabled = activeSession?.thinkingEnabled ?? false;
   const isBlank = mode === "blank" || (activeSession?.kind ?? "adventure") === "blank";
   // 文本格式开启：冒险会话，或空白会话开启了格式开关（formatEnabled）
   const hasFormat = !isBlank || !!activeSession?.formatEnabled;
@@ -189,8 +188,7 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
   const applyModel = (pid: string, model: string) => {
     setActiveProvider(pid);
     setActiveModel(model);
-    // 思考模式所有模型默认开启
-    if (activeId) updateSessionModel(activeId, pid, model, true);
+    if (activeId) updateSessionModel(activeId, pid, model);
     setOpenMenu(null);
   };
 

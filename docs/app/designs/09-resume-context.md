@@ -8,7 +8,7 @@
 
 1. **文风**：`generationStore.setActivePreset(story.generationPresetId || "none")`。书内改文风时回写 Story.generationPresetId。
 2. **规则书**：useChat 直读 story.worldBookId（04 若已做则复查）。
-3. **现场条**：进入 reading 后，若最新 assistant 有 chapterTitle 或 scene location，在列表顶或输入框上显示一次「上次写到：xxx」，点 × 或发送后消失。不入库。
+3. **现场条**：重开一本**已有正文**的书时，若最新 assistant 有 chapterTitle，在场景条下方显示一次「上次写到：xxx」。点 ×、发送或约 8 秒后消失。刚开局生成过程中不出现。不入库。
 4. **可选设置** persist：`openToLastBook` 默认 false。true 时冷启动 openStory(lastOpened) 但仍先经过书架一帧可省，直接 reading——若做，必须能从书内回书架。默认保持关。
 
 ## 字数缓存

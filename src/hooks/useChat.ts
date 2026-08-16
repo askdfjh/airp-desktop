@@ -4,7 +4,7 @@ import type { Message, AttachedFile, ToolDefinition, ToolCall } from "@/types";
 import { chatStream } from "@/providers/openai";
 import type { ApiMessage } from "@/providers/openai";
 import { analyzeScene, parseSceneAnalysis, buildAnalyzePrompt } from "@/lib/sceneAnalyzer";
-import { parseSceneReply } from "@/lib/sceneTemplate";
+import { parseSceneReply, stripDraftNotes } from "@/lib/sceneTemplate";
 import { buildNarrativeGuard, buildProgressionGuard } from "@/lib/narrativeGuard";
 import { estimateTokens } from "@/lib/characterExtract";
 import { logError } from "@/lib/appLog";
@@ -215,7 +215,7 @@ export function useChat() {
       const basePrompt = activeSession?.systemPrompt || "";
       // 正文单独输出：不注入【场景信息】【对话推荐】模板（章节/场景/推荐由独立格式分析请求生成）
       let sceneTemplate = (activeSession?.kind !== "blank" || activeSession?.formatEnabled)
-        ? `\n\n【输出要求】直接输出故事正文本身。不要输出章节名、场景信息、对话推荐等任何区块标签，不要添加任何格式说明或前后缀。`
+        ? `\n\n【输出要求】直接输出故事正文本身。不要输出章节名、场景信息、对话推荐等任何区块标签，不要添加任何格式说明或前后缀。不要在正文里写作者备忘、创作提示或括号标注（如「伏笔」「新钩子」「等下要加」），也不要输出 markdown 标题。`
         : "";
       // 叙事约束（插件设置页开关，默认关闭）：叙事防护 + 剧情推进，可独立开启
       if (activeSession?.kind !== "blank") {
@@ -559,8 +559,7 @@ export function useChat() {
         let finalContent = "";
         let finalThinking = "";
         let resolvedToolCalls: ToolCall[] | undefined;
-        // 思考模式默认开启：仅当会话明确关闭（DB 存 0）时才关闭
-        const thinkingEnabled = activeSession?.thinkingEnabled ?? true;
+        const thinkingEnabled = activeSession?.thinkingEnabled ?? false;
         let pendingContent = "";
         let pendingThinking = "";
         let flushRafId: number | null = null;
@@ -642,6 +641,15 @@ export function useChat() {
               return;
             }
 
+            const cleaned = stripDraftNotes(parseSceneReply(finalContent).body || finalContent);
+            if (cleaned && cleaned !== finalContent) {
+              finalContent = cleaned;
+              setMessages((prev) => prev.map((m) => (m.id === placeholderMsg.id ? { ...m, content: cleaned } : m)));
+              messagesRef.current = messagesRef.current.map((m) =>
+                m.id === placeholderMsg.id ? { ...m, content: cleaned } : m,
+              );
+            }
+
             updateMessageContent(placeholderMsg.id, finalContent).catch(() => {});
             if (finalThinking) updateMessageThinking(placeholderMsg.id, finalThinking).catch(() => {});
             // token 消耗估算（估算制：↑输入=apiMessages 文本，↓输出=正文+思考）
@@ -665,8 +673,10 @@ export function useChat() {
             if (!abortController.signal.aborted && finalContent.trim()) {
               const storyId = useStoryStore.getState().activeStoryId || activeSession?.storyId;
               if (storyId) {
-                void useStoryStore.getState().autoTitle(storyId);
-                void useStoryStore.getState().recountWords(storyId);
+                void (async () => {
+                  await useStoryStore.getState().recountWords(storyId);
+                  await useStoryStore.getState().autoTitle(storyId);
+                })();
               }
             }
             resolve({ content: finalContent, thinking: finalThinking });
