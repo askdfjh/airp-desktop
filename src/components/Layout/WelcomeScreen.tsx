@@ -1,3 +1,5 @@
+import { ART } from "@/assets/art";
+
 export function WelcomeScreen({
   onSkip,
   onConfigure,
@@ -20,6 +22,7 @@ export function WelcomeScreen({
           "radial-gradient(ellipse 70% 55% at 50% 28%, var(--seed-accent-bg) 0%, transparent 65%), radial-gradient(ellipse 55% 45% at 75% 75%, color-mix(in srgb, var(--seed-accent) 4%, transparent) 0%, transparent 55%), var(--seed-bg)",
       }}
     >
+      <img className="seed-welcome-art" src={ART.welcome} alt="" />
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none", opacity: 0.5 }}>
         {Array.from({ length: 8 }, (_, i) => (
           <div
@@ -39,6 +42,7 @@ export function WelcomeScreen({
       <div
         style={{
           position: "relative",
+          zIndex: 1,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -62,22 +66,20 @@ export function WelcomeScreen({
             marginBottom: 8,
           }}
         >
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--seed-accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-          </svg>
+          <img src={ART.appIcon} alt="" style={{ width: 56, height: 56, borderRadius: 16 }} />
         </div>
 
         <h1 style={{ margin: 0, fontSize: 34, fontWeight: 700, letterSpacing: "0.06em", color: "var(--seed-fg)" }}>
           灵叙 Narra
         </h1>
         <p style={{ margin: 0, fontSize: 14, color: "var(--seed-muted)", letterSpacing: "0.2em" }}>
-          沉浸式 AI 互动小说
+          本地文字创作与排版
         </p>
 
         <p style={{ margin: "18px 0 4px", fontSize: 14, lineHeight: 1.8, color: "var(--seed-muted)" }}>
-          欢迎开启你的冒险之旅。首次使用需要配置模型服务（API），
+          打开就是书架。第一次先接上模型服务，
           <br />
-          配置完成后即可开始创作你的故事。
+          然后就能开一本自己的故事。
         </p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 22, width: "100%", maxWidth: 320 }}>
@@ -103,7 +105,7 @@ export function WelcomeScreen({
             onMouseEnter={(e) => { e.currentTarget.style.color = "var(--seed-fg)"; e.currentTarget.style.borderColor = "var(--seed-accent-border)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.color = "var(--seed-muted)"; e.currentTarget.style.borderColor = "var(--seed-border)"; }}
           >
-            跳过，直接进入对话
+            跳过，先去书架
           </button>
         </div>
 

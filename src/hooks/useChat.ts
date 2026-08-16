@@ -4,7 +4,7 @@ import type { Message, AttachedFile, ToolDefinition, ToolCall } from "@/types";
 import { chatStream } from "@/providers/openai";
 import type { ApiMessage } from "@/providers/openai";
 import { analyzeScene, parseSceneAnalysis, buildAnalyzePrompt } from "@/lib/sceneAnalyzer";
-import { parseSceneReply } from "@/lib/sceneTemplate";
+import { parseSceneReply, stripDraftNotes } from "@/lib/sceneTemplate";
 import { buildNarrativeGuard, buildProgressionGuard } from "@/lib/narrativeGuard";
 import { estimateTokens } from "@/lib/characterExtract";
 import { logError } from "@/lib/appLog";
@@ -16,6 +16,7 @@ import { useMcpStore } from "@/stores/mcpStore";
 import { callTool as callMcpTool } from "@/lib/mcpClient";
 import { useUIStore } from "@/stores/uiStore";
 import { useWorldStore } from "@/stores/worldStore";
+import { useStoryStore } from "@/stores/storyStore";
 import { buildWorldContext, findMatchingEntries, pickRandomEventEntry } from "@/lib/worldBookEngine";
 import { useGenerationStore } from "@/stores/generationStore";
 import { usePromptInjectionStore } from "@/stores/promptInjectionStore";
@@ -107,6 +108,8 @@ export function useChat() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   // 格式分析（章节/场景/对话推荐独立请求）进行中
   const [analysingScene, setAnalysingScene] = useState(false);
+  const [sceneError, setSceneError] = useState<string | null>(null);
+  const lastSceneTargetRef = useRef<{ msgId: string; body: string } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
   const messagesRef = useRef<Message[]>([]);
@@ -122,6 +125,15 @@ export function useChat() {
   );
   const activeProvider = providers.find((p) => p.id === activeProviderId);
   const activeWorldBook = useWorldStore((s) => s.activeBook);
+  const storyBoundBook = useStoryStore((s) => {
+    const sid = s.activeStoryId;
+    const story = sid ? s.stories.find((x) => x.id === sid) : null;
+    if (!story?.worldBookId) return null;
+    return useWorldStore.getState().books.find((b) => b.id === story.worldBookId) || null;
+  });
+  const activeStoryId = useStoryStore((s) => s.activeStoryId);
+  // 有当前书时只信 Story.worldBookId，禁止回落到上一本的 activeBook（切书串世界）
+  const worldBookForChat = activeStoryId ? storyBoundBook : activeWorldBook;
   const [sessionCards, setSessionCards] = useState<LoadedExtractedCard[]>([]);
   // 父卷消息缓存（续集触发式注入用：切换会话时预加载）
   const parentMessagesRef = useRef<Message[]>([]);
@@ -203,7 +215,7 @@ export function useChat() {
       const basePrompt = activeSession?.systemPrompt || "";
       // 正文单独输出：不注入【场景信息】【对话推荐】模板（章节/场景/推荐由独立格式分析请求生成）
       let sceneTemplate = (activeSession?.kind !== "blank" || activeSession?.formatEnabled)
-        ? `\n\n【输出要求】直接输出故事正文本身。不要输出章节名、场景信息、对话推荐等任何区块标签，不要添加任何格式说明或前后缀。`
+        ? `\n\n【输出要求】直接输出故事正文本身。不要输出章节名、场景信息、对话推荐等任何区块标签，不要添加任何格式说明或前后缀。不要在正文里写作者备忘、创作提示或括号标注（如「伏笔」「新钩子」「等下要加」），也不要输出 markdown 标题。`
         : "";
       // 叙事约束（插件设置页开关，默认关闭）：叙事防护 + 剧情推进，可独立开启
       if (activeSession?.kind !== "blank") {
@@ -325,12 +337,12 @@ export function useChat() {
         }
         result.push({ role: "system", content: joined });
       }
-      if (!isBlankSession && activeWorldBook) {
+      if (!isBlankSession && worldBookForChat) {
         const recentContext = [
           ...hist.slice(-2).map((m) => m.content),
           lastUserContent,
         ].join("\n");
-        const world = buildWorldContext(activeWorldBook, recentContext);
+        const world = buildWorldContext(worldBookForChat, recentContext);
         if (world.text) {
           result.push({ role: "system", content: world.text });
         }
@@ -437,7 +449,7 @@ export function useChat() {
       }
       return result;
     },
-    [activeSession, activeWorldBook, activeGenPreset, activeInjections, sessionCards, isBlankSession],
+    [activeSession, worldBookForChat, activeGenPreset, activeInjections, sessionCards, isBlankSession],
   );
 
   // 格式分析（独立请求）：按设置解析执行模型 → analyzeScene → 更新消息内存 + 入库。
@@ -469,6 +481,8 @@ export function useChat() {
       }
     }
 
+    lastSceneTargetRef.current = { msgId, body };
+    setSceneError(null);
     setAnalysingScene(true);
     try {
       const includeHidden = useUIStore.getState().hiddenProgressOn;
@@ -499,25 +513,29 @@ export function useChat() {
           console.error("[db] updateMessageTokenUsage failed:", e),
         );
       } else if (!result) {
+        const reason = analyzeError ?? "模型未返回有效内容";
+        setSceneError(reason);
         const now = Date.now();
         logError("useChat.runSceneAnalysis", "场景分析未产出结果", {
           model,
           provider: provider.baseUrl,
-          reason: analyzeError ?? "模型未返回有效内容",
+          reason,
         });
         if (now - lastSceneFailNotifyAt > 60_000) {
           lastSceneFailNotifyAt = now;
-          useUIStore.getState().notify(
-            analyzeError
-              ? `场景生成失败：${analyzeError}`
-              : "场景生成失败：模型服务未返回结果，已跳过场景信息",
-          );
+          useUIStore.getState().notify(`场景生成失败：${reason}`);
         }
       }
     } finally {
       setAnalysingScene(false);
     }
   }, []);
+
+  const retrySceneAnalysis = useCallback(() => {
+    const t = lastSceneTargetRef.current;
+    if (!t || analysingScene) return;
+    void runSceneAnalysis(t.msgId, t.body);
+  }, [analysingScene, runSceneAnalysis]);
 
   const startStream = useCallback(
     (sessionId: string, apiMessages: ApiMessage[], tools?: ToolDefinition[]): Promise<{ toolCalls?: ToolCall[]; content: string; thinking: string }> => {
@@ -541,8 +559,7 @@ export function useChat() {
         let finalContent = "";
         let finalThinking = "";
         let resolvedToolCalls: ToolCall[] | undefined;
-        // 思考模式默认开启：仅当会话明确关闭（DB 存 0）时才关闭
-        const thinkingEnabled = activeSession?.thinkingEnabled ?? true;
+        const thinkingEnabled = activeSession?.thinkingEnabled ?? false;
         let pendingContent = "";
         let pendingThinking = "";
         let flushRafId: number | null = null;
@@ -624,6 +641,15 @@ export function useChat() {
               return;
             }
 
+            const cleaned = stripDraftNotes(parseSceneReply(finalContent).body || finalContent);
+            if (cleaned && cleaned !== finalContent) {
+              finalContent = cleaned;
+              setMessages((prev) => prev.map((m) => (m.id === placeholderMsg.id ? { ...m, content: cleaned } : m)));
+              messagesRef.current = messagesRef.current.map((m) =>
+                m.id === placeholderMsg.id ? { ...m, content: cleaned } : m,
+              );
+            }
+
             updateMessageContent(placeholderMsg.id, finalContent).catch(() => {});
             if (finalThinking) updateMessageThinking(placeholderMsg.id, finalThinking).catch(() => {});
             // token 消耗估算（估算制：↑输入=apiMessages 文本，↓输出=正文+思考）
@@ -643,6 +669,15 @@ export function useChat() {
             // 格式分析（独立请求）：正文完成后生成章节名/场景信息/对话推荐（冒险会话或空白格式会话、未中断）
             if ((activeSession?.kind !== "blank" || activeSession?.formatEnabled) && !abortController.signal.aborted && finalContent.trim()) {
               void runSceneAnalysis(placeholderMsg.id, finalContent);
+            }
+            if (!abortController.signal.aborted && finalContent.trim()) {
+              const storyId = useStoryStore.getState().activeStoryId || activeSession?.storyId;
+              if (storyId) {
+                void (async () => {
+                  await useStoryStore.getState().recountWords(storyId);
+                  await useStoryStore.getState().autoTitle(storyId);
+                })();
+              }
             }
             resolve({ content: finalContent, thinking: finalThinking });
           } catch (err: unknown) {
@@ -674,7 +709,7 @@ export function useChat() {
         })();
       });
     },
-    [activeModel, activeProvider, activeSession, activeWorldBook, activeGenPreset, isBlankSession, runSceneAnalysis],
+    [activeModel, activeProvider, activeSession, worldBookForChat, activeGenPreset, isBlankSession, runSceneAnalysis],
   );
 
   const sendMessage = useCallback(
@@ -682,10 +717,15 @@ export function useChat() {
       if (streaming) return;
       const blocker = getSendBlocker();
       if (blocker) {
+        if (opts?.opening) useUIStore.getState().setOpeningError(blocker);
         blockSend(blocker);
         return;
       }
-      if (!activeProvider || !activeModel || !activeSession) return;
+      if (!activeProvider || !activeModel || !activeSession) {
+        if (opts?.opening) useUIStore.getState().setOpeningError("还没准备好模型，开篇发不出去");
+        return;
+      }
+      if (opts?.opening) useUIStore.getState().setOpeningError(null);
       const sessionId = activeSession.id;
       activeSessionIdRef.current = sessionId;
 
@@ -698,14 +738,14 @@ export function useChat() {
       // 每轮只抽一次（存 ref），buildApiMessages 消费注入；重试复用同一条
       pendingRandomEventRef.current = null;
       const uiState = useUIStore.getState();
-      if (uiState.randomWorldEventOn && !isBlankSession && activeWorldBook && activeWorldBook.entries.length > 0) {
+      if (uiState.randomWorldEventOn && !isBlankSession && worldBookForChat && worldBookForChat.entries.length > 0) {
         // user 消息计数（含本次正要发送的一条）：4 条 user 消息为一个节奏周期
         const userCount = messagesRef.current.filter((m) => m.role === "user").length + 1;
         const state = randomEventStateRef.current.get(sessionId) || { lastTurn: 0, pickedIds: [] };
         if (userCount - state.lastTurn >= 4) {
           const recentText = [...messagesRef.current.slice(-2).map((m) => m.content), content].join("\n");
-          const matchedIds = findMatchingEntries(activeWorldBook.entries, recentText).map((e) => e.id);
-          const entry = pickRandomEventEntry(activeWorldBook.entries, matchedIds, state.pickedIds);
+          const matchedIds = findMatchingEntries(worldBookForChat.entries, recentText).map((e) => e.id);
+          const entry = pickRandomEventEntry(worldBookForChat.entries, matchedIds, state.pickedIds);
           const next = { lastTurn: userCount, pickedIds: state.pickedIds };
           if (entry) {
             const line = `【世界事件·${entry.title}】${entry.content}（可将此设定自然引入本段剧情，作为新进展、转折或悬念；不必强行出现）`;
@@ -742,7 +782,16 @@ export function useChat() {
       console.log("[tools] sendMessage: _toolsEnabled =", _toolsEnabled);
       const tools = _toolsEnabled ? await collectTools() : [];
       console.log("[tools] sendMessage: tools.length =", tools.length);
-      let result = await startStream(sessionId, apiMessages, tools.length > 0 ? tools : undefined);
+      let result;
+      try {
+        result = await startStream(sessionId, apiMessages, tools.length > 0 ? tools : undefined);
+      } catch (e) {
+        if (opts?.opening) {
+          const msg = e instanceof Error ? e.message : String(e);
+          useUIStore.getState().setOpeningError(msg || "开篇没有写出来");
+        }
+        throw e;
+      }
       console.log("[tools] first stream done, toolCalls:", result?.toolCalls?.length || 0, "contentLen:", result?.content?.length || 0);
 
       // Fallback: retry only if user query clearly needs real-time info but model didn't call tools
@@ -1191,6 +1240,8 @@ export function useChat() {
     toolRunning,
     loadingMessages,
     analysingScene,
+    sceneError,
+    retrySceneAnalysis,
     sendMessage,
     stopStreaming,
     clearMessages,

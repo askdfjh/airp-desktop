@@ -1,6 +1,6 @@
 {
   "productName": "灵叙 Narra",
-  "version": "0.2.1",
+  "version": "0.3.2",
   "identifier": "com.airp.app",
   "build": {
     "beforeBuildCommand": "npm run build",
@@ -12,10 +12,10 @@
     "windows": [
       {
         "title": "灵叙 Narra",
-        "width": 1000,
-        "height": 700,
-        "minWidth": 640,
-        "minHeight": 480,
+        "width": 1320,
+        "height": 860,
+        "minWidth": 960,
+        "minHeight": 640,
         "resizable": true,
         "decorations": false,
         "transparent": false,

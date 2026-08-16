@@ -48,7 +48,7 @@ interface SessionState {
   clearSearch: () => void;
   jumpToMessage: (sessionId: string, messageId: string, keyword?: string) => void;
   clearTargetMessage: () => void;
-  createBlankSession: () => string;
+  createBlankSession: (storyId?: string) => string;
   updateSystemPrompt: (id: string, systemPrompt: string) => void;
   toggleThinking: (id: string) => void;
   setThinkingEnabled: (id: string, enabled: boolean) => void;
@@ -189,6 +189,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   loadFromDb: async () => {
+    // 只加载；不 createBlankSession，也不按上次会话 setActive
     try {
       const sessions = await loadSessions();
       const favorites = await loadFavorites();
@@ -290,19 +291,20 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   clearTargetMessage: () => set({ targetMessageId: null, targetKeyword: null }),
 
-  createBlankSession: () => {
+  createBlankSession: (storyId?) => {
     const now = Date.now();
     const id = 's_' + now + '_' + Math.random().toString(36).slice(2, 8);
-    const session = {
+    const session: Session = {
       id,
-      title: '空白会话',
+      title: storyId ? '未命名稿纸' : '空白会话',
       systemPrompt: '',
       providerId: '',
       model: '',
-      thinkingEnabled: true,
-      kind: 'blank' as const,
+      thinkingEnabled: false,
+      kind: 'blank',
       createdAt: now,
       updatedAt: now,
+      ...(storyId ? { storyId, chainId: storyId, chainIndex: 1 } : {}),
     };
     set((st) => ({ sessions: [session, ...st.sessions], activeId: id }));
     insertSession(session).catch((e) => console.error('[db] insertSession failed:', e));
@@ -318,11 +320,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       systemPrompt: source.systemPrompt,
       providerId: source.providerId,
       model: source.model,
-      thinkingEnabled: source.thinkingEnabled ?? true,
+      thinkingEnabled: source.thinkingEnabled ?? false,
       kind: source.kind ?? "adventure",
       createdAt: now,
       updatedAt: now,
-      chainId: source.chainId || source.id,
+      storyId: source.storyId,
+      chainId: source.chainId || source.storyId || source.id,
       chainIndex: (source.chainIndex ?? 1) + 1,
       parentId: source.id,
       archive: opts.archive,
@@ -345,6 +348,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
     insertSession(session).catch((e) => console.error("[db] insertSession(continuation) failed:", e));
     set((st) => ({ sessions: [session, ...st.sessions], activeId: id }));
+    if (session.storyId) {
+      import("./storyStore").then(({ useStoryStore }) => {
+        useStoryStore.getState().patch(session.storyId!, { lastVolumeId: id, updatedAt: now });
+      }).catch(() => {});
+    }
     return id;
   },
 
@@ -367,7 +375,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       systemPrompt: role.systemPrompt,
       providerId: ps.activeProviderId ?? "",
       model: ps.activeModel ?? "",
-      thinkingEnabled: true,
+      thinkingEnabled: false,
       kind: "blank",
       createdAt: now,
       updatedAt: now,

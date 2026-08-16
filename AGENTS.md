@@ -4,6 +4,13 @@
 
 灵叙 Narra：本地文字创作与排版工具。桌面端（Tauri Windows）+ 安卓端（Tauri Android，`src-tauri/gen/android`，gitignore 不入库）。
 
+## vdnight 分支
+
+当前主线在 `vdnight`（`APP` 已并入后删除，只保留 `master` 与 `vdnight`）：**书架是首页**，一本书是一个故事，用户随时进出、切换、新建。设计与分期见 [`docs/app/bookshelf-design.md`](docs/app/bookshelf-design.md)。未读该文档不要改导航或会话模型。
+
+产品规格：[`docs/app/product-spec.md`](docs/app/product-spec.md)。分块设计：`docs/app/designs/`。  
+桌面端回路：[`docs/app/desktop-dev-loop.md`](docs/app/desktop-dev-loop.md)。旧 APP 交付回路已退役。
+
 ## 关键命令
 
 - 前端构建：`npm run build`（tsc + vite，产物在 `dist/`）
@@ -11,6 +18,15 @@
 - 安卓打包：手动多步流程，见下
 
 ## 安卓打包流程（重要）
+
+**每次打 APK 必须先升版本号**，否则手机上「应用信息」和书架顶栏都显示同一串 `0.2.x`，无法区分包。改这四处的同一版本：
+
+- `package.json` → `version`
+- `src-tauri/tauri.conf.json` → `version`
+- `src-tauri/Cargo.toml` / `Cargo.lock` 里 `airp-desktop` 的 `version`
+- `src-tauri/gen/android/app/tauri.properties`：`versionName` 同步，`versionCode` **必须 +1**（如 0.2.1→2001，0.2.2→2002）
+
+产物文件名带版本：`releases/Narra_<version>_android-arm64.apk`。
 
 **前端资源不是从 APK assets 加载的！** Tauri Android 的资源由 `generate_context!` 在**编译期嵌入 `.so`**（lib.rs 有注释），WebView 走 `Rust.handleRequest`（RustWebViewClient.kt 中 `withAssetLoader=false` 分支）。**改前端后必须重新编译 `.so`，光复制 assets 不生效**（这是"安卓端和桌面端不同步"的根因）。
 

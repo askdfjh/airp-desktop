@@ -1,10 +1,17 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { HotTropeId } from "@/lib/popularTropes";
+import {
+  clampReaderPrefs,
+  DEFAULT_READER_PREFS,
+  readerFontSizeFromMessage,
+  type ReaderPrefs,
+} from "@/lib/readerPrefs";
 
 export type ThemeMode = "dark" | "light" | "system";
 export type MessageFontSize = "xs" | "sm" | "md" | "lg" | "xl";
 export type OnboardingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type AppPhase = "welcome" | "bookshelf" | "onboarding" | "reading" | "create";
 
 /** 格式分析（章节/场景/对话推荐）执行模型设置：跟随当前模型 / 指定模型 / 关闭 */
 export interface FormatModelConfig {
@@ -21,6 +28,17 @@ interface UIState {
   settingsOpen: boolean;
   theme: ThemeMode;
   messageFontSize: MessageFontSize;
+  reader: ReaderPrefs;
+  readerSettingsOpen: boolean;
+  setReader: (p: Partial<ReaderPrefs>) => void;
+  setReaderSettingsOpen: (v: boolean) => void;
+  resetReader: () => void;
+  readerByStory: Record<string, ReaderPrefs>;
+  readerStoryId: string | null;
+  hydrateReaderForStory: (storyId: string | null) => void;
+  openingError: string | null;
+  lastOpeningMessage: string | null;
+  setOpeningError: (msg: string | null) => void;
   webSearchOn: boolean;
   mcpActive: boolean;
   // 格式分析执行模型（章节/场景/对话推荐独立请求所用模型）
@@ -43,8 +61,8 @@ interface UIState {
   toast: string | null;
   toastAction: "settings" | null;
   notify: (msg: string, action?: "settings" | null) => void;
-  // Onboarding state
-  appPhase: "onboarding" | "dialogue";
+  // Onboarding state（welcome/create 保留在联合类型，实际走 overlay）
+  appPhase: AppPhase;
   onboardingStep: OnboardingStep;
   selectedWorldId: string | null;
   selectedWorldName: string | null;
@@ -76,7 +94,13 @@ interface UIState {
   setMcpActive: (v: boolean) => void;
   effectiveTheme: () => "dark" | "light";
   // Onboarding methods
-  setAppPhase: (phase: "onboarding" | "dialogue") => void;
+  setAppPhase: (phase: AppPhase) => void;
+  shelfView: "grid" | "list";
+  shelfSort: "opened" | "updated" | "title" | "created";
+  shelfGroup: "all" | "writing" | "finished" | "draft";
+  setShelfView: (v: "grid" | "list") => void;
+  setShelfSort: (v: "opened" | "updated" | "title" | "created") => void;
+  setShelfGroup: (v: "all" | "writing" | "finished" | "draft") => void;
   setOnboardingStep: (step: OnboardingStep) => void;
   setSelectedWorld: (id: string | null, name: string | null) => void;
   setSelectedTopicScheme: (id: string | null, name: string | null) => void;
@@ -119,6 +143,36 @@ export const useUIStore = create<UIState>()(
       settingsOpen: false,
       theme: "system",
       messageFontSize: "sm",
+      reader: DEFAULT_READER_PREFS,
+      readerSettingsOpen: false,
+      readerByStory: {},
+      readerStoryId: null,
+      setReader: (p) =>
+        set((s) => {
+          const reader = clampReaderPrefs({ ...s.reader, ...p });
+          const sid = s.readerStoryId;
+          return {
+            reader,
+            readerByStory: sid ? { ...s.readerByStory, [sid]: reader } : s.readerByStory,
+          };
+        }),
+      setReaderSettingsOpen: (v) => set({ readerSettingsOpen: v }),
+      resetReader: () =>
+        set((s) => {
+          const next = { ...s.readerByStory };
+          if (s.readerStoryId) delete next[s.readerStoryId];
+          return { reader: DEFAULT_READER_PREFS, readerByStory: next };
+        }),
+      hydrateReaderForStory: (storyId) =>
+        set((s) => ({
+          readerStoryId: storyId,
+          reader: storyId && s.readerByStory[storyId]
+            ? clampReaderPrefs(s.readerByStory[storyId])
+            : s.reader,
+        })),
+      openingError: null,
+      lastOpeningMessage: null,
+      setOpeningError: (msg) => set({ openingError: msg }),
       webSearchOn: false,
       mcpActive: false,
       formatModel: { mode: "follow" },
@@ -141,7 +195,7 @@ export const useUIStore = create<UIState>()(
         toastTimer = setTimeout(() => set({ toast: null, toastAction: null }), 2200);
       },
       // Onboarding state defaults
-      appPhase: "onboarding",
+      appPhase: "bookshelf",
       onboardingStep: 1,
       selectedWorldId: null,
       selectedWorldName: null,
@@ -177,7 +231,17 @@ export const useUIStore = create<UIState>()(
         return t;
       },
       // Onboarding methods
-      setAppPhase: (phase) => set({ appPhase: phase }),
+      // welcome/create 只走 overlay，不写入 live phase
+      setAppPhase: (phase) => {
+        if (phase === "welcome" || phase === "create") return;
+        set({ appPhase: phase });
+      },
+      shelfView: "grid",
+      shelfSort: "opened",
+      shelfGroup: "all",
+      setShelfView: (v) => set({ shelfView: v }),
+      setShelfSort: (v) => set({ shelfSort: v }),
+      setShelfGroup: (v) => set({ shelfGroup: v }),
       setOnboardingStep: (step) => set({ onboardingStep: step }),
       setSelectedWorld: (id, name) => set({ selectedWorldId: id, selectedWorldName: name }),
       setSelectedTopicScheme: (id, name) => set({ selectedTopicSchemeId: id, selectedTopicSchemeName: name }),
@@ -189,7 +253,12 @@ export const useUIStore = create<UIState>()(
       setSelectedTrope: (id, name) => set({ selectedTropeId: id, selectedTropeName: name }),
       setPlayerName: (name) => set({ playerName: name }),
       setOnboardingAudience: (a) => set({ onboardingAudience: a }),
-      setPendingOpeningMessage: (msg) => set({ pendingOpeningMessage: msg }),
+      setPendingOpeningMessage: (msg) =>
+        set((s) => ({
+          pendingOpeningMessage: msg,
+          lastOpeningMessage: msg ?? s.lastOpeningMessage,
+          openingError: msg ? null : s.openingError,
+        })),
       resetOnboarding: () =>
         set({
           onboardingStep: 1,
@@ -228,13 +297,14 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: "airp-ui-v3",
-      // 仅持久化用户偏好,不持久化开局流程状态
-      // appPhase/onboardingStep/selected* 每次启动由 AppShell 根据有无活跃会话重新判定
+      // 仅持久化用户偏好；appPhase 与开局选择不写入，冷启动由 AppShell 定为 bookshelf
       partialize: (s) => ({
         sidebarOpen: s.sidebarOpen,
         settingsOpen: s.settingsOpen,
         theme: s.theme,
         messageFontSize: s.messageFontSize,
+        reader: s.reader,
+        readerByStory: s.readerByStory,
         webSearchOn: s.webSearchOn,
         mcpActive: s.mcpActive,
         formatModel: s.formatModel,
@@ -243,7 +313,48 @@ export const useUIStore = create<UIState>()(
         ensembleGuardOn: s.ensembleGuardOn,
         hiddenProgressOn: s.hiddenProgressOn,
         randomWorldEventOn: s.randomWorldEventOn,
+        shelfView: s.shelfView,
+        shelfSort: s.shelfSort,
+        shelfGroup: s.shelfGroup,
       }),
+      // 旧 airp-ui-v3 可能仍带 appPhase/onboardingStep/selected*，禁止回灌
+      merge: (persistedState, currentState) => {
+        const raw =
+          persistedState && typeof persistedState === "object"
+            ? { ...(persistedState as Record<string, unknown>) }
+            : {};
+        delete raw.appPhase;
+        delete raw.onboardingStep;
+        delete raw.createMode;
+        delete raw.readerSettingsOpen;
+        delete raw.readerStoryId;
+        delete raw.openingError;
+        delete raw.lastOpeningMessage;
+        for (const key of Object.keys(raw)) {
+          if (key.startsWith("selected")) delete raw[key];
+        }
+        const persistedReader = raw.reader;
+        delete raw.reader;
+        const persistedByStory = raw.readerByStory;
+        delete raw.readerByStory;
+        const migratedSize = readerFontSizeFromMessage(
+          typeof raw.messageFontSize === "string" ? raw.messageFontSize : undefined,
+        );
+        const reader = clampReaderPrefs({
+          ...DEFAULT_READER_PREFS,
+          ...(migratedSize ? { fontSize: migratedSize } : {}),
+          ...(persistedReader && typeof persistedReader === "object"
+            ? (persistedReader as Partial<ReaderPrefs>)
+            : {}),
+        });
+        const readerByStory: Record<string, ReaderPrefs> = {};
+        if (persistedByStory && typeof persistedByStory === "object") {
+          for (const [k, v] of Object.entries(persistedByStory as Record<string, unknown>)) {
+            if (v && typeof v === "object") readerByStory[k] = clampReaderPrefs(v as Partial<ReaderPrefs>);
+          }
+        }
+        return { ...currentState, ...raw, reader, readerByStory };
+      },
     },
   ),
 );

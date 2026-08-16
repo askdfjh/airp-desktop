@@ -19,6 +19,7 @@ import { CreateHistory } from "./CreateHistory";
 import { ConfirmDialog } from "@/components/Layout/ConfirmDialog";
 import type { Message } from "@/types";
 import type { AnimPhase } from "@/hooks/useAnimatedVisibility";
+import { ART } from "@/assets/art";
 
 export function CreateModeView({ phase = "in" }: { phase?: AnimPhase }) {
   const ui = useUIStore();
@@ -362,6 +363,7 @@ export function CreateModeView({ phase = "in" }: { phase?: AnimPhase }) {
         background: "var(--seed-bg)",
       }}
     >
+      <img className="narra-create-art" src={ART.create} alt="" />
       {/* 消息区：与空白会话一致的排版（安卓避开系统状态栏） */}
       <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: "auto", paddingTop: isAndroid ? "calc(env(safe-area-inset-top, 0px) + 16px)" : undefined }}>
         <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 24px 8px" }}>

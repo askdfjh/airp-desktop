@@ -10,7 +10,7 @@ import { setToolsEnabled } from "@/hooks/useChat";
 import { setAppSetting } from "@/lib/db";
 import { runCompression, stopCompress, CONTEXT_WINDOW_TOKENS, COMPRESS_ALLOW_PCT } from "@/lib/contextCompress";
 import { isThinkingModel } from "@/providers/openai";
-import { SessionPopup } from "./SessionPopup";
+import { VolumeSheet } from "@/components/Bookshelf/VolumeSheet";
 import { SearchPanel } from "./SearchPanel";
 import { WorldInfoPanel } from "./WorldInfoPanel";
 import { registerBackHandler } from "@/lib/androidBack";
@@ -21,7 +21,7 @@ type OpenMenu = "provider" | "model" | "style" | null;
 type FunctionBarMode = "adventure" | "blank";
 
 export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: FunctionBarMode; historyTokens?: number }) {
-  const { theme, setTheme, messageFontSize, setMessageFontSize, settingsOpen, setSettingsOpen, webSearchOn, setWebSearchOn, effectiveTheme, toast, toastAction, notify } = useUIStore();
+  const { theme, setTheme, settingsOpen, setSettingsOpen, webSearchOn, setWebSearchOn, effectiveTheme, toast, toastAction, notify, readerSettingsOpen, setReaderSettingsOpen } = useUIStore();
   const { providers, activeProviderId, activeModel, setActiveProvider, setActiveModel, enabledProviders } = useProviderStore();
   const { presets, activePresetId, setActivePreset } = useGenerationStore();
   const activePreset = presets.find((p) => p.id === activePresetId) || null;
@@ -41,6 +41,22 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
   const compressing = useUIStore((s) => s.compressing);
   const worldBtnRef = useRef<HTMLButtonElement>(null);
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
+  const [showMore, setShowMore] = useState(false);
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== "undefined" && /Android/i.test(navigator.userAgent),
+  );
+  useEffect(() => {
+    const android = /Android/i.test(navigator.userAgent);
+    if (android) {
+      setNarrow(true);
+      return;
+    }
+    const mq = window.matchMedia("(max-width: 820px)");
+    const apply = () => setNarrow(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
   const barRef = useRef<HTMLDivElement>(null);
   const chipRefs = {
     provider: useRef<HTMLDivElement>(null),
@@ -88,8 +104,7 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
     (p) => enabledProviders[p.id] !== false || p.id === activeProviderId,
   );
   const models = activeProvider?.models || [];
-  // 思考模式默认开启：仅当会话明确关闭（DB 存 0）时才关闭
-  const thinkingEnabled = activeSession?.thinkingEnabled ?? true;
+  const thinkingEnabled = activeSession?.thinkingEnabled ?? false;
   const isBlank = mode === "blank" || (activeSession?.kind ?? "adventure") === "blank";
   // 文本格式开启：冒险会话，或空白会话开启了格式开关（formatEnabled）
   const hasFormat = !isBlank || !!activeSession?.formatEnabled;
@@ -134,6 +149,14 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
         setOpenMenu(null);
         return true;
       }
+      if (showMore) {
+        setShowMore(false);
+        return true;
+      }
+      if (useUIStore.getState().readerSettingsOpen) {
+        useUIStore.getState().setReaderSettingsOpen(false);
+        return true;
+      }
       const ae = document.activeElement as HTMLElement | null;
       if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA")) {
         ae.blur();
@@ -142,7 +165,7 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
       return false;
     });
     return unregister;
-  }, [showSessionPopup, showSearch, showWorldInfo, openMenu]);
+  }, [showSessionPopup, showSearch, showWorldInfo, openMenu, showMore]);
 
   // Cycle theme
   const cycleTheme = () => {
@@ -150,16 +173,6 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
     setTheme(next);
     const labels = { dark: "深色", light: "浅色", system: "跟随系统" };
     showToast(`已切换至${labels[next]}主题`);
-  };
-
-  // Cycle font size
-  const fontSizes = ["xs", "sm", "md", "lg", "xl"] as const;
-  const fontLabels: Record<string, string> = { xs: "最小", sm: "小", md: "中", lg: "大", xl: "最大" };
-  const cycleFontSize = () => {
-    const currentIdx = fontSizes.indexOf(messageFontSize);
-    const nextIdx = (currentIdx + 1) % fontSizes.length;
-    setMessageFontSize(fontSizes[nextIdx]);
-    showToast(`字体大小：${fontLabels[fontSizes[nextIdx]]}`);
   };
 
   // Toggle web search
@@ -175,8 +188,7 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
   const applyModel = (pid: string, model: string) => {
     setActiveProvider(pid);
     setActiveModel(model);
-    // 思考模式所有模型默认开启
-    if (activeId) updateSessionModel(activeId, pid, model, true);
+    if (activeId) updateSessionModel(activeId, pid, model);
     setOpenMenu(null);
   };
 
@@ -301,69 +313,90 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
           </div>
         )}
 
-        {/* 思考模式快捷开关 */}
-        <button
-          className={"seed-func-btn" + (thinkingEnabled ? " seed-func-btn--active" : "")}
-          disabled={compressing}
-          data-tooltip={thinkingEnabled ? "思考模式已开启" : "思考模式已关闭"}
-          onClick={() => { if (activeId) toggleThinking(activeId); }}
-        >
-          <Brain size={16} />
-        </button>
-
-        {/* Web search toggle */}
-        <button className={"seed-func-btn" + (webSearchOn ? " seed-func-btn--active" : "")} disabled={compressing} data-tooltip={webSearchOn ? "联网搜索已开启" : "联网搜索已关闭"} onClick={toggleWebSearch}>
-          <Wifi size={16} />
-        </button>
-
-        <div style={{ width: 1, height: 20, background: "var(--seed-border)", margin: "0 6px" }} />
-
-        {/* Settings */}
-        <button className={"seed-func-btn" + (settingsOpen ? " seed-func-btn--active" : "")} disabled={compressing} data-tooltip="设置" onClick={() => { const s = useUIStore.getState(); s.setSettingsOpen(!s.settingsOpen); }}>
-          <Settings size={16} />
-        </button>
-
-        {/* Theme */}
-        <button className="seed-func-btn" disabled={compressing} data-tooltip="深/浅主题" onClick={cycleTheme}>
-          <NarraTheme size={16} />
-        </button>
-
-        {/* Font size */}
-        <button className="seed-func-btn" disabled={compressing} data-tooltip="字体大小" onClick={cycleFontSize}>
-          <NarraFont size={16} />
-        </button>
-
-        {/* Session management */}
-        <button className="seed-func-btn" disabled={compressing} data-tooltip="会话管理" onClick={() => setShowSessionPopup(true)}>
-          <NarraSession size={16} />
-        </button>
-
-        {/* Search messages */}
-        <button className={"seed-func-btn" + (showSearch ? " seed-func-btn--active" : "")} disabled={compressing} data-tooltip="搜索消息" onClick={() => { setOpenMenu(null); setShowSearch((v) => !v); }}>
-          <Search size={16} />
-        </button>
-
-        {/* 章节排版开关：仅空白会话显示（开启后仅启用章节分隔线）；冒险会话固定格式排版，不显示 */}
-        {isBlank && (
-          <button
-            className={"seed-func-btn" + (hasFormat ? " seed-func-btn--active" : "")}
-            disabled={compressing}
-            data-tooltip={hasFormat
-              ? "文字排版已开启（重新输入后生效），点击关闭"
-              : "文字排版，打开重新输入有效"}
-            onClick={toggleTextFormat}
-          >
-            <Sparkles size={16} />
-          </button>
+        {(!narrow) && (
+          <>
+            <button
+              className={"seed-func-btn" + (thinkingEnabled ? " seed-func-btn--active" : "")}
+              disabled={compressing}
+              data-tooltip={thinkingEnabled ? "思考模式已开启" : "思考模式已关闭"}
+              onClick={() => { if (activeId) toggleThinking(activeId); }}
+            >
+              <Brain size={16} />
+            </button>
+            <button className={"seed-func-btn" + (webSearchOn ? " seed-func-btn--active" : "")} disabled={compressing} data-tooltip={webSearchOn ? "联网搜索已开启" : "联网搜索已关闭"} onClick={toggleWebSearch}>
+              <Wifi size={16} />
+            </button>
+            <div style={{ width: 1, height: 20, background: "var(--seed-border)", margin: "0 6px" }} />
+            <button className={"seed-func-btn" + (settingsOpen ? " seed-func-btn--active" : "")} disabled={compressing} data-tooltip="设置" onClick={() => { const s = useUIStore.getState(); s.setSettingsOpen(!s.settingsOpen); }}>
+              <Settings size={16} />
+            </button>
+            <button className="seed-func-btn" disabled={compressing} data-tooltip="深/浅主题" onClick={cycleTheme}>
+              <NarraTheme size={16} />
+            </button>
+            <button
+              className={"seed-func-btn" + (readerSettingsOpen ? " seed-func-btn--active" : "")}
+              disabled={compressing}
+              data-tooltip="阅读排版"
+              onClick={() => setReaderSettingsOpen(!readerSettingsOpen)}
+            >
+              <NarraFont size={16} />
+            </button>
+            <button className="seed-func-btn" disabled={compressing} data-tooltip="本书卷次" onClick={() => setShowSessionPopup(true)}>
+              <NarraSession size={16} />
+            </button>
+            <button className={"seed-func-btn" + (showSearch ? " seed-func-btn--active" : "")} disabled={compressing} data-tooltip="搜索消息" onClick={() => { setOpenMenu(null); setShowSearch((v) => !v); }}>
+              <Search size={16} />
+            </button>
+            {isBlank && (
+              <button
+                className={"seed-func-btn" + (hasFormat ? " seed-func-btn--active" : "")}
+                disabled={compressing}
+                data-tooltip={hasFormat ? "文字排版已开启（重新输入后生效），点击关闭" : "文字排版，打开重新输入有效"}
+                onClick={toggleTextFormat}
+              >
+                <Sparkles size={16} />
+              </button>
+            )}
+            {!isBlank && (
+              <button ref={worldBtnRef} className={"seed-func-btn" + (showWorldInfo ? " seed-func-btn--active" : "")} disabled={compressing} data-tooltip="世界信息" onClick={() => { setOpenMenu(null); setShowWorldInfo((v) => !v); }}>
+                <NarraWorldInfo size={16} />
+              </button>
+            )}
+          </>
         )}
-
-        {/* World info：空白会话不显示世界规则入口 */}
-        {!isBlank && (
-          <button ref={worldBtnRef} className={"seed-func-btn" + (showWorldInfo ? " seed-func-btn--active" : "")} disabled={compressing} data-tooltip="世界信息" onClick={() => { setOpenMenu(null); setShowWorldInfo((v) => !v); }}>
-            <NarraWorldInfo size={16} />
+        {narrow && <button ref={worldBtnRef} type="button" aria-hidden style={{ display: "none" }} />}
+        {narrow && (
+          <button
+            className={"seed-func-btn" + (showMore ? " seed-func-btn--active" : "")}
+            disabled={compressing}
+            data-tooltip="更多"
+            onClick={() => { setOpenMenu(null); setShowMore((v) => !v); }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="6" r="1.6" />
+              <circle cx="12" cy="12" r="1.6" />
+              <circle cx="12" cy="18" r="1.6" />
+            </svg>
           </button>
         )}
       </div>
+      {showMore && createPortal(
+        <div className={`theme-${eff}`}>
+          <button type="button" className="narra-more-mask" aria-label="关闭更多" onClick={() => setShowMore(false)} />
+          <div className="narra-more-sheet">
+            <button type="button" onClick={() => { if (activeId) toggleThinking(activeId); }}>{thinkingEnabled ? "思考：开" : "思考：关"}</button>
+            <button type="button" onClick={() => { toggleWebSearch(); }}>{webSearchOn ? "联网：开" : "联网：关"}</button>
+            <button type="button" onClick={() => { setShowMore(false); useUIStore.getState().setSettingsOpen(true); }}>设置</button>
+            <button type="button" onClick={() => { cycleTheme(); }}>深浅主题</button>
+            <button type="button" onClick={() => { setShowMore(false); setReaderSettingsOpen(true); }}>阅读排版</button>
+            <button type="button" onClick={() => { setShowMore(false); setShowSessionPopup(true); }}>本书卷次</button>
+            <button type="button" onClick={() => { setShowMore(false); setShowSearch(true); }}>搜索</button>
+            {isBlank && <button type="button" onClick={() => { toggleTextFormat(); }}>文字排版</button>}
+            {!isBlank && <button type="button" onClick={() => { setShowMore(false); setShowWorldInfo(true); }}>世界信息</button>}
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {/* 模型/服务/文风 下拉菜单：portal 到 body，fixed 定位，避免窄屏滚动栏裁剪 */}
       {renderMenuType && renderRect && createPortal(
@@ -482,7 +515,7 @@ export function FunctionBar({ mode = "adventure", historyTokens = 0 }: { mode?: 
       {/* Session popup */}
       {sessionAnim.mounted && createPortal(
         <div className={`theme-${eff}`}>
-          <SessionPopup phase={sessionAnim.phase} onClose={() => setShowSessionPopup(false)} />
+          <VolumeSheet phase={sessionAnim.phase} onClose={() => setShowSessionPopup(false)} />
         </div>,
         document.body
       )}

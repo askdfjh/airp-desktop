@@ -76,6 +76,35 @@ export interface Session {
   contextIndex?: string;
   /** 会话临时世界条目（压缩时从对话提取；仅本会话及续集生效，不写入规则书） */
   sessionEntries?: SessionEntry[];
+  /** 所属故事（书架上一本书）；同书多卷共享 */
+  storyId?: string;
+}
+
+export type StoryKind = "adventure" | "blank";
+export type StoryStatus = "writing" | "paused" | "finished";
+
+/** 书架上的一本故事：聚合整条会话链 */
+export interface Story {
+  id: string;
+  title: string;
+  kind: StoryKind;
+  status: StoryStatus;
+  cover?: string | null;
+  groupId: string;
+  pinned: boolean;
+  worldBookId?: string | null;
+  generationPresetId?: string | null;
+  protagonistName?: string | null;
+  topicSchemeId?: string | null;
+  worldBaseId?: string | null;
+  synopsis: string;
+  tags: string[];
+  lastOpenedAt?: number | null;
+  lastVolumeId?: string | null;
+  wordCount: number;
+  createdAt: number;
+  updatedAt: number;
+  deletedAt?: number;
 }
 
 export interface Message {

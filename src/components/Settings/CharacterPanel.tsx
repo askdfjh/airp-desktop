@@ -67,6 +67,7 @@ export function CharacterPanel() {
   useEffect(() => { loadTrashFromDb(); }, []);
 
   const extractedCards = cards.filter((c) => c.isExtracted);
+  const helperCards = cards.filter((c) => c.isBuiltin && !c.isExtracted);
   const selected = detailId ? characters.find(c => c.id === detailId) ?? null : null;
 
   useEffect(() => {
@@ -237,7 +238,7 @@ export function CharacterPanel() {
                     预设角色 · {builtinChars.length}
                   </div>
                   <div style={{ fontSize: "var(--fs-9)", color: "var(--seed-muted)", opacity: 0.7, padding: "0 2px", lineHeight: 1.5 }}>
-                    内置预设内容仅供演示与功能参考
+                    网文向模板，可直接应用为扮演会话
                   </div>
                   {builtinChars.map((c) => {
                     const isSelected = selectedChars.has(c.id);
@@ -254,11 +255,34 @@ export function CharacterPanel() {
                           </div>
                         </div>
                         {c.personality && (
-                          <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical" }}>{c.personality}</div>
+                          <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{c.personality}</div>
+                        )}
+                        {c.tags.length > 0 && (
+                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                            {c.tags.slice(0, 3).map((tag) => (
+                              <span key={tag} className="seed-tag-pill" style={{ fontSize: "var(--fs-9)", padding: "1px 7px", background: "var(--seed-accent-bg)", color: "var(--seed-accent)", fontWeight: 500 }}>{tag}</span>
+                            ))}
+                          </div>
                         )}
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {helperCards.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--seed-muted)", textTransform: "uppercase", letterSpacing: "0.06em", padding: "2px 2px 0" }}>
+                    写作助手 · {helperCards.length}
+                  </div>
+                  {helperCards.map((c) => (
+                    <div key={c.id}
+                      onClick={() => roleplayFromCard(c)}
+                      style={{ padding: 12, borderRadius: 16, cursor: "pointer", background: "var(--seed-surface)", border: "1px solid var(--seed-border)", display: "flex", flexDirection: "column", gap: 6 }}>
+                      <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--seed-fg)" }}>{c.name}</span>
+                      <div style={{ fontSize: "var(--fs-11)", color: "var(--seed-muted)", lineHeight: 1.35 }}>{c.description}</div>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -325,7 +349,7 @@ export function CharacterPanel() {
           <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
             {extractedCards.length === 0 && (
               <div style={{ padding: "30px 12px", textAlign: "center", color: "var(--seed-muted)", fontSize: "var(--fs-12)" }}>
-                暂无提取角色卡。对话足够长时点击底栏「保存记忆」，将自动记录出场的重要角色。
+                暂无提取角色卡。可在书详情点「从正文整理」，或对话很长时用底栏「保存记忆」。
               </div>
             )}
             {extractedCards.map((c) => (

@@ -356,6 +356,10 @@ function ModelsSection() {
       if (activeModel === model) setActiveModel(filtered[0] ?? '');
     } else {
       updateProvider(providerId, { models: [...p.models, model] });
+      if (!activeModel) {
+        setActiveProvider(providerId);
+        setActiveModel(model);
+      }
     }
   };
 
@@ -1143,6 +1147,10 @@ function ProviderDetail({
                 updateProvider(p.id, { models: newModels, thinkingModels: newThinking });
                 } else {
                 updateProvider(p.id, { models: [...new Set([...p.models, ...models])] });
+                if (!activeModel && models[0]) {
+                  setActiveProvider(p.id);
+                  setActiveModel(models[0]);
+                }
                 }
                 }}
                 className="cp"
@@ -1172,6 +1180,10 @@ function ProviderDetail({
                 if (activeModel === m) setActiveModel(filtered[0] ?? '');
                 } else {
                 updateProvider(p.id, { models: [...p.models, m] });
+                if (!activeModel) {
+                  setActiveProvider(p.id);
+                  setActiveModel(m);
+                }
                 }
                 }}
                 style={{
@@ -1194,6 +1206,10 @@ function ProviderDetail({
                 if (activeModel === m) setActiveModel(filtered[0] ?? '');
                 } else {
                 updateProvider(p.id, { models: [...p.models, m] });
+                if (!activeModel) {
+                  setActiveProvider(p.id);
+                  setActiveModel(m);
+                }
                 }
                 }}
                 title={isEnabled ? '已启用' : '启用'}

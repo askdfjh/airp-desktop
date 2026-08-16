@@ -72,6 +72,35 @@ function parseSuggestions(sugText: string): string[] {
     .filter((l) => Boolean(l) && !isMetaSuggestion(l));
 }
 
+/** 模型常把创作备忘写进正文：括号标注、作者旁白、收尾 markdown 标题。 */
+const NOTE_TAG_RE = /[（(]\s*(?:伏笔|新钩子|旧钩子|钩子|待补|待续|补细节|加细节|作者注|备注|TODO|todo)\s*[）)]/g;
+const NOTE_PAREN_RE = /[（(](?:等下要加|还要加|待补|待加|补充一下|作者注|注[：:]|TODO|todo)[^）)]*[）)]/g;
+const AUTHOR_PREFIX_RE = /^(?:哦对还要加个细节[：:]?|哦对还要|还要加个细节[：:]?|加个细节[：:]|等下要加[：:]?|补充一下[：:]?|作者注[：:]|注[：:]|TODO[：:]|todo[：:])\s*/;
+const MD_HEADING_RE = /^\s{0,3}#{1,6}\s+\S/;
+
+export function stripDraftNotes(text: string): string {
+  if (!text) return text;
+  const kept: string[] = [];
+  for (const raw of text.split(/\n{2,}/)) {
+    const lines = raw
+      .replace(NOTE_TAG_RE, "")
+      .replace(NOTE_PAREN_RE, "")
+      .split("\n")
+      .map((l) => l.replace(AUTHOR_PREFIX_RE, "").replace(/[ \t]+$/g, ""));
+    const cleaned = lines
+      .filter((l) => {
+        const t = l.trim();
+        if (!t) return false;
+        if (MD_HEADING_RE.test(t) && t.length < 40) return false;
+        return true;
+      })
+      .join("\n")
+      .trim();
+    if (cleaned) kept.push(cleaned);
+  }
+  return kept.join("\n\n").trim();
+}
+
 export function parseSceneReply(content: string): ParsedReply {
   const m = content.match(SECTION_RE);
   if (!m) {
@@ -83,13 +112,13 @@ export function parseSceneReply(content: string): ParsedReply {
       if (idx >= 0) {
         const sugText = content.slice(idx + marker.length).trim();
         const suggestions = parseSuggestions(sugText);
-        const body = content.slice(0, idx).trim();
+        const body = stripDraftNotes(content.slice(0, idx).trim());
         if (suggestions.length > 0) {
           return { scene: null, body: body || content.trim(), suggestions };
         }
       }
     }
-    return { scene: null, body: content.trim(), suggestions: [] };
+    return { scene: null, body: stripDraftNotes(content.trim()), suggestions: [] };
   }
   const chapterTitle = (m[1] || "").trim() || undefined;
   const sceneText = m[2].trim();
@@ -112,5 +141,5 @@ export function parseSceneReply(content: string): ParsedReply {
 
   const suggestions = parseSuggestions(sugText);
 
-  return { chapterTitle, scene, body: body || content.trim(), suggestions };
+  return { chapterTitle, scene, body: stripDraftNotes(body || content.trim()), suggestions };
 }
