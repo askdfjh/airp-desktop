@@ -30,7 +30,7 @@ dependencies = [
 
 [[package]]
 name = "airp-desktop"
-version = "0.2.12"
+version = "0.3.0"
 dependencies = [
  "reqwest 0.12.28",
  "serde",
